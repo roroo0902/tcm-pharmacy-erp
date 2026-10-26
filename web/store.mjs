@@ -6,7 +6,7 @@ export function validate(data){
  const ledger=new InventoryLedger({today});
  const ids=new Set();
  for(const i of data.items){if(typeof i.category!=='string'||typeof i.code!=='string'||!Number.isFinite(i.safety)||i.safety<0)throw Error('藥品資料不完整');ledger.register(i);}
- for(const e of data.entries){if(ids.has(e.id))throw Error('重複交易ID');ids.add(e.id);if(e.reverses)ledger.reverse(e.reverses,{id:e.id,date:e.date,actor:e.actor,reason:e.note});else ledger.post(e);}
+ for(const e of data.entries){if(ids.has(e.id))throw Error('重複交易ID');ids.add(e.id);if(e.reverses){const original=data.entries.find(x=>x.id===e.reverses);if(!original||e.type!=='沖銷'||e.itemId!==original.itemId||e.bottles!==original.bottles)throw Error('沖銷資料與原交易不符');ledger.reverse(e.reverses,{id:e.id,date:e.date,actor:e.actor,reason:e.note});}else ledger.post(e);}
  return ledger;
 }
 export function addItem(data,item){const next=structuredClone(data);next.items.push(item);validate(next);return next;}

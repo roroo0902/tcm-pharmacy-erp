@@ -12,3 +12,5 @@ dialog{max-height:90vh;overflow:auto}.check-label{display:flex;gap:10px;align-it
 .receive-tools{margin-top:24px}.receive-tools input{max-width:340px}#receive-table .receive-qty{width:120px;text-align:right}#receive-summary{align-self:center;color:#527260}
 
 #receive-table th,#receive-table td{vertical-align:middle}#receive-table .receive-stock,#receive-table .receive-quantity{text-align:center;font-variant-numeric:tabular-nums}#receive-table .receive-stock{min-width:125px}#receive-table .receive-quantity{min-width:175px}#receive-table .receive-input-group{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:148px}#receive-table .receive-qty{width:120px;flex:none;margin:0}#receive-table .receive-warning{white-space:normal;max-width:240px}#receive-table .sort-heading{display:inline-block;text-align:inherit}
+
+#receive-custom-brand-label[hidden]{display:none}

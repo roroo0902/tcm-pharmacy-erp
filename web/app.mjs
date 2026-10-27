@@ -1,4 +1,4 @@
-import {mountReceive} from './receive.mjs?v=receive2';
+import {mountReceive} from './receive.mjs?v=receive3';
 import {mountOrders} from './orders.mjs?v=order3';
 import {mountSheets} from './sheets.mjs?v=20261027-sort1';
 import {mountCatalog} from './catalog.mjs';

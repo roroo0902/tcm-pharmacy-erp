@@ -1,4 +1,4 @@
-import {mountSheets} from './sheets.mjs';
+import {mountSheets} from './sheets.mjs?v=20261027-sort1';
 import {mountCatalog} from './catalog.mjs';
 import {today,empty,validate,addItem,addEntry} from './store.mjs?v=20261027';
 const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

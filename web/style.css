@@ -4,3 +4,5 @@ dialog{max-height:90vh;overflow:auto}.check-label{display:flex;gap:10px;align-it
 .cloud-filters select{max-width:180px}#cloud-status{color:#20604c;font-size:14px}#cloud-table a,#cloud-sources a{color:#246d57}@media(max-width:650px){.cloud-filters{flex-wrap:wrap}}
 
 .sort-heading{background:transparent;color:inherit;border:0;padding:8px 0;font:inherit;font-weight:600;white-space:nowrap;cursor:pointer}.sort-heading:hover{color:#195748;background:#e9f0eb}.sort-heading:focus-visible{outline:2px solid #195748;outline-offset:3px}
+
+#cloud-table .sort-heading[data-sort="bottles"]{display:block;width:100%;text-align:right}

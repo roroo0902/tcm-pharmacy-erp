@@ -8,3 +8,5 @@ dialog{max-height:90vh;overflow:auto}.check-label{display:flex;gap:10px;align-it
 #cloud-table .sort-heading[data-sort="bottles"]{display:block;width:100%;text-align:right}
 
 .order-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.order-tabs .selected{background:#174c41;color:white}.order-grid input{width:110px;text-align:right}.order-grid td:last-child{white-space:normal;min-width:160px}.order-history-row{display:flex;align-items:center;gap:16px;border-bottom:1px solid #e1e5dc;padding:14px 0;flex-wrap:wrap}#order-search{max-width:300px}#order-state.error{color:#a33}#order-reviewed,#order-blank{width:auto}
+
+.receive-tools{margin-top:24px}.receive-tools input{max-width:340px}#receive-table .receive-qty{width:120px;text-align:right}#receive-table th.num button{width:100%;text-align:right}#receive-table td:nth-child(5){white-space:normal;min-width:130px}#receive-summary{align-self:center;color:#527260}

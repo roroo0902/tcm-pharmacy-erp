@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mergeCatalog} from '../web/catalog-data.mjs';
+import {empty,addItem,addEntry,validate,today} from '../web/store.mjs';
+const row={id:'source-1',name:'測試藥',brand:'測試',category:'單方',code:'A1',sourceKey:'page!3',referenceBottles:99,stockDate:'2021-01-01',warnings:[]};
+const file={kind:'tcm-catalog',version:1,records:[row]};
+test('匯入名冊不建立可用庫存、重複匯入不重複新增',()=>{const d=mergeCatalog(empty(),file);assert.equal(d.items.length,0);assert.equal(d.catalog.length,1);assert.throws(()=>validate(d).balance(row.id),/尚未建帳/);assert.equal(mergeCatalog(d,file).catalog.length,1);});
+test('保留已有庫存交易並完整備份名冊',()=>{let d=addItem(empty(),{id:'manual',name:'自建',brand:'廠',category:'單方',code:'Z',safety:0,openingDate:today(),openingBottles:10});d=addEntry(d,{id:'e',itemId:'manual',date:today(),actor:'測試',type:'耗損',bottles:2});d=mergeCatalog(d,file);assert.equal(validate(JSON.parse(JSON.stringify(d))).balance('manual'),8);assert.equal(d.entries.length,1);});
+test('同來源變更或重複ID須中止，不覆寫',()=>{const d=mergeCatalog(empty(),file);assert.throws(()=>mergeCatalog(d,{...file,records:[{...row,name:'變更'}]}),/內容不同/);assert.throws(()=>mergeCatalog(empty(),{...file,records:[row,row]}),/重複/);});
+test('實盤建帳與來源歷史量分離',()=>{let d=mergeCatalog(empty(),file);d=addItem(d,{...row,safety:1,openingDate:today(),openingBottles:5});assert.equal(validate(d).balance(row.id),5);assert.equal(d.catalog[0].referenceBottles,99);});

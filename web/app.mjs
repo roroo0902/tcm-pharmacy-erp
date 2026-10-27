@@ -1,6 +1,6 @@
 import {mountSheets} from './sheets.mjs';
 import {mountCatalog} from './catalog.mjs';
-import {today,empty,validate,addItem,addEntry} from './store.mjs';
+import {today,empty,validate,addItem,addEntry} from './store.mjs?v=20261027';
 const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let data,ledger,pending,locked=false;
 const fmt=n=>Number(n).toLocaleString('zh-TW',{maximumFractionDigits:2});
@@ -28,3 +28,4 @@ function ask(html,action){pending=action;$('#confirm-detail').innerHTML=html;$('
 $('#cancel').onclick=()=>$('#confirm').close();$('#commit').onclick=async()=>{const form=$('#confirm form');if(form&&!form.reportValidity())return;const action=pending;pending=null;$('#confirm').close();if(action)await action();};
 window.addEventListener('hashchange',()=>{message('');render();});window.addEventListener('storage',e=>{if(e.key===KEY){try{read();render();message('已載入其他分頁的最新資料');}catch(err){message(err.message,true);}}});
 try{read();render();}catch(e){$('#content').innerHTML='<section class="panel"><h2>無法讀取本機資料</h2><p>資料可能損壞或瀏覽器禁止儲存。為避免覆蓋現有資料，已停止入帳；請先保留瀏覽器資料並聯絡維護人員。</p></section>';message(e.message,true);}
+

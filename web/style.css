@@ -6,3 +6,5 @@ dialog{max-height:90vh;overflow:auto}.check-label{display:flex;gap:10px;align-it
 .sort-heading{background:transparent;color:inherit;border:0;padding:8px 0;font:inherit;font-weight:600;white-space:nowrap;cursor:pointer}.sort-heading:hover{color:#195748;background:#e9f0eb}.sort-heading:focus-visible{outline:2px solid #195748;outline-offset:3px}
 
 #cloud-table .sort-heading[data-sort="bottles"]{display:block;width:100%;text-align:right}
+
+.order-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}.order-tabs .selected{background:#174c41;color:white}.order-grid input{width:110px;text-align:right}.order-grid td:last-child{white-space:normal;min-width:160px}.order-history-row{display:flex;align-items:center;gap:16px;border-bottom:1px solid #e1e5dc;padding:14px 0;flex-wrap:wrap}#order-search{max-width:300px}#order-state.error{color:#a33}#order-reviewed,#order-blank{width:auto}

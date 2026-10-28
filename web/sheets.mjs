@@ -1,4 +1,4 @@
-import {directEnabled,directSheet,directPollMs} from './direct-sync.mjs';
+import {directEnabled,directSheet,directPollMs} from './direct-sync.mjs?v=direct20261029b';
 import {sortSheetRows} from './sheets-sort.mjs';
 import {SOURCES,parseSheet,sheetUrl,exportUrl} from './sheets-data.mjs';
 export function mountSheets({esc,fmt}){

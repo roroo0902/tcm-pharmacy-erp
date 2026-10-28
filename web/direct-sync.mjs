@@ -63,14 +63,19 @@ export async function directReview(draft,ask,onSuccess,status){
   if(sequence!==reviewSequence)return;
   const lines=preview.lines.map(l=>`<tr><td>${escape(l.sheet)} ${escape(l.code)} ${escape(l.name)}</td><td>${escape(l.quantity??l.total)}</td><td>${escape(l.before)}</td><td>${escape(l.after??l.stockAfter)}</td></tr>`).join('');
   const loss=reviewed.kind==='tcm-loss-cumulative';
-  ask(`<p>${escape(reviewed.date)} · ${escape(reviewed.actor)}</p><p>${loss?'當日累計以差額入帳；原值欄為已登錄累計。':'請核對數量與庫存。訂貨不增加庫存。'}</p><div class="tablewrap"><table><thead><tr><th>藥品</th><th>${loss?'新累計':'數量'}</th><th>${loss?'原累計':'原庫存'}</th><th>入帳後庫存</th></tr></thead><tbody>${lines}</tbody></table></div>${loss?'<p>'+preview.lines.map(l=>escape(l.code)+'：本次差額 '+escape(l.delta)+' 罐').join('；')+'</p>':''}`,
+  ask(`<p>${escape(reviewed.date)} · ${escape(reviewed.actor)}</p><p>${loss?'當日累計以差額入帳；原值欄為已登錄累計。':'請核對數量與庫存。訂貨不增加庫存。'}</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>藥品</th><th>${loss?'新累計':'數量'}</th><th>${loss?'原累計':'原庫存'}</th><th>入帳後庫存</th></tr></thead><tbody>${lines}</tbody></table></div>${loss?'<p>'+preview.lines.map(l=>escape(l.code)+'：本次差額 '+escape(l.delta)+' 罐').join('；')+'</p>':''}`,
    async()=>{if(writing)return;writing=true;const controls=[...document.querySelectorAll('#content input,#content select,#content button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);status('正在入帳與讀回核對，請勿重複送出…');try{
     const result=await runDirect('commit',reviewed,preview.token);
+    if(loss){
+     const check=await runDirect('preview',reviewed);
+     if(check.lines.some(l=>l.delta!==0))throw Error('入帳後資料又有變動，請重新核對累計，不要另建重送');
+     result.lines=check.lines;
+    }
     // Invalidate in-flight snapshots so a post-write read cannot reuse older data.
     snapshotRequest=null;
     await onSuccess(result);status([result.message||'已同步 Google Sheets',result.warning].filter(Boolean).join('；'));window.dispatchEvent(new Event('erp-synced'));
     const updates=(result.lines||preview.lines).map(l=>'<tr><td>'+escape(l.sheet)+' '+escape(l.code)+' '+escape(l.name)+'</td><td>'+escape(l.quantity??l.total)+'</td><td>'+escape(l.after??l.stockAfter)+'</td></tr>').join('');
-    ask('<h3>同步完成・工作表已讀回核對</h3><p>'+escape(result.message||'已完成')+'</p><div class="tablewrap"><table><thead><tr><th>品項</th><th>本次數量／累計</th><th>目前庫存</th></tr></thead><tbody>'+updates+'</tbody></table></div><p>'+escape(result.id||'')+'</p>',()=>{},'完成');
+    ask('<h3>同步完成・工作表已讀回核對</h3><p>'+escape(result.message||'已完成')+'</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>品項</th><th>本次數量／累計</th><th>目前庫存</th></tr></thead><tbody>'+updates+'</tbody></table></div><p>'+escape(result.id||'')+'</p>',()=>{},'完成');
    }catch(e){status(e.message+'；請重新預覽同一筆資料，輸入仍保留。');}finally{writing=false;controls.forEach(([el,disabled])=>{if(el.isConnected)el.disabled=disabled;});}},'確認入帳');
  }catch(e){status(e.message);}
 }

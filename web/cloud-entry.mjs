@@ -1,4 +1,4 @@
-import {directEnabled,directReview,directSheet,directLog} from './direct-sync.mjs';
+import {directEnabled,directReview,directSheet,directLog} from './direct-sync.mjs?v=direct20261029b';
 import {SOURCES,parseSheet,exportUrl,SHEET_ID,csvRows} from './sheets-data.mjs';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {LOSS_ENDPOINT} from './loss-cloud.mjs';

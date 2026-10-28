@@ -16,15 +16,20 @@ function erpDirect(operation,input,token){
   return {values:sheet?erpDirectValues_(sheet):[]};
  }
  if(!input||!['preview','commit'].includes(operation))throw Error('不支援的操作');
+ // API object key order is not guaranteed; preserve semantic snapshot comparison.
+ input=erpDirectCanonical_(input);
  if(input.kind==='tcm-loss-cumulative'){
   if(operation==='preview'){lossV3PrepareDate(input);return lossV3Preview(input);}
-  const result=lossV3Commit(input,token);
-  const check=lossV3Preview(input);
-  if(check.lines.some(l=>l.delta!==0))throw Error('入帳後資料又有變動，請重新核對累計，不要另建重送');
-  return {...result,lines:check.lines};
+  // Read back in a separate API execution to avoid stale SpreadsheetApp caches.
+  return lossV3Commit(input,token);
  }
  if(input.kind==='tcm-cloud')return operation==='preview'?erpPreview(input):erpCommit(input,token);
  throw Error('交易種類無效');
+}
+function erpDirectCanonical_(value){
+ if(Array.isArray(value))return value.map(erpDirectCanonical_);
+ if(value&&typeof value==='object')return Object.keys(value).sort().reduce((out,key)=>{out[key]=erpDirectCanonical_(value[key]);return out;},{});
+ return value;
 }
 function erpDirectValues_(sheet){
  if(!sheet)throw Error('找不到來源工作表');

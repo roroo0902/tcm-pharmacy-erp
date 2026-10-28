@@ -45,3 +45,6 @@ footer{border-top:1px solid #a5b4ad;padding-top:18px;margin-top:30px;color:#586d
 #content tr[data-category="複方"] > td:first-child::before{background-position:right center}
 
 #content tr[data-category="單方"] > td:first-child::before{background-image:url('./assets/herbal-powder.png');background-size:contain;background-position:center}
+
+/* Keep reviewed quantities readable inside the dark RPG dialog. */
+dialog:has(.direct-review-table){max-width:860px}dialog .direct-review-table{table-layout:fixed;white-space:normal}dialog .direct-review-table th:first-child{width:46%}dialog .direct-review-table td{background:#fffbee;color:#203b55;overflow-wrap:anywhere}dialog .direct-review-table th:not(:first-child),dialog .direct-review-table td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}

@@ -1,4 +1,4 @@
-import {directEnabled,directReview,directSheet} from './direct-sync.mjs';
+import {directEnabled,directReview,directSheet} from './direct-sync.mjs?v=direct20261029b';
 import {SOURCES,sheetUrl} from './sheets-data.mjs';
 import {sortSheetRows} from './sheets-sort.mjs';
 import {today} from './store.mjs';

@@ -32,7 +32,7 @@ test('API preserves preview token and cumulative loss readback; date preparation
  c.erpDirect('preview',loss);assert.ok(calls.includes('date'));assert.ok(!calls.some(Array.isArray));
  c.erpDirect('commit',{kind:'tcm-cloud',id:'ERP-stable'},'snapshot');
  assert.deepEqual(calls.find(Array.isArray),['commit','ERP-stable','snapshot']);
- c.lossV3Preview=()=>({lines:[{delta:1}]});assert.throws(()=>c.erpDirect('commit',loss,'old'),/入帳後/);
+ c.lossV3Preview=()=>{throw Error('same execution cache');};assert.equal(c.erpDirect('commit',loss,'old').message,'ok');
 });
 
 let serial=0;
@@ -67,4 +67,23 @@ test('expired authorization and ambiguous transport failures never auto-retry a 
  await assert.rejects(m.runDirect('commit',{},'token'),/expired/);await assert.rejects(m.runDirect('commit',{},'token'),/登入/);assert.equal(calls,1);
  await m.authorize();globalThis.fetch=async()=>{calls++;throw Error('connection lost');};
  await assert.rejects(m.runDirect('commit',{},'token'),/connection lost/);assert.equal(calls,2);
+});
+
+test('loss confirms success only after a separate fresh readback and rejects a nonzero delta',async t=>{
+ const m=await client(t);let confirm,success=0,status='',readbacks=0;const ops=[];
+ globalThis.fetch=async(url,init)=>{const op=JSON.parse(init.body).parameters[0];ops.push(op);return response(op==='commit'?{message:'ok'}:{token:'snapshot',lines:[{delta:op==='preview'&&ops.at(-2)==='commit'?readbacks:1}]});};
+ const review=()=>m.directReview({kind:'tcm-loss-cumulative',lines:[{total:1}]},(html,fn)=>confirm=fn,async()=>success++,s=>status=s);
+ await review();await confirm();assert.deepEqual(ops,['preview','commit','preview']);assert.equal(success,1);
+ readbacks=1;await review();await confirm();assert.equal(success,1);assert.match(status,/入帳後資料又有變動/);
+});
+
+test('API snapshot stays stable when transport reorders nested object keys',()=>{
+ const {c}=server();
+ c.lossV3Preview=d=>({token:JSON.stringify(d),lines:[]});
+ c.lossV3Commit=(d,t)=>{assert.equal(JSON.stringify(d),t);return {message:'ok'};};
+ const a={kind:'tcm-loss-cumulative',date:'2026-10-29',lines:[{sheet:'科達單方',code:'QA',total:1}]};
+ const b={lines:[{total:1,code:'QA',sheet:'科達單方'}],date:'2026-10-29',kind:'tcm-loss-cumulative'};
+ c.erpDirect('commit',b,c.erpDirect('preview',a).token);
+ b.lines[0].total=2;
+ assert.throws(()=>c.erpDirect('commit',b,c.erpDirect('preview',a).token));
 });

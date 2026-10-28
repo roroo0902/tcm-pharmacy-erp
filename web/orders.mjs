@@ -1,4 +1,4 @@
-import {directEnabled,directReview,directSheet} from './direct-sync.mjs';
+import {directEnabled,directReview,directSheet} from './direct-sync.mjs?v=direct20261029b';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {ORDER_ENDPOINT} from './order-endpoint.mjs?v=cloud20261029';
 import {SOURCES,SHEET_ID,csvRows,dailyExportUrl} from './sheets-data.mjs?v=qa20261029';

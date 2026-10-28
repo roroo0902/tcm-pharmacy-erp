@@ -1,3 +1,4 @@
+import {updateQuestTheme} from './quest-theme.mjs?v=quest1';
 import {mountLoss} from './loss.mjs?v=loss-jars1';
 import {mountReceive} from './receive.mjs?v=receive3';
 import {mountOrders} from './orders.mjs?v=order3';
@@ -17,7 +18,7 @@ function stock(i){return ledger.balance(i.id);}function badge(i){const n=stock(i
 function rows(items){return items.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted">${esc(i.code||'未填編號')}</div></td><td>${esc(i.brand)}</td><td>${esc(i.category)}</td><td class="num"><b>${fmt(stock(i))}</b> 瓶</td><td class="num">${fmt(i.safety)}</td><td>${badge(i)}</td></tr>`).join('');}
 const emptyHtml='<div class="empty"><strong>從第一筆藥品開始</strong>先建立藥品與實際盤點瓶數，就能登錄進貨和耗損。<br><a href="#items">前往藥品建帳 →</a></div>';
 function table(items){return `<div class="tablewrap"><table><thead><tr><th>藥品名稱／編號</th><th>廠牌</th><th>類別</th><th class="num">目前瓶數</th><th class="num">安全瓶數</th><th>狀態</th></tr></thead><tbody id="stockrows">${rows(items)}</tbody></table></div>`;}
-function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');
+function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuestTheme(r);$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');
  if(r==='cloud')cloudCleanup=mountSheets({esc,fmt});
  if(r==='orders')cloudCleanup=mountOrders({esc,fmt,ask});
  if(r==='overview') {const entries=data.entries.filter(e=>e.date===today()&&!e.reverses);c.innerHTML=`<div class="cards">${[['藥品品項',data.items.length,'項已建帳'],['目前總瓶數',data.items.reduce((s,i)=>s+stock(i),0),'瓶'],['今日進貨',entries.filter(e=>e.type==='進貨').reduce((s,e)=>s+e.bottles,0),'瓶 · 原始登錄量'],['低庫存品項',data.items.filter(i=>stock(i)<=i.safety).length,'項需留意']].map(([t,n,u])=>`<div class="card"><small>${t}</small><strong>${fmt(n)}</strong><em>${u}</em></div>`).join('')}</div><section class="panel"><div class="panelhead"><h2>藥庫現況</h2><div class="toolbar"><input id="search" aria-label="搜尋藥品" placeholder="搜尋藥名、廠牌、編號"><select id="filter" aria-label="庫存狀態"><option value="all">全部庫存</option><option value="low">低庫存</option></select></div></div>${data.items.length?table(data.items):emptyHtml}</section>`;const filter=()=>{if(!$('#stockrows'))return;const q=$('#search').value.toLowerCase();$('#stockrows').innerHTML=rows(data.items.filter(i=>[i.name,i.brand,i.code].join(' ').toLowerCase().includes(q)&&($('#filter').value!=='low'||stock(i)<=i.safety)));};$('#search').oninput=filter;$('#filter').onchange=filter;}

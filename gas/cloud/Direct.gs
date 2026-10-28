@@ -15,15 +15,17 @@ function erpDirect(operation,input,token){
   const [id,name]=logs[input.log],sheet=SpreadsheetApp.openById(id).getSheetByName(name);
   return {values:sheet?erpDirectValues_(sheet):[]};
  }
- if(!input||!['preview','commit'].includes(operation))throw Error('不支援的操作');
+ if(!input||!['prepareLoss','preview','commit'].includes(operation))throw Error('不支援的操作');
  // API object key order is not guaranteed; preserve semantic snapshot comparison.
  input=erpDirectCanonical_(input);
  if(input.kind==='tcm-loss-cumulative'){
-  if(operation==='preview'){lossV3PrepareDate(input);return lossV3Preview(input);}
+  const serialized=JSON.stringify(input);
+  if(operation==='prepareLoss')return lossV3PrepareDate(serialized);
+  if(operation==='preview')return lossV3Preview(serialized);
   // Read back in a separate API execution to avoid stale SpreadsheetApp caches.
-  return lossV3Commit(input,token);
+  return lossV3Commit(serialized,token);
  }
- if(input.kind==='tcm-cloud')return operation==='preview'?erpPreview(input):erpCommit(input,token);
+ if(input.kind==='tcm-cloud'&&operation!=='prepareLoss')return operation==='preview'?erpPreview(input):erpCommit(input,token);
  throw Error('交易種類無效');
 }
 function erpDirectCanonical_(value){

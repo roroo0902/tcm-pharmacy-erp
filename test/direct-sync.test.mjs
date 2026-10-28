@@ -29,7 +29,7 @@ test('API reads only configured sheets/logs, refuses caller supplied arbitrary t
 });
 test('API preserves preview token and cumulative loss readback; date preparation does not commit',()=>{
  const {c,calls}=server(),loss={kind:'tcm-loss-cumulative'};
- c.erpDirect('preview',loss);assert.ok(calls.includes('date'));assert.ok(!calls.some(Array.isArray));
+ c.erpDirect('prepareLoss',loss);c.erpDirect('preview',loss);assert.ok(calls.includes('date'));assert.ok(!calls.some(Array.isArray));
  c.erpDirect('commit',{kind:'tcm-cloud',id:'ERP-stable'},'snapshot');
  assert.deepEqual(calls.find(Array.isArray),['commit','ERP-stable','snapshot']);
  c.lossV3Preview=()=>{throw Error('same execution cache');};assert.equal(c.erpDirect('commit',loss,'old').message,'ok');
@@ -71,9 +71,9 @@ test('expired authorization and ambiguous transport failures never auto-retry a 
 
 test('loss confirms success only after a separate fresh readback and rejects a nonzero delta',async t=>{
  const m=await client(t);let confirm,success=0,status='',readbacks=0;const ops=[];
- globalThis.fetch=async(url,init)=>{const op=JSON.parse(init.body).parameters[0];ops.push(op);return response(op==='commit'?{message:'ok'}:{token:'snapshot',lines:[{delta:op==='preview'&&ops.at(-2)==='commit'?readbacks:1}]});};
+ globalThis.fetch=async(url,init)=>{const op=JSON.parse(init.body).parameters[0];ops.push(op);return response(op==='commit'?{message:'ok'}:{token:'snapshot',lines:[{delta:op==='preview'&&ops.at(-3)==='commit'?readbacks:1}]});};
  const review=()=>m.directReview({kind:'tcm-loss-cumulative',lines:[{total:1}]},(html,fn)=>confirm=fn,async()=>success++,s=>status=s);
- await review();await confirm();assert.deepEqual(ops,['preview','commit','preview']);assert.equal(success,1);
+ await review();await confirm();assert.deepEqual(ops,['prepareLoss','preview','commit','prepareLoss','preview']);assert.equal(success,1);
  readbacks=1;await review();await confirm();assert.equal(success,1);assert.match(status,/入帳後資料又有變動/);
 });
 

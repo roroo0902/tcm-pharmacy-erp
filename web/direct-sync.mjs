@@ -42,6 +42,7 @@ export async function runDirect(operation,draft,previewToken){
   return call(operation);
  }
  if(!token||Date.now()>=expires)throw Error('請先點「登入 Google 同步」重新連線；輸入仍保留');
+ if(operation==='preview'&&draft?.kind==='tcm-loss-cumulative')await runDirect('prepareLoss',draft);
  const response=await fetch('https://script.googleapis.com/v1/scripts/'+encodeURIComponent(DIRECT.deploymentId)+':run',{
   method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
   body:JSON.stringify({function:'erpDirect',parameters:[operation,draft??null,previewToken??null],devMode:false})

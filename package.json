@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "中醫藥庫進銷存，全部以瓶管理",
-  "engines": { "node": ">=22" },
-  "scripts": { "test": "node --test" }
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
 }

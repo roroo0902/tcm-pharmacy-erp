@@ -1,11 +1,17 @@
 import {DIRECT} from './direct-config.mjs';
-export const directEnabled=()=>DIRECT.enabled&&!!DIRECT.clientId&&!!DIRECT.deploymentId;
+export const hostedEnabled=()=>!!globalThis.google?.script?.run;
+export const directEnabled=()=>hostedEnabled()||(DIRECT.enabled&&!!DIRECT.clientId&&!!DIRECT.deploymentId);
 const scopes=['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/script.container.ui','https://www.googleapis.com/auth/userinfo.email'];
 let token='',expires=0,client,signing;
 let snapshotRequest,writing=false,reviewSequence=0;
 export const directPollMs=()=>DIRECT.pollMs;
 export function setupDirect(){
  if(!directEnabled())return;
+ if(hostedEnabled()){
+  document.querySelector('.notice').textContent='Google Sheets 為正式庫存；在本頁預覽並確認後直接入帳，完成後自動讀回。訂貨不增加庫存。';
+  document.querySelector('.sidefoot small').textContent='Google 已登入・站內確認後直接同步';
+  return;
+ }
  const script=document.createElement('script');script.src='https://accounts.google.com/gsi/client';script.async=true;
  document.head.append(script);
  const button=document.createElement('button');button.id='google-connect';button.textContent='登入 Google 同步';
@@ -14,6 +20,7 @@ export function setupDirect(){
  button.onclick=()=>authorize().then(()=>{button.textContent='Google 已連線';window.dispatchEvent(new Event('erp-synced'));}).catch(e=>{button.textContent=e.message;});
 }
 export function authorize(){
+ if(hostedEnabled())return Promise.resolve();
  if(token&&Date.now()<expires)return Promise.resolve();
  if(signing)return signing;
  if(!directEnabled())return Promise.reject(Error('站內同步尚未完成部署設定'));
@@ -28,6 +35,12 @@ export function authorize(){
  });return signing;
 }
 export async function runDirect(operation,draft,previewToken){
+ if(hostedEnabled()){
+  const call=(op)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(Error(e.message||'同步失敗，請重新核對同一筆資料'))).erpHosted(op,draft??null,previewToken??null));
+  // Separate executions avoid SpreadsheetApp stale caches after adding a date column.
+  if(operation==='preview'&&draft?.kind==='tcm-loss-cumulative')await call('prepareLoss');
+  return call(operation);
+ }
  if(!token||Date.now()>=expires)throw Error('請先點「登入 Google 同步」重新連線；輸入仍保留');
  const response=await fetch('https://script.googleapis.com/v1/scripts/'+encodeURIComponent(DIRECT.deploymentId)+':run',{
   method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
@@ -56,6 +69,8 @@ export async function directReview(draft,ask,onSuccess,status){
     // Invalidate in-flight snapshots so a post-write read cannot reuse older data.
     snapshotRequest=null;
     await onSuccess(result);status([result.message||'已同步 Google Sheets',result.warning].filter(Boolean).join('；'));window.dispatchEvent(new Event('erp-synced'));
+    const updates=(result.lines||preview.lines).map(l=>'<tr><td>'+escape(l.sheet)+' '+escape(l.code)+' '+escape(l.name)+'</td><td>'+escape(l.quantity??l.total)+'</td><td>'+escape(l.after??l.stockAfter)+'</td></tr>').join('');
+    ask('<h3>同步完成・工作表已讀回核對</h3><p>'+escape(result.message||'已完成')+'</p><div class="tablewrap"><table><thead><tr><th>品項</th><th>本次數量／累計</th><th>目前庫存</th></tr></thead><tbody>'+updates+'</tbody></table></div><p>'+escape(result.id||'')+'</p>',()=>{},'完成');
    }catch(e){status(e.message+'；請重新預覽同一筆資料，輸入仍保留。');}finally{writing=false;controls.forEach(([el,disabled])=>{if(el.isConnected)el.disabled=disabled;});}},'確認入帳');
  }catch(e){status(e.message);}
 }

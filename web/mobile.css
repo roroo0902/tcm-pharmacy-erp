@@ -26,3 +26,5 @@
   .hero-potion { width:32px; height:44px; }
   .local { top:10px; right:12px; }
 }
+
+.basket-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #ddd}.basket-row>span{flex:1;min-width:160px}.basket-row input{max-width:120px}dialog{max-height:90dvh;overflow:auto}

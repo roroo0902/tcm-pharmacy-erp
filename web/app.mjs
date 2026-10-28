@@ -1,4 +1,4 @@
-import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=cloud20261029b';
+import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=cloud20261029c';
 import {updateQuestTheme} from './quest-theme.mjs?v=cloud20261029';
 import {mountLoss} from './loss.mjs?v=cloud20261029';
 import {mountReceive} from './receive.mjs?v=potions2';

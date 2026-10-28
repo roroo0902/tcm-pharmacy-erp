@@ -10,6 +10,6 @@ export function parseLossSheet(text,source,date){
 export function lossDraft(lines,{date,actor,reason}){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date).toISOString().slice(0,10)!==date)throw Error('請選擇耗損日期');
  if(!String(actor).trim())throw Error('請填經手人');if(!lines.length)throw Error('請至少填一項當日累計');
- const seen=new Set();const result=lines.map(({row,total})=>{const key=JSON.stringify([row.name,row.code]);if(seen.has(key))throw Error('藥品重複');seen.add(key);if(!Number.isFinite(total)||total<0||Math.abs(total*100-Math.round(total*100))>1e-7)throw Error('累計瓶數須非負，最多兩位小數');if(row.posted!==null&&total<row.posted&&!reason.trim())throw Error('調低累計或歸零請填更正原因');return {sheet:row.name,code:row.code,name:row.drug,total};});
+ const seen=new Set();const result=lines.map(({row,total})=>{const key=JSON.stringify([row.name,row.code]);if(seen.has(key))throw Error('藥品重複');seen.add(key);if(!Number.isInteger(total)||total<0||total>1000000)throw Error('累計罐數須為 0 或正整數，不接受小數');if(row.posted!==null&&total<row.posted&&!reason.trim())throw Error('調低累計或歸零請填更正原因');return {sheet:row.name,code:row.code,name:row.drug,total};});
  return {kind:'tcm-loss-cumulative',version:3,date,actor:actor.trim(),reason:reason.trim(),lines:result};
 }

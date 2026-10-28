@@ -43,3 +43,5 @@ footer{border-top:1px solid #a5b4ad;padding-top:18px;margin-top:30px;color:#586d
 #content tr:is([data-category="單方"],[data-category="複方"]) > td:first-child{background-image:none!important;position:relative;padding-left:60px;min-height:50px}
 #content tr:is([data-category="單方"],[data-category="複方"]) > td:first-child::before{content:"";position:absolute;left:8px;top:50%;transform:translateY(-50%);width:44px;height:44px;background-image:url('./assets/potion-categories.png');background-size:200% 100%;background-position:left center;background-repeat:no-repeat;image-rendering:pixelated;pointer-events:none}
 #content tr[data-category="複方"] > td:first-child::before{background-position:right center}
+
+#content tr[data-category="單方"] > td:first-child::before{background-image:url('./assets/herbal-powder.png');background-size:contain;background-position:center}

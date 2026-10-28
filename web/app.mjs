@@ -1,4 +1,5 @@
 import {setupDirect} from './direct-sync.mjs?v=direct20261029b';
+import {mountGoogleEntry,restoreGooglePage} from './google-entry.mjs?v=remember20261029';
 import {mountReceiptGrid} from './receive-grid.mjs?v=receiptgrid20261029';
 import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=direct20261029b';
 import {updateQuestTheme} from './quest-theme.mjs?v=direct20261029b';
@@ -9,7 +10,7 @@ import {mountSheets} from './sheets.mjs?v=direct20261029b';
 import {mountCatalog} from './catalog.mjs?v=potions2';
 import {today,empty,validate,addItem,addEntry} from './store.mjs?v=20261027';
 const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let data,ledger,pending,locked=false;
+let data,ledger,pending,locked=false,ready=false;
 const fmt=n=>Number(n).toLocaleString('zh-TW',{maximumFractionDigits:2});
 let cloudCleanup=()=>{};
 const titles={orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',cloud:'雲端庫存查詢',overview:'庫存總覽',receive:'進貨登錄',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
@@ -40,6 +41,7 @@ function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuest
 }
 function ask(html,action,label='確認入帳'){$('#commit').textContent=label;pending=action;$('#confirm-detail').innerHTML=html;const form=$('#confirm form');if(form)form.onsubmit=e=>e.preventDefault();$('#confirm').showModal();}
 $('#cancel').onclick=()=>$('#confirm').close();$('#commit').onclick=async()=>{const form=$('#confirm form');if(form&&!form.reportValidity())return;const action=pending;pending=null;$('#confirm').close();if(action)await action();};
-window.addEventListener('hashchange',()=>{message('');render();});window.addEventListener('storage',e=>{if(e.key===KEY){try{read();render();message('已載入其他分頁的最新資料');}catch(err){message(err.message,true);}}});
-setupDirect();try{read();render();}catch(e){$('#content').innerHTML='<section class="panel"><h2>無法讀取本機資料</h2><p>資料可能損壞或瀏覽器禁止儲存。為避免覆蓋現有資料，已停止入帳；請先保留瀏覽器資料並聯絡維護人員。</p></section>';message(e.message,true);}
+window.addEventListener('hashchange',()=>{if(ready){message('');render();}});window.addEventListener('storage',e=>{if(e.key===KEY&&ready){try{read();render();message('已載入其他分頁的最新資料');}catch(err){message(err.message,true);}}});
+async function start(){await restoreGooglePage(globalThis.google,location);setupDirect();mountGoogleEntry();try{read();ready=true;render();}catch(e){$('#content').innerHTML='<section class="panel"><h2>無法讀取本機資料</h2><p>資料可能損壞或瀏覽器禁止儲存。為避免覆蓋現有資料，已停止入帳；請先保留瀏覽器資料並聯絡維護人員。</p></section>';message(e.message,true);}}
+start().catch(e=>message(e.message,true));
 

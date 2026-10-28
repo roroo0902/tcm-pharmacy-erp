@@ -1,9 +1,9 @@
 import {updateQuestTheme} from './quest-theme.mjs?v=quest1';
-import {mountLoss} from './loss.mjs?v=loss-jars1';
-import {mountReceive} from './receive.mjs?v=receive3';
-import {mountOrders} from './orders.mjs?v=order3';
-import {mountSheets} from './sheets.mjs?v=20261027-sort1';
-import {mountCatalog} from './catalog.mjs';
+import {mountLoss} from './loss.mjs?v=potions2';
+import {mountReceive} from './receive.mjs?v=potions2';
+import {mountOrders} from './orders.mjs?v=potions2';
+import {mountSheets} from './sheets.mjs?v=potions2';
+import {mountCatalog} from './catalog.mjs?v=potions2';
 import {today,empty,validate,addItem,addEntry} from './store.mjs?v=20261027';
 const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let data,ledger,pending,locked=false;
@@ -15,7 +15,7 @@ function message(text,error=false){$('#message').textContent=text;$('#message').
 function read(){const raw=localStorage.getItem(KEY);data=raw?JSON.parse(raw):empty();ledger=validate(data);}
 async function mutate(fn){if(locked)return;locked=true;try{if(!navigator.locks)throw Error('請使用新版 Chrome 或 Edge，以避免多分頁同時入帳衝突');await navigator.locks.request(KEY,async()=>{read();const next=fn(data);validate(next);localStorage.setItem(KEY,JSON.stringify(next));data=next;ledger=validate(data);});render();message('已儲存在此瀏覽器。請定期匯出備份。');}catch(e){message(e.message,true);}finally{locked=false;}}
 function stock(i){return ledger.balance(i.id);}function badge(i){const n=stock(i);return `<span class="pill ${n===0?'out':n<=i.safety?'warn':''}">${n===0?'無庫存':n<=i.safety?'低庫存':'庫存正常'}</span>`;}
-function rows(items){return items.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted">${esc(i.code||'未填編號')}</div></td><td>${esc(i.brand)}</td><td>${esc(i.category)}</td><td class="num"><b>${fmt(stock(i))}</b> 瓶</td><td class="num">${fmt(i.safety)}</td><td>${badge(i)}</td></tr>`).join('');}
+function rows(items){return items.map(i=>`<tr data-category="${esc(i.category)}"><td><b>${esc(i.name)}</b><div class="muted">${esc(i.code||'未填編號')}</div></td><td>${esc(i.brand)}</td><td>${esc(i.category)}</td><td class="num"><b>${fmt(stock(i))}</b> 瓶</td><td class="num">${fmt(i.safety)}</td><td>${badge(i)}</td></tr>`).join('');}
 const emptyHtml='<div class="empty"><strong>從第一筆藥品開始</strong>先建立藥品與實際盤點瓶數，就能登錄進貨和耗損。<br><a href="#items">前往藥品建帳 →</a></div>';
 function table(items){return `<div class="tablewrap"><table><thead><tr><th>藥品名稱／編號</th><th>廠牌</th><th>類別</th><th class="num">目前瓶數</th><th class="num">安全瓶數</th><th>狀態</th></tr></thead><tbody id="stockrows">${rows(items)}</tbody></table></div>`;}
 function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuestTheme(r);$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');

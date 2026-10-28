@@ -14,7 +14,7 @@ D1 是固定日期；E1 是已載入日期。D 欄當日累計、E 欄已入帳�
 E/F 受保護，E 只是顯示快照；GAS 重新讀取目標日欄，不信任前端或 E/F 計算。
 
 ```excel
-=IF(D3="","",IF($D$1<>$E$1,"請載入日期",IF(AND(ISNUMBER(D3),D3>=0,ISNUMBER(E3),E3>=0),D3-E3,"請檢查數字")))
+=IF(D3="","",IF(IF(ISNUMBER($D$1),TEXT($D$1,"yyyy-mm-dd"),$D$1)<>IF(ISNUMBER($E$1),TEXT($E$1,"yyyy-mm-dd"),$E$1),"請載入日期",IF(AND(ISNUMBER(D3),D3>=0,ISNUMBER(E3),E3>=0),D3-E3,"請檢查數字")))
 ```
 
 重新整理試算表後，使用「💊 庫存管理系統」選單：

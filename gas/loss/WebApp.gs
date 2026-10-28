@@ -1,7 +1,3 @@
-// The old WebApp auto-posted on page load. Use the bound Sheet's preview instead.
-function doGet() {
-  return HtmlService.createHtmlOutput('<!doctype html><meta charset="utf-8"><h2>每日耗損 V2</h2>' +
-    '<p>請開啟耗損表，使用「💊 庫存管理系統 → 預覽每日耗損並同步」，核對後確認扣庫。</p>' +
-    '<a target="_top" href="https://docs.google.com/spreadsheets/d/1zQr0awr9wJr2Fbsk2PQgiMd1C640AokVmT2pPU9-fU4/edit">開啟耗損表</a>')
-    .setTitle('每日耗損 V2');
-}
+// Deploy with access MYSELF. GET/POST display drafts only; authenticated confirmation commits.
+function doGet(){loss3Actor_();return HtmlService.createHtmlOutput(loss3Html_(JSON.stringify(loss3SourceDraft_()))).setTitle('每日耗損｜當日累計');}
+function doPost(e){loss3Actor_();const text=String(e&&e.parameter&&e.parameter.payload||'');if(text.length>300000)throw Error('清單過大');loss3Draft_(text);return HtmlService.createHtmlOutput(loss3Html_(text)).setTitle('每日耗損｜確認差額');}

@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {cloudDraft,cloudPlan} from '../src/cloud-transaction.mjs';
+test('multi-item receipt plans every item together and rejects a bad line before commit',()=>{
+ const lines=[{sheet:'科達單方',code:'QA1',name:'測試一',quantity:2},{sheet:'天明單方',code:'QA2',name:'測試二',quantity:3}];
+ const draft=cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-batch-test123',action:'進貨',date:'2026-10-29',actor:'QA',note:'',lines});
+ const rows=lines.map((l,i)=>({...l,stock:i+1,sheetId:i+1,row:3}));
+ assert.deepEqual(cloudPlan(draft,rows).lines.map(l=>l.after),[3,5]);
+ assert.throws(()=>cloudPlan(draft,[rows[0],{...rows[1],stock:null}]));
+ assert.throws(()=>cloudDraft({...draft,lines:[lines[0],{...lines[1],quantity:1.5}]}));
+});
 test('hosted RPC uses existing session; prepares loss in a separate execution and never writes on preview',async t=>{
  const old=globalThis.google,calls=[];t.after(()=>{globalThis.google=old;});
  const runner={withSuccessHandler(fn){this.ok=fn;return this;},withFailureHandler(fn){this.fail=fn;return this;},erpHosted(op,d,token){calls.push([op,d,token]);this.ok({lines:[],token:'review'});}};

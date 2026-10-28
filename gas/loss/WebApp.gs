@@ -1,3 +1,3 @@
 // Deploy with access MYSELF. GET/POST display drafts only; authenticated confirmation commits.
-function doGet(){loss3Actor_();return HtmlService.createHtmlOutput(loss3Html_(JSON.stringify(loss3SourceDraft_()))).setTitle('每日耗損｜當日累計');}
-function doPost(e){loss3Actor_();const text=String(e&&e.parameter&&e.parameter.payload||'');if(text.length>300000)throw Error('清單過大');loss3Draft_(text);return HtmlService.createHtmlOutput(loss3Html_(text)).setTitle('每日耗損｜確認差額');}
+function doGet(e){loss3Actor_();return HtmlService.createHtmlOutput(e&&e.parameter&&e.parameter.mode==='loss'?loss3Html_(''):erpHtml_('')).setTitle('藥庫雲端同步');}
+function doPost(e){loss3Actor_();const text=String(e&&e.parameter&&e.parameter.payload||'');if(text.length>300000)throw Error('清單過大');const d=JSON.parse(text);if(d.kind==='tcm-cloud'){CloudTransaction.cloudDraft(d);return HtmlService.createHtmlOutput(erpHtml_(text)).setTitle('藥庫雲端同步確認');}loss3Draft_(text);return HtmlService.createHtmlOutput(loss3Html_(text)).setTitle('每日耗損｜確認差額');}

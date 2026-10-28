@@ -1,7 +1,8 @@
-import {updateQuestTheme} from './quest-theme.mjs?v=quest1';
-import {mountLoss} from './loss.mjs?v=potions2';
+import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=cloud20261029';
+import {updateQuestTheme} from './quest-theme.mjs?v=cloud20261029';
+import {mountLoss} from './loss.mjs?v=cloud20261029';
 import {mountReceive} from './receive.mjs?v=potions2';
-import {mountOrders} from './orders.mjs?v=qa20261029';
+import {mountOrders} from './orders.mjs?v=cloud20261029';
 import {mountSheets} from './sheets.mjs?v=potions2';
 import {mountCatalog} from './catalog.mjs?v=potions2';
 import {today,empty,validate,addItem,addEntry} from './store.mjs?v=20261027';
@@ -9,8 +10,8 @@ const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String
 let data,ledger,pending,locked=false;
 const fmt=n=>Number(n).toLocaleString('zh-TW',{maximumFractionDigits:2});
 let cloudCleanup=()=>{};
-const titles={orders:'廠商訂貨',cloud:'雲端庫存查詢',overview:'庫存總覽',receive:'進貨登錄',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
-const route=()=>Object.hasOwn(titles,location.hash.slice(1))?location.hash.slice(1):'cloud';
+const titles={orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',cloud:'雲端庫存查詢',overview:'庫存總覽',receive:'進貨登錄',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
+const route=()=>Object.hasOwn(titles,location.hash.slice(1))?location.hash.slice(1):'overview';
 function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
 function read(){const raw=localStorage.getItem(KEY);data=raw?JSON.parse(raw):empty();ledger=validate(data);}
 async function mutate(fn){if(locked)return;locked=true;try{if(!navigator.locks)throw Error('請使用新版 Chrome 或 Edge，以避免多分頁同時入帳衝突');await navigator.locks.request(KEY,async()=>{read();const next=fn(data);validate(next);localStorage.setItem(KEY,JSON.stringify(next));data=next;ledger=validate(data);});render();message('已儲存在此瀏覽器。請定期匯出備份。');}catch(e){message(e.message,true);}finally{locked=false;}}
@@ -19,6 +20,11 @@ function rows(items){return items.map(i=>`<tr data-category="${esc(i.category)}"
 const emptyHtml='<div class="empty"><strong>從第一筆藥品開始</strong>先建立藥品與實際盤點瓶數，就能登錄進貨和耗損。<br><a href="#items">前往藥品建帳 →</a></div>';
 function table(items){return `<div class="tablewrap"><table><thead><tr><th>藥品名稱／編號</th><th>廠牌</th><th>類別</th><th class="num">目前瓶數</th><th class="num">安全瓶數</th><th>狀態</th></tr></thead><tbody id="stockrows">${rows(items)}</tbody></table></div>`;}
 function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuestTheme(r);$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');
+ if(r==='overview'||r==='cloud'){cloudCleanup=mountSheets({esc,fmt});return;}
+ if(['receive','orders','items'].includes(r)){cloudCleanup=mountCloudEntry({esc,route:r,ask});return;}
+ if(r==='history'){cloudCleanup=mountCloudHistory({esc,ask});return;}
+ if(r==='orderPlanning'){cloudCleanup=mountOrders({esc,fmt,ask});return;}
+
  if(r==='cloud')cloudCleanup=mountSheets({esc,fmt});
  if(r==='orders')cloudCleanup=mountOrders({esc,fmt,ask});
  if(r==='overview') {const entries=data.entries.filter(e=>e.date===today()&&!e.reverses);c.innerHTML=`<div class="cards">${[['藥品品項',data.items.length,'項已建帳'],['目前總瓶數',data.items.reduce((s,i)=>s+stock(i),0),'瓶'],['今日進貨',entries.filter(e=>e.type==='進貨').reduce((s,e)=>s+e.bottles,0),'瓶 · 原始登錄量'],['低庫存品項',data.items.filter(i=>stock(i)<=i.safety).length,'項需留意']].map(([t,n,u])=>`<div class="card"><small>${t}</small><strong>${fmt(n)}</strong><em>${u}</em></div>`).join('')}</div><section class="panel"><div class="panelhead"><h2>藥庫現況</h2><div class="toolbar"><input id="search" aria-label="搜尋藥品" placeholder="搜尋藥名、廠牌、編號"><select id="filter" aria-label="庫存狀態"><option value="all">全部庫存</option><option value="low">低庫存</option></select></div></div>${data.items.length?table(data.items):emptyHtml}</section>`;const filter=()=>{if(!$('#stockrows'))return;const q=$('#search').value.toLowerCase();$('#stockrows').innerHTML=rows(data.items.filter(i=>[i.name,i.brand,i.code].join(' ').toLowerCase().includes(q)&&($('#filter').value!=='low'||stock(i)<=i.safety)));};$('#search').oninput=filter;$('#filter').onchange=filter;}

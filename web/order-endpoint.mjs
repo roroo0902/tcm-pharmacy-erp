@@ -1,2 +1,2 @@
-// Restricted Google Apps Script web app. Never place tokens or credentials here.
-export const ORDER_ENDPOINT='';
+// Uses the same authenticated cloud gateway.
+export {LOSS_ENDPOINT as ORDER_ENDPOINT} from './loss-cloud.mjs?v=cloud20261029';

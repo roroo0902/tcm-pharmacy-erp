@@ -1,4 +1,5 @@
 import {setupDirect} from './direct-sync.mjs?v=direct20261029b';
+import {mountReceiptGrid} from './receive-grid.mjs?v=receiptgrid20261029';
 import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=direct20261029b';
 import {updateQuestTheme} from './quest-theme.mjs?v=direct20261029b';
 import {mountLoss} from './loss.mjs?v=direct20261029b';
@@ -22,7 +23,8 @@ const emptyHtml='<div class="empty"><strong>從第一筆藥品開始</strong>先
 function table(items){return `<div class="tablewrap"><table><thead><tr><th>藥品名稱／編號</th><th>廠牌</th><th>類別</th><th class="num">目前瓶數</th><th class="num">安全瓶數</th><th>狀態</th></tr></thead><tbody id="stockrows">${rows(items)}</tbody></table></div>`;}
 function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuestTheme(r);$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');
  if(r==='overview'||r==='cloud'){cloudCleanup=mountSheets({esc,fmt});return;}
- if(['receive','orders','items'].includes(r)){cloudCleanup=mountCloudEntry({esc,route:r,ask});return;}
+ if(r==='receive'){cloudCleanup=mountReceiptGrid({esc,fmt,ask});return;}
+ if(['orders','items'].includes(r)){cloudCleanup=mountCloudEntry({esc,route:r,ask});return;}
  if(r==='history'){cloudCleanup=mountCloudHistory({esc,ask});return;}
  if(r==='orderPlanning'){cloudCleanup=mountOrders({esc,fmt,ask});return;}
 

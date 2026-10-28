@@ -48,3 +48,6 @@ footer{border-top:1px solid #a5b4ad;padding-top:18px;margin-top:30px;color:#586d
 
 /* Keep reviewed quantities readable inside the dark RPG dialog. */
 dialog:has(.direct-review-table){max-width:860px}dialog .direct-review-table{table-layout:fixed;white-space:normal}dialog .direct-review-table th:first-child{width:46%}dialog .direct-review-table td{background:#fffbee;color:#203b55;overflow-wrap:anywhere}dialog .direct-review-table th:not(:first-child),dialog .direct-review-table td:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+
+/* Worksheet-style receipts share the daily-loss layout. */
+#receipt-grid .receipt-qty{width:136px;min-height:44px;text-align:right;background:#fffef7}#receipt-grid .num{text-align:right;font-variant-numeric:tabular-nums}#receipt-grid th:nth-child(1){min-width:260px}#receipt-grid th:nth-child(4){min-width:160px}#receipt-state{padding:12px 14px;background:#e8f0ec;border:1px solid #c5d6cf;border-radius:4px;color:#335775}#receipt-summary{font-size:13px;color:#405c73}#receipt-pending:not(:empty){margin-top:24px;padding-top:18px;border-top:1px solid #d5c9a7}#receipt-grid .sort-heading{color:#f4e7c7}#receipt-grid td:first-child{padding-left:60px}

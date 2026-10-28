@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
+test('hosted loss fingerprints ignore RPC object key order but preserve values and array order',()=>{
+ const ctx={};vm.createContext(ctx);vm.runInContext(fs.readFileSync('gas/cloud/Hosted.gs','utf8'),ctx);
+ const a={kind:'tcm-loss-cumulative',lines:[{code:'QA',total:1}],date:'2026-10-29'};
+ const b={date:a.date,lines:[{total:1,code:'QA'}],kind:a.kind};
+ const key=x=>JSON.stringify(ctx.erpHostedCanonical_(x));
+ assert.equal(key(a),key(b));assert.notEqual(key(a),key({...b,lines:[{total:2,code:'QA'}]}));
+ assert.notEqual(key([1,2]),key([2,1]));
+});
 import {cloudDraft,cloudPlan} from '../src/cloud-transaction.mjs';
 test('multi-item receipt plans every item together and rejects a bad line before commit',()=>{
  const lines=[{sheet:'科達單方',code:'QA1',name:'測試一',quantity:2},{sheet:'天明單方',code:'QA2',name:'測試二',quantity:3}];

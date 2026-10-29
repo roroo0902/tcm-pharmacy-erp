@@ -83,9 +83,11 @@ export function mountPhotoReceive({esc,fmt,ask}){
    if(!directEnabled())throw Error('AI 拍照功能需要已授權的 Google 雲端入口');
    if(!rows.length)throw Error('請先完成此廠商的藥品清單讀取');
    const file=$('#ai-image').files[0];if(!file)throw Error('請先上傳照片');
+   const scanSheet=selected.name;
    lockBusy(true);status('正在壓縮照片、辨識藥名與數量…');
-   const base64=await jpegData(file);await authorize();
-   const result=await runDirect('recognizeReceipt',{sheet:selected.name,mimeType:'image/jpeg',base64});
+   await authorize();const base64=await jpegData(file);
+   const result=await runDirect('recognizeReceipt',{sheet:scanSheet,mimeType:'image/jpeg',base64});
+   if(!alive||selected.name!==scanSheet){status('已切換廠商，上一張照片的辨識結果未套用。');return;}
    // Do not persist the image or raw API response in localStorage.
    recognized=cleanRecognized(result);
    if(!recognized.length)throw Error('AI 未辨識到藥品項目，請重拍或改用一般進貨登錄');

@@ -1,3 +1,4 @@
+import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
 import {directEnabled,directReview,directSheet,directLog} from './direct-sync.mjs?v=direct20261029b';
 import {SOURCES,parseSheet,exportUrl,csvRows,sheetUrl} from './sheets-data.mjs';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
@@ -18,6 +19,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   $('#receipt-grid tbody').innerHTML=list.map(r=>`<tr data-category="${esc(r.category)}"><td><b>${esc(r.drug)}</b><div class="muted">${esc(r.code)}</div>${r.warning?`<div class="muted">${esc(r.warning)}</div>`:''}</td><td>${esc(r.brand)}<div class="muted">${esc(r.category)}</div></td><td class="num">${r.bottles===null?'待核對':fmt(r.bottles)+' 瓶'}</td><td class="num"><input class="receipt-qty" data-key="${esc(receiptKey(r))}" aria-label="${esc(r.code)} ${esc(r.drug)} 進貨數量" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="${esc(quantities.get(receiptKey(r))??'')}" placeholder="未進貨"></td><td class="num" data-after="${esc(receiptKey(r))}">—</td><td>${esc(r.updated||'—')}</td><td>${esc([r.stockout,r.shortage].filter(Boolean).join('／')||'—')}</td><td><a href="${sheetUrl(r)}" target="_blank" rel="noopener">查看 ↗</a></td></tr>`).join('')||'<tr><td colspan="8">沒有符合的品項</td></tr>';
   c.querySelectorAll('[data-sort]').forEach(b=>{const active=b.dataset.sort===sort;b.parentElement.setAttribute('aria-sort',active?(direction==='asc'?'ascending':'descending'):'none');b.textContent=b.textContent.replace(/[↑↓↕]$/,active?(direction==='asc'?'↑':'↓'):'↕');});
   c.querySelectorAll('.receipt-qty').forEach(el=>el.oninput=()=>{if(el.value==='')quantities.delete(el.dataset.key);else quantities.set(el.dataset.key,el.value);summary();});
+  quantitySteppers(c,'.receipt-qty');
   summary();
  }
  function summary(){

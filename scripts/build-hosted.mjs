@@ -5,7 +5,7 @@ const result=await build({entryPoints:['web/app.mjs'],bundle:true,write:false,fo
 let js=result.outputFiles[0].text.replaceAll('./web/assets/',origin+'web/assets/');
 let html=await readFile('index.html','utf8');
 await writeFile('web/hosted-app.js',js);
-html=html.replace(/<script type="module"[^>]*><\/script>/,()=>'<script src="'+origin+'web/hosted-app.js?v=stepper20261029"></script>');
+html=html.replace(/<script type="module"[^>]*><\/script>/,()=>'<script src="'+origin+'web/hosted-app.js?v=price20261029"></script>');
 for(const path of ['web/style.css','web/quest-theme.css','web/mobile.css']){
  const css=(await readFile(path,'utf8')).replace(/url\((['"]?)(?!data:|https:)([^)'"\s]+)\1\)/g,(_,q,url)=>'url("'+new URL(url,origin+path).href+'")');
  html=html.replace(new RegExp('<link rel="stylesheet" href="\\./'+path.replaceAll('.','\\.')+'[^\"]*">'),()=>'<style>'+css+'</style>');

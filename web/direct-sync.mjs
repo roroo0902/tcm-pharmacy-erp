@@ -54,6 +54,10 @@ export async function runDirect(operation,draft,previewToken){
  return result.response.result;
 }
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const priceMoney=c=>'NT$ '+(c/100).toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});
+const priceCells=l=>`<td>${l.unitPriceCents===undefined?'未提供':priceMoney(l.unitPriceCents)}</td><td>${l.unitPriceCents===undefined?'—':priceMoney(l.unitPriceCents*l.quantity)}</td>`;
+const priceChange=l=>l.priceAfter===undefined?'':`<li>${escape(l.sheet)} ${escape(l.code)}：E欄 ${escape(l.priceBefore===''?'未提供':l.priceBefore)} → ${priceMoney(l.unitPriceCents)}</li>`;
+function priceTotal(lines){const missing=lines.filter(l=>l.unitPriceCents===undefined).length,total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);return `<p class="price-total">${missing?'已填單價小計':'進貨金額合計'}：${priceMoney(total)}${missing?'（'+missing+' 項未提供單價）':''}</p>`;}
 export async function directReview(draft,ask,onSuccess,status){
  if(writing){status('上一筆仍在入帳，請稍候');return;}
  const sequence=++reviewSequence;
@@ -62,9 +66,12 @@ export async function directReview(draft,ask,onSuccess,status){
   const reviewed=JSON.parse(JSON.stringify(draft));
   const preview=await runDirect('preview',reviewed);
   if(sequence!==reviewSequence)return;
-  const lines=preview.lines.map(l=>`<tr><td>${escape(l.sheet)} ${escape(l.code)} ${escape(l.name)}</td><td>${escape(l.quantity??l.total)}</td><td>${escape(l.before)}</td><td>${escape(l.after??l.stockAfter)}</td></tr>`).join('');
+  if(reviewed.version===2&&reviewed.kind==='tcm-cloud')for(const l of reviewed.lines){const p=preview.lines.find(p=>p.sheet===l.sheet&&p.code===l.code&&p.name===l.name);if(!p||p.quantity!==l.quantity||p.unitPriceCents!==l.unitPriceCents||(l.unitPriceCents!==undefined&&p.amountCents!==l.unitPriceCents*l.quantity))throw Error('單價預覽不一致，請重新載入最新版再核對，尚未入帳');}
+  const priced=reviewed.kind==='tcm-cloud'&&['進貨','沖銷'].includes(reviewed.action),priceHead=priced?'<th>單價（元／瓶）</th><th>小計（元）</th>':'';
+  const lines=preview.lines.map(l=>`<tr><td>${escape(l.sheet)} ${escape(l.code)} ${escape(l.name)}</td><td>${escape(l.quantity??l.total)}</td><td>${escape(l.before)}</td><td>${escape(l.after??l.stockAfter)}</td>${priced?priceCells(l):''}</tr>`).join('');
   const loss=reviewed.kind==='tcm-loss-cumulative';
-  ask(`<p>${escape(reviewed.date)} · ${escape(reviewed.actor)}</p><p>${loss?'當日累計以差額入帳；原值欄為已登錄累計。':'請核對數量與庫存。訂貨不增加庫存。'}</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>藥品</th><th>${loss?'新累計':'數量'}</th><th>${loss?'原累計':'原庫存'}</th><th>入帳後庫存</th></tr></thead><tbody>${lines}</tbody></table></div>${loss?'<p>'+preview.lines.map(l=>escape(l.code)+'：本次差額 '+escape(l.delta)+' 罐').join('；')+'</p>':''}`,
+  const priceChanges=reviewed.action==='進貨'?preview.lines.map(priceChange).join(''):'';
+  ask(`<p>${escape(reviewed.date)} · ${escape(reviewed.actor)}</p><p>${loss?'當日累計以差額入帳；原值欄為已登錄累計。':'請核對數量與庫存。訂貨不增加庫存。'}</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>藥品</th><th>${loss?'新累計':'數量'}</th><th>${loss?'原累計':'原庫存'}</th><th>入帳後庫存</th>${priceHead}</tr></thead><tbody>${lines}</tbody></table></div>${priced?priceTotal(preview.lines):''}${priceChanges?'<p>確認入帳後同步更新原表價格：</p><ul>'+priceChanges+'</ul>':''}${reviewed.action==='沖銷'?'<p>上述金額為原進貨金額；本筆將沖銷原進貨，原表目前單價維持不變。</p>':''}${loss?'<p>'+preview.lines.map(l=>escape(l.code)+'：本次差額 '+escape(l.delta)+' 罐').join('；')+'</p>':''}`,
    async()=>{if(writing)return;writing=true;const controls=[...document.querySelectorAll('#content input,#content select,#content button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);status('正在入帳與讀回核對，請勿重複送出…');try{
     const result=await runDirect('commit',reviewed,preview.token);
     if(loss){
@@ -75,8 +82,9 @@ export async function directReview(draft,ask,onSuccess,status){
     // Invalidate in-flight snapshots so a post-write read cannot reuse older data.
     snapshotRequest=null;
     await onSuccess(result);status([result.message||'已同步 Google Sheets',result.warning].filter(Boolean).join('；'));window.dispatchEvent(new Event('erp-synced'));
-    const updates=(result.lines||preview.lines).map(l=>'<tr><td>'+escape(l.sheet)+' '+escape(l.code)+' '+escape(l.name)+'</td><td>'+escape(l.quantity??l.total)+'</td><td>'+escape(l.after??l.stockAfter)+'</td></tr>').join('');
-    ask('<h3>同步完成・工作表已讀回核對</h3><p>'+escape(result.message||'已完成')+'</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>品項</th><th>本次數量／累計</th><th>目前庫存</th></tr></thead><tbody>'+updates+'</tbody></table></div><p>'+escape(result.id||'')+'</p>',()=>{},'完成');
+    const posted=result.lines||preview.lines;
+    const updates=posted.map(l=>'<tr><td>'+escape(l.sheet)+' '+escape(l.code)+' '+escape(l.name)+'</td><td>'+escape(l.quantity??l.total)+'</td><td>'+escape(l.after??l.stockAfter)+'</td>'+(priced?priceCells(l):'')+'</tr>').join('');
+    ask('<h3>同步完成・工作表已讀回核對</h3><p>'+escape(result.message||'已完成')+'</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>品項</th><th>本次數量／累計</th><th>目前庫存</th>'+priceHead+'</tr></thead><tbody>'+updates+'</tbody></table></div>'+(priced?priceTotal(posted):'')+'<p>'+escape(result.id||'')+'</p>',()=>{},'完成');
    }catch(e){status(e.message+'；請重新預覽同一筆資料，輸入仍保留。');}finally{writing=false;controls.forEach(([el,disabled])=>{if(el.isConnected)el.disabled=disabled;});}},'確認入帳');
  }catch(e){status(e.message);}
 }

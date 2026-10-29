@@ -1,6 +1,8 @@
 import {sortSheetRows} from './sheets-sort.mjs';
+import {priceCents} from './receipt-pricing.mjs';
 export const receiptKey=r=>JSON.stringify([r.name,r.code,r.drug]);
-export function receiptLines(rows,quantities){
+export const receiptPrice=(r,prices)=>prices.has(receiptKey(r))?prices.get(receiptKey(r)):r.unitPriceCents===undefined?'':(r.unitPriceCents/100).toFixed(2);
+export function receiptLines(rows,quantities,prices=new Map()){
  const lines=[];
  for(const [key,value] of quantities){
   if(value==='')continue;
@@ -10,7 +12,9 @@ export function receiptLines(rows,quantities){
   if(!r.code||r.warning?.includes('編號'))throw Error(r.drug+'：請先核對編號');
   if(!Number.isInteger(quantity)||quantity<1||quantity>1000000)throw Error(r.drug+'：進貨數量須為正整數');
   if(!Number.isInteger(r.bottles)||r.bottles<0)throw Error(r.drug+'：目前庫存待核對');
-  lines.push({sheet:r.name,code:r.code,name:r.drug,quantity});
+  if(r.priceWarning&&!prices.has(key))throw Error(r.drug+'：'+r.priceWarning+'，請手動核對單價');
+  let unitPriceCents;try{unitPriceCents=priceCents(receiptPrice(r,prices));}catch(e){throw Error(r.drug+'：'+e.message);}
+  lines.push({sheet:r.name,code:r.code,name:r.drug,quantity,...(unitPriceCents===undefined?{}:{unitPriceCents})});
  }
  return lines;
 }

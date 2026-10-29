@@ -1,4 +1,4 @@
-import {SOURCES,parseSheet,exportUrl,sheetUrl} from './sheets-data.mjs';
+import {SOURCES,parseSheet,exportUrl,sheetUrl} from './sheets-data.mjs?v=price20261029';
 import {sortSheetRows} from './sheets-sort.mjs';
 import {receiveBatch} from './receive-data.mjs';
 import {today} from './store.mjs';

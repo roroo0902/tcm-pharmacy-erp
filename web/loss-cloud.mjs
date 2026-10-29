@@ -1,4 +1,4 @@
-import {csvRows,parseSheet,SHEET_ID} from './sheets-data.mjs';
+import {csvRows,parseSheet,SHEET_ID} from './sheets-data.mjs?v=price20261029';
 export const LOSS_ENDPOINT='https://script.google.com/macros/s/AKfycbwsXafoCVk_UzEwqhTD4shlbLerTzPh1sxv1EH8wxjTovy_fZUNH6F8btpo_oYLYUVF4Q/exec';
 export const LOSS_SHEET='https://docs.google.com/spreadsheets/d/1zQr0awr9wJr2Fbsk2PQgiMd1C640AokVmT2pPU9-fU4/edit';
 export function lossExportUrl(source){return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${source.gid}&range=A1:ZZ5000`;}

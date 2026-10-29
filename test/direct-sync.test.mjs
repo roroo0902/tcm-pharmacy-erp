@@ -46,6 +46,15 @@ async function client(t){
  return mod;
 }
 const response=result=>new Response(JSON.stringify({done:true,response:{result}}));
+test('price review rejects missing server prices and confirms exact cents with E change',async t=>{
+ const m=await client(t);const line={sheet:'科達單方',code:'QA',name:'測試',quantity:3,unitPriceCents:18025};
+ const d={kind:'tcm-cloud',version:2,action:'進貨',lines:[line]};let asked=false,status='',confirm,committed;
+ globalThis.fetch=async()=>response({token:'p',lines:[{...line,unitPriceCents:undefined}]});
+ await m.directReview(d,()=>asked=true,async()=>{},s=>status=s);assert.equal(asked,false);assert.match(status,/單價預覽不一致/);
+ globalThis.fetch=async(u,init)=>{const [op,payload]=JSON.parse(init.body).parameters;if(op==='commit'){committed=payload;return response({message:'ok',lines:[line]});}return response({token:'p',lines:[{...line,amountCents:54075,priceBefore:180,priceAfter:180.25,before:5,after:8}]});};
+ await m.directReview(d,(html,fn)=>{assert.match(html,/540.75/);assert.match(html,/E欄/);confirm=fn;},async()=>{},()=>{});
+ d.lines[0].unitPriceCents=0;await confirm();assert.equal(committed.lines[0].unitPriceCents,18025);
+});
 test('client needs login, uses authenticated API deployment, and coalesces six sheet reads',async t=>{
  const m=await client(t);let calls=0;
  globalThis.fetch=async(url,init)=>{calls++;assert.ok(url.endsWith('/api-deployment:run'));assert.equal(init.headers.Authorization,'Bearer test-only');assert.equal(JSON.parse(init.body).devMode,false);return response({sheets:{A:[['x,y','"z"']]}});};

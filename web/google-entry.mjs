@@ -1,7 +1,7 @@
 import {LOSS_ENDPOINT} from './loss-cloud.mjs';
 
 export const ENTRY_KEY='tcm-google-entry-v1';
-const pages=new Set(['cloud','overview','receive','loss','orders','orderPlanning','items','history','backup']);
+const pages=new Set(['cloud','overview','receive','photoReceive','loss','orders','orderPlanning','items','history','backup']);
 export const safePage=value=>pages.has(value)?value:'overview';
 export function googleEntryUrl(hash=''){
  const url=new URL(LOSS_ENDPOINT);url.searchParams.set('page',safePage(hash.replace(/^#/,'')));return url.href;

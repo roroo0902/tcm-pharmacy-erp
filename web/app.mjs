@@ -2,6 +2,7 @@ import {setupDirect} from './direct-sync.mjs?v=price20261029';
 import {mountGoogleEntry,restoreGooglePage} from './google-entry.mjs?v=remember20261029';
 import {mountReceiptGrid} from './receive-grid.mjs?v=price20261029';
 import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=price20261029';
+import {mountPhotoReceive} from './photo-receive.mjs?v=ai20261030vendor';
 import {updateQuestTheme} from './quest-theme.mjs?v=direct20261029b';
 import {mountLoss} from './loss.mjs?v=price20261029';
 import {mountReceive} from './receive.mjs?v=price20261029';
@@ -13,7 +14,7 @@ const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String
 let data,ledger,pending,locked=false,ready=false;
 const fmt=n=>Number(n).toLocaleString('zh-TW',{maximumFractionDigits:2});
 let cloudCleanup=()=>{};
-const titles={orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',cloud:'雲端庫存查詢',overview:'庫存總覽',receive:'進貨登錄',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
+const titles={orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',cloud:'雲端庫存查詢',overview:'庫存總覽',receive:'進貨登錄',photoReceive:'AI 拍照進貨',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
 const route=()=>Object.hasOwn(titles,location.hash.slice(1))?location.hash.slice(1):'overview';
 function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
 function read(){const raw=localStorage.getItem(KEY);data=raw?JSON.parse(raw):empty();ledger=validate(data);}
@@ -25,6 +26,7 @@ function table(items){return `<div class="tablewrap"><table><thead><tr><th>藥�
 function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuestTheme(r);$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');
  if(r==='overview'||r==='cloud'){cloudCleanup=mountSheets({esc,fmt});return;}
  if(r==='receive'){cloudCleanup=mountReceiptGrid({esc,fmt,ask});return;}
+ if(r==='photoReceive'){cloudCleanup=mountPhotoReceive({esc,fmt,ask});return;}
  if(['orders','items'].includes(r)){cloudCleanup=mountCloudEntry({esc,route:r,ask});return;}
  if(r==='history'){cloudCleanup=mountCloudHistory({esc,ask});return;}
  if(r==='orderPlanning'){cloudCleanup=mountOrders({esc,fmt,ask});return;}

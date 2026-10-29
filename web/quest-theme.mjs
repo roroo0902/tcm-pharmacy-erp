@@ -3,6 +3,7 @@ const pages={
  overview:['02 / SUPPLY CHEST','藥庫寶箱','直接同步 Google 工作表，掌握最新品項與庫存。'],
  orders:['03 / MERCHANT GUILD','商人公會','核對訂貨品項與瓶數，將待發送訂單存入 Google 工作表。'],
  receive:['04 / RESTOCK QUEST','補給入庫','選擇廠牌、核對到貨，在本頁確認後同步入庫。'],
+ photoReceive:['04 / AI RESTOCK','智慧補給','拍照辨識進貨單，逐項核對既有藥名與庫存後再入帳。'],
  loss:['05 / DAILY JOURNAL','每日冒險紀錄','填寫當日累計耗損，在本頁核對入帳差額。'],
  history:['06 / ADVENTURE LOG','交易冒險誌','查閱每次進出庫，讓每一瓶藥品都有跡可循。'],
  items:['07 / APOTHECARY CODEX','藥品圖鑑','建立品項與實盤期初，整理你的藥庫收藏。'],

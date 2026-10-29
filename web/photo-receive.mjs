@@ -1,5 +1,5 @@
 import {SOURCES,parseSheet,exportUrl} from './sheets-data.mjs';
-import {directEnabled,authorize,runDirect,directSheet,directReview,directLog} from './direct-sync.mjs';
+import {directEnabled,authorize,runDirect,directSheet,directReview,directLog} from './direct-sync.mjs?v=direct20261029b';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {csvRows} from './sheets-data.mjs';
 import {matchRecognized,cleanRecognized,addToBasket} from '../src/photo-receive-data.mjs';
@@ -40,7 +40,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
  async function load(){
   const seq=++run;status('正在讀取 '+selected.name+' 的最新藥品…');
   try{
-   const response=directEnabled()?await (async()=>{await authorize();return directSheet(selected,abort.signal);})():await fetch(exportUrl(selected),{cache:'no-store',signal:abort.signal});
+   const response=directEnabled()?await directSheet(selected,abort.signal):await fetch(exportUrl(selected),{cache:'no-store',signal:abort.signal});
    if(!response.ok||!response.headers.get('content-type')?.includes('text/csv'))throw Error('讀取藥品清單失敗，請先登入 Google');
    const next=parseSheet(await response.text(),selected);
    if(seq!==run||!alive)return;
@@ -76,7 +76,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   $('#ai-preview').disabled=!basket.length;
  }
  $('#ai-source').onchange=()=>{selected=sources.find(s=>s.name===$('#ai-source').value)||sources[0];recognized=[];drawResult();load();};
- $('#ai-reload').onclick=load;
+ $('#ai-reload').onclick=async()=>{try{if(directEnabled())await authorize();await load();}catch(error){status(error.message);}};
  $('#ai-scan').onclick=async()=>{
   if(loading)return;
   try{

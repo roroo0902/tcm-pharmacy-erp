@@ -1,9 +1,9 @@
-import {priceCents,money,pricingTotal} from './receipt-pricing.mjs';
+import {priceCents,money,pricingTotal} from './receipt-pricing.mjs?v=compact20261030';
 import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
-import {directEnabled,directReview,directSheet,directLog} from './direct-sync.mjs?v=price20261029';
-import {SOURCES,parseSheet,exportUrl,csvRows,sheetUrl} from './sheets-data.mjs?v=price20261029';
-import {cloudDraft} from '../src/cloud-transaction.mjs?v=price20261029';
-import {receiptKey,receiptLines,sortReceiptRows,receiptPrice} from './receive-grid-data.mjs?v=price20261029';
+import {directEnabled,directReview,directSheet,directLog} from './direct-sync.mjs?v=compact20261030';
+import {SOURCES,parseSheet,exportUrl,csvRows,sheetUrl} from './sheets-data.mjs?v=compact20261030';
+import {cloudDraft} from '../src/cloud-transaction.mjs?v=compact20261030';
+import {receiptKey,receiptLines,sortReceiptRows,receiptPrice} from './receive-grid-data.mjs?v=compact20261030';
 import {today} from './store.mjs';
 import {LOSS_ENDPOINT} from './loss-cloud.mjs';
 const KEY='tcm-cloud-pending-v1';
@@ -46,7 +46,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   if(!pending)return;
   $('#receipt-resume').onclick=()=>send(cloudDraft(pending));
   $('#receipt-check').onclick=async()=>{try{const d=cloudDraft(pending),res=await directLog(['訂貨','取消訂貨'].includes(d.action)?'orders':'inventory'),found=csvRows(await res.text()).slice(1).find(r=>r[0]===d.id);if(!found)throw Error('尚未查到入帳紀錄，請使用同一交易重新核對');const posted=JSON.parse(found[1]).draft;localStorage.setItem(KEY,JSON.stringify({...posted,verified:true}));reuseId='';showPending();status('已讀回原交易；如有未送出的數量，請核對後再建立新單。');}catch(e){status(e.message);}};
-  if($('#receipt-edit'))$('#receipt-edit').onclick=()=>{reuseId=pending.id;quantities.clear();prices.clear();for(const l of pending.lines){const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});quantities.set(key,String(l.quantity));prices.set(key,l.unitPriceCents===undefined?'':(l.unitPriceCents/100).toFixed(2));}$('#receipt-date').value=pending.date;$('#receipt-actor').value=pending.actor;$('#receipt-note').value=pending.note;draw();status('已載入待核對內容，修改後會沿用原交易編號。');};
+  if($('#receipt-edit'))$('#receipt-edit').onclick=()=>{reuseId=pending.id;quantities.clear();prices.clear();for(const l of pending.lines){const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});quantities.set(key,String(l.quantity));prices.set(key,l.unitPriceCents===undefined?'':String(l.unitPriceCents/100));}$('#receipt-date').value=pending.date;$('#receipt-actor').value=pending.actor;$('#receipt-note').value=pending.note;draw();status('已載入待核對內容，修改後會沿用原交易編號。');};
  }
  function send(d){
   if(directEnabled())return directReview(d,ask,async()=>{localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));reuseId='';if(alive){quantities.clear();prices.clear();showPending();await load();}},status);

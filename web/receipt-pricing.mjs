@@ -5,7 +5,7 @@ export function priceCents(value){
  const [whole,fraction='']=text.split('.');const cents=Number(whole)*100+Number(fraction.padEnd(2,'0'));
  if(!Number.isSafeInteger(cents)||cents>100000000)throw Error('單價不可超過1,000,000元');return cents;
 }
-export const money=cents=>'NT$ '+(cents/100).toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});
+export const money=cents=>'NT$ '+(cents/100).toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2});
 export function sheetPrice(value){
  const raw=String(value??'').trim();if(!raw)return {};
  const m=raw.match(/^(?:NT\$|NTD|TWD|\$)?\s*(\d{1,3}(?:,\d{3})+|\d+)(\.\d{1,2})?$/i);

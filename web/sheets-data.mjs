@@ -16,4 +16,4 @@ export function sheetUrl(source){return `https://docs.google.com/spreadsheets/d/
 export function exportUrl(source){return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${source.gid}&range=A1:M5000`;}
 // Daily columns are appended over time. Keep the order feed as wide as the loss feed.
 export function dailyExportUrl(source){return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${source.gid}&range=A1:ZZ5000`;}
-import {sheetPrice} from './receipt-pricing.mjs';
+import {sheetPrice} from './receipt-pricing.mjs?v=compact20261030';

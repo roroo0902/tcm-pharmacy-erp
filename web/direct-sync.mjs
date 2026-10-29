@@ -54,7 +54,7 @@ export async function runDirect(operation,draft,previewToken){
  return result.response.result;
 }
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const priceMoney=c=>'NT$ '+(c/100).toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});
+const priceMoney=c=>'NT$ '+(c/100).toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2});
 const priceCells=l=>`<td>${l.unitPriceCents===undefined?'未提供':priceMoney(l.unitPriceCents)}</td><td>${l.unitPriceCents===undefined?'—':priceMoney(l.unitPriceCents*l.quantity)}</td>`;
 const priceChange=l=>l.priceAfter===undefined?'':`<li>${escape(l.sheet)} ${escape(l.code)}：E欄 ${escape(l.priceBefore===''?'未提供':l.priceBefore)} → ${priceMoney(l.unitPriceCents)}</li>`;
 function priceTotal(lines){const missing=lines.filter(l=>l.unitPriceCents===undefined).length,total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);return `<p class="price-total">${missing?'已填單價小計':'進貨金額合計'}：${priceMoney(total)}${missing?'（'+missing+' 項未提供單價）':''}</p>`;}

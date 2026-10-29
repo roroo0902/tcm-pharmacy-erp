@@ -1,5 +1,5 @@
 import {SOURCES,parseSheet,exportUrl} from './sheets-data.mjs';
-import {directEnabled,authorize,runDirect,directSheet,directReview,directLog} from './direct-sync.mjs?v=price20261029';
+import {directEnabled,authorize,runDirect,directSheet,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {csvRows} from './sheets-data.mjs';
 import {matchRecognized,cleanRecognized,addToBasket} from '../src/photo-receive-data.mjs';

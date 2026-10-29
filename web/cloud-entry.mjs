@@ -1,6 +1,6 @@
-import {directEnabled,directReview,directSheet,directLog} from './direct-sync.mjs?v=price20261029';
-import {SOURCES,parseSheet,exportUrl,SHEET_ID,csvRows} from './sheets-data.mjs?v=price20261029';
-import {cloudDraft} from '../src/cloud-transaction.mjs?v=price20261029';
+import {directEnabled,directReview,directSheet,directLog} from './direct-sync.mjs?v=compact20261030';
+import {SOURCES,parseSheet,exportUrl,SHEET_ID,csvRows} from './sheets-data.mjs?v=compact20261030';
+import {cloudDraft} from '../src/cloud-transaction.mjs?v=compact20261030';
 import {LOSS_ENDPOINT} from './loss-cloud.mjs';
 const KEY='tcm-cloud-pending-v1';
 export const ORDER_SHEET='1YcO7XRhN4T8wrL6wn-jD45lqif--rYQF4HCuBE-Nju8';

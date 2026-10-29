@@ -15,7 +15,7 @@ test('prices distinguish blank/zero and parse currency without floating point ce
 test('source E price defaults refresh, overrides persist, blank suppresses update and malformed source blocks',()=>{
  const r={name:line.sheet,code:'QA',drug:line.name,bottles:5,unitPriceCents:80000},key=receiptKey(r),q=new Map([[key,'3']]),prices=new Map();
  assert.equal(receiptLines([r],q)[0].unitPriceCents,80000);
- assert.equal(receiptPrice({...r,unitPriceCents:90000},prices),'900.00');
+ assert.equal(receiptPrice({...r,unitPriceCents:90000},prices),'900');
  prices.set(key,'180.25');assert.equal(receiptLines([{...r,unitPriceCents:90000}],q,prices)[0].unitPriceCents,18025);
  prices.set(key,'');assert.equal(receiptLines([r],q,prices)[0].unitPriceCents,undefined);
  assert.throws(()=>receiptLines([{...r,priceWarning:'格式錯誤'}],q));

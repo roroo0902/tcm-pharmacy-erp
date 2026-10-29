@@ -1,7 +1,7 @@
 import {sortSheetRows} from './sheets-sort.mjs';
-import {priceCents} from './receipt-pricing.mjs';
+import {priceCents} from './receipt-pricing.mjs?v=compact20261030';
 export const receiptKey=r=>JSON.stringify([r.name,r.code,r.drug]);
-export const receiptPrice=(r,prices)=>prices.has(receiptKey(r))?prices.get(receiptKey(r)):r.unitPriceCents===undefined?'':(r.unitPriceCents/100).toFixed(2);
+export const receiptPrice=(r,prices)=>prices.has(receiptKey(r))?prices.get(receiptKey(r)):r.unitPriceCents===undefined?'':String(r.unitPriceCents/100);
 export function receiptLines(rows,quantities,prices=new Map()){
  const lines=[];
  for(const [key,value] of quantities){

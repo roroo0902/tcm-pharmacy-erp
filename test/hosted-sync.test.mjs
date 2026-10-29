@@ -46,5 +46,5 @@ test('hosted artifact embeds executable app and keeps hash navigation inside the
  const js=fs.readFileSync('web/hosted-app.js','utf8');assert.ok(js.includes('加入進貨清單'));assert.ok(js.includes('同步完成・工作表已讀回核對'));
  assert.ok(!html.includes('<base href='));assert.ok(!html.includes('<script type="module" src='));
  assert.ok(html.includes('https://roroo0902.github.io/tcm-pharmacy-erp/web/assets/'));
- new Function(js);assert.ok(html.includes('web/hosted-app.js?v=stepper20261029'));
+ new Function(js);assert.ok(html.includes('web/hosted-app.js?v=ai20261030vendor'));
 });

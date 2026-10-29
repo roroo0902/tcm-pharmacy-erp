@@ -7,10 +7,11 @@ export function matchRecognized(line, candidates) {
   const byCode = code ? valid.filter(row => normalizeDrug(row.code) === code) : [];
   if (byCode.length === 1) {
     const nameDiffers = !!name && normalizeDrug(byCode[0].drug) !== name;
-    return {row: byCode[0], reason: nameDiffers ? '編號符合，但照片藥名不同，請仔細核對' : '編號完全相符', warning: nameDiffers};
+    return nameDiffers ? {row:null,reason:'品號與藥名衝突，請人工選擇',warning:true} : {row:byCode[0],reason:'編號完全相符',warning:false};
   }
   if (byCode.length > 1) return {row: null, reason: '庫存編號重複，禁止自動比對', warning: true};
   const byName = name ? valid.filter(row => normalizeDrug(row.drug) === name) : [];
+  if (code && !byCode.length) return {row:null,reason:'照片品號未找到，請人工核對藥名與編號',warning:true};
   if (byName.length === 1) return {row: byName[0], reason: '藥名完全相符，請再核對編號', warning: !!code};
   return {row: null, reason: byName.length > 1 ? '同名品項不只一筆' : '未找到完全相符品項，請手動選擇', warning: true};
 }
@@ -30,7 +31,7 @@ export function cleanRecognized(payload) {
   }));
 }
 
-export function addToBasket(basket, pendingLines, candidates, sheet) {
+export function addToBasket(basket, pendingLines, candidates, brand) {
   const next = basket.map(x => ({...x}));
   const lookup = new Map(candidates.map(r => [String(r.id), r]));
   if (!pendingLines.length) throw Error('沒有待加入品項');
@@ -43,6 +44,9 @@ export function addToBasket(basket, pendingLines, candidates, sheet) {
     if (!Number.isInteger(qty) || qty < 1 || qty > 1000000) throw Error('入庫瓶數必須為 1～1,000,000 的整數');
     if (!Number.isInteger(r.bottles) || r.bottles < 0) throw Error(r.drug + '：現有庫存待核對');
     if (!r.code || r.warning?.includes('編號')) throw Error(r.drug + '：庫存編號待核對');
+    if (r.brand !== brand) throw Error('品項不屬於所選廠商');
+    const sheet = r.name;
+    if (!sheet || !['單方','複方'].includes(r.category)) throw Error('品項分類不明');
     const key = sheet + '|' + r.code;
     const prior = next.find(x => x.key === key);
     if (prior) {

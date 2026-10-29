@@ -4,9 +4,9 @@
  * Set ERP_GEMINI_API_KEY in Script Properties; optionally ERP_VISION_MODEL.
  */
 function erpRecognizeReceipt(input) {
-  if (!input || typeof input.sheet !== 'string') throw Error('照片資料格式錯誤');
-  const sources = ['科達單方','科達複方','天明單方','天明複方','富田單方','富田複方'];
-  if (!sources.includes(input.sheet)) throw Error('不支援的廠商或類別');
+  if (!input || typeof input.brand !== 'string') throw Error('照片資料格式錯誤');
+  const sources = ['科達','天明','富田'];
+  if (!sources.includes(input.brand)) throw Error('不支援的廠商');
   if (!['image/jpeg','image/png'].includes(input.mimeType)) throw Error('只允許 JPG 或 PNG');
   if (typeof input.base64 !== 'string' || input.base64.length < 100 || input.base64.length > 3200000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.base64)) throw Error('照片資料過大或格式無效');
   const bytes = Utilities.base64Decode(input.base64);

@@ -3,7 +3,7 @@
  * owner + ERP_ALLOWED_EMAILS gate. Never logs or stores uploaded image bytes.
  * Set ERP_GEMINI_API_KEY in Script Properties; optionally ERP_VISION_MODEL.
  */
-function erpRecognizeReceipt(input) {
+function erpRecognizeReceipt_(input) {
   if (!input || typeof input.brand !== 'string') throw Error('照片資料格式錯誤');
   const sources = ['科達','天明','富田'];
   if (!sources.includes(input.brand)) throw Error('不支援的廠商');

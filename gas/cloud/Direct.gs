@@ -4,7 +4,7 @@ function erpDirect(operation,input,token){
  const allowed=(PropertiesService.getScriptProperties().getProperty('ERP_ALLOWED_EMAILS')||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
  if(!email||!allowed.includes(email.toLowerCase()))throw Error('此帳號尚未獲准使用藥庫站內同步');
  loss3Actor_();
- if(operation==='recognizeReceipt')return erpRecognizeReceipt(input);
+ if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);
  if(operation==='readAll'){
   const ss=SpreadsheetApp.openById(LOSS3.inventory),sheets={};
   for(const name of LOSS3.names)sheets[name]=erpDirectValues_(ss.getSheetByName(name));

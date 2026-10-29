@@ -4,6 +4,15 @@ function erpDirect(operation,input,token){
  const allowed=(PropertiesService.getScriptProperties().getProperty('ERP_ALLOWED_EMAILS')||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
  if(!email||!allowed.includes(email.toLowerCase()))throw Error('此帳號尚未獲准使用藥庫站內同步');
  loss3Actor_();
+ if(operation==='readStaff'){
+  const sh=SpreadsheetApp.openById(LOSS3.inventory).getSheetByName('員工名冊');
+  if(!sh)throw Error('找不到員工名冊工作表');
+  const last=sh.getLastRow();if(last>10000)throw Error('員工名冊範圍過大');
+  if(String(sh.getRange(1,2).getDisplayValue()).trim()!=='員工姓名')throw Error('員工名冊 B1 應為員工姓名');
+  const names=last<2?[]:[...new Set(sh.getRange(2,2,last-1,1).getDisplayValues().map(r=>String(r[0]).trim()).filter(Boolean))];
+  if(!names.length)throw Error('員工名冊尚未填寫姓名');
+  return {names};
+ }
  if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);
  if(operation==='readAll'){
   const ss=SpreadsheetApp.openById(LOSS3.inventory),sheets={};

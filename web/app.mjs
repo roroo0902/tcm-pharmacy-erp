@@ -1,6 +1,6 @@
 import {setupDirect} from './direct-sync.mjs?v=compact20261030';
 import {mountGoogleEntry,restoreGooglePage} from './google-entry.mjs?v=compact20261030';
-import {mountReceiptGrid} from './receive-grid.mjs?v=compact20261030';
+import {mountReceiptGrid} from './receive-grid.mjs?v=staff20261030';
 import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=compact20261030';
 import {mountPhotoReceive} from './photo-receive.mjs?v=compact20261030';
 import {updateQuestTheme} from './quest-theme.mjs?v=compact20261030';

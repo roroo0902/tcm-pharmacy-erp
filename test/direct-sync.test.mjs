@@ -96,3 +96,10 @@ test('API snapshot stays stable when transport reorders nested object keys',()=>
  b.lines[0].total=2;
  assert.throws(()=>c.erpDirect('commit',b,c.erpDirect('preview',a).token));
 });
+
+test('staff RPC reads only B names, trims blanks, deduplicates and checks header',()=>{
+ const {c}=server(),ranges=[];let header='員工姓名';
+ c.SpreadsheetApp.openById=id=>{assert.equal(id,'stock');return {getSheetByName:name=>{assert.equal(name,'員工名冊');return {getLastRow:()=>5,getRange:(...args)=>{ranges.push(args);return {getDisplayValue:()=>header,getDisplayValues:()=>[[' 甲 '],[''],['甲'],['乙']]};}};}};};
+ assert.deepEqual(Array.from(c.erpDirect('readStaff').names),['甲','乙']);assert.deepEqual(ranges,[[1,2],[2,2,4,1]]);
+ header='其他';assert.throws(()=>c.erpDirect('readStaff'),/B1/);
+});

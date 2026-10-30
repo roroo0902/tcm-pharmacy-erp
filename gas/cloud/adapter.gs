@@ -14,7 +14,8 @@ function erpRead_(input){
   tabs[name]={sh,v,f};for(let r=2;r<v.length;r++)if(v[r][1]||v[r][3])rows.push({sheet:name,code:String(v[r][1]).trim(),name:String(v[r][3]).trim(),stock:v[r][6],formula:f[r][6],price:v[r][4],priceFormula:f[r][4],row:r,sheetId:sh.getSheetId()});
  }
  const plan=CloudTransaction.cloudPlan(draft,rows,events);
- return {draft,ss,title,log,events,tabs,plan,token:loss3Hash_({draft,plan,rows})};
+ const weekly=erpWeeklyRead_(draft,ss,tabs,events,plan);
+ return {draft,ss,title,log,events,tabs,plan,weekly,token:loss3Hash_({draft,plan,rows,weekly})};
 }
 function erpPreview(input){const s=erpRead_(input);return {token:s.token,...s.plan};}
 function erpCommit(input,token){
@@ -38,7 +39,8 @@ function erpCommit(input,token){
    if(s.draft.action==='進貨'&&l.unitPriceCents!==undefined)requests.push(loss3Cell_(l.sheetId,l.row,4,l.unitPriceCents/100));
   }
   if(s.draft.action==='取消訂貨'){const originalRow=s.events.findIndex(e=>e.draft.id===s.draft.reverses)+1;requests.push(loss3Cell_(id,originalRow,7,'已取消・未發送'));}
-  const event={draft:s.draft,lines:s.plan.lines,time:new Date().toISOString()};
+  requests.push(...(s.weekly?.requests||[]));
+  const event={draft:s.draft,lines:s.plan.lines,weekly:s.weekly?.changes||[],time:new Date().toISOString()};
   const priced=['進貨','沖銷'].includes(s.draft.action),missing=s.draft.lines.filter(l=>l.unitPriceCents===undefined).length,total=s.draft.lines.reduce((n,l)=>n+(l.unitPriceCents||0)*l.quantity,0);
   const summary=s.draft.lines.map(l=>l.sheet+' '+l.code+' '+l.name+' '+l.quantity+'瓶'+(priced?(l.unitPriceCents===undefined?'（單價未提供）':' × NT$'+(l.unitPriceCents/100).toFixed(2)+' = NT$'+(l.unitPriceCents*l.quantity/100).toFixed(2)):'')).join('；')+(priced?'；'+(missing?'已填單價小計':'進貨金額合計')+' NT$'+(total/100).toFixed(2)+(missing?'（'+missing+'項未提供單價）':''):'');
   const values=[s.draft.id,JSON.stringify(event),s.draft.date,s.draft.action,s.draft.actor,s.draft.note,summary,s.draft.action==='訂貨'?'待發送・未入庫':s.draft.action==='取消訂貨'?'已取消・未發送':'已入帳',event.time];
@@ -47,7 +49,8 @@ function erpCommit(input,token){
   SpreadsheetApp.flush();
   const check=erpRead_(s.draft);if(!check.plan.duplicate)throw Error('寫入結果待核對，請用同一交易編號重新預覽');
   for(const l of s.plan.lines)if(s.draft.action==='進貨'&&l.unitPriceCents!==undefined){const v=check.tabs[l.sheet].v[l.row];if(v[4]!==l.unitPriceCents/100||v[6]!==l.after)throw Error('入帳後價格或庫存讀回不一致，請用同一交易編號核對，勿另建交易');}
-  return {id:s.draft.id,lines:s.plan.lines,message:'Google 工作表已寫入並讀回核對。'+(s.draft.action==='訂貨'?'訂單待發送，尚未入庫。':s.draft.action==='取消訂貨'?'訂單已取消，沒有庫存異動。':'')};
+  erpWeeklyVerify_(s.ss,s.weekly?.changes||[]);
+  return {id:s.draft.id,lines:s.plan.lines,message:'Google 工作表已寫入並讀回核對。'+(s.draft.action==='訂貨'?'本周訂貨量已同步；訂單待發送，尚未入庫。':s.draft.action==='取消訂貨'?'訂單已取消，本周訂貨量已還原，沒有庫存異動。':'')};
  }finally{lock.releaseLock();}
 }
 function erpHtml_(payload){return '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:16px system-ui;background:#f7f5ea;color:#172c43;margin:20px;max-width:900px}button{min-height:44px;font:inherit;padding:10px;margin:6px;background:#203e58;color:white;border:0;border-radius:8px}textarea{width:95%;min-height:120px;font-size:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:16px}a{color:#174d77}</style></head><body><h1>Google 藥庫同步確認</h1><p>建檔與進貨寫入庫存總表；訂貨寫入訂藥工作表。只有下方確認按鈕會正式入帳。</p><label id="label">交易清單<textarea id="draft"></textarea></label><button id="preview">讀取雲端並預覽</button><pre id="result">請先預覽。</pre><button id="commit" disabled>確認同步到 Google Sheet</button><p><a target="_blank" href="https://docs.google.com/spreadsheets/d/'+ERP.inventory+'/edit">開啟庫存工作表</a> · <a target="_blank" href="https://docs.google.com/spreadsheets/d/'+ERP.orders+'/edit">開啟訂貨工作表</a> · <a target="_blank" href="https://roroo0902.github.io/tcm-pharmacy-erp/#overview">回庫存總覽並按立即同步</a></p><script>const draft=document.querySelector("#draft"),out=document.querySelector("#result"),p=document.querySelector("#preview"),b=document.querySelector("#commit");draft.value='+JSON.stringify(payload).replace(/</g,'\\u003c')+';document.querySelector("#label").hidden=!!draft.value;let token,reviewed;draft.oninput=()=>b.disabled=true;p.onclick=()=>{b.disabled=true;p.disabled=true;reviewed=draft.value;out.textContent="正在讀取Google…";google.script.run.withSuccessHandler(r=>{token=r.token;out.textContent=(r.duplicate?"已入帳，重送不會重複寫入。\\n":"")+r.lines.map(x=>x.sheet+" "+x.code+" "+x.name+"：數量 "+x.quantity+"；庫存 "+x.before+" → "+x.after+(x.unitPriceCents===undefined?"":"；單價 NT$"+(x.unitPriceCents/100).toFixed(2)+"；小計 NT$"+(x.amountCents/100).toFixed(2))+(x.priceAfter===undefined?"":"；E欄價格 "+x.priceBefore+" → "+x.priceAfter)).join("\\n");b.disabled=false;p.disabled=false;}).withFailureHandler(e=>{out.textContent=e.message;p.disabled=false;}).erpPreview(reviewed);};b.onclick=()=>{b.disabled=true;p.disabled=true;out.textContent="正在寫入並讀回…";google.script.run.withSuccessHandler(r=>{out.textContent=r.message+"\\n交易編號："+r.id+"\\n"+r.lines.map(x=>x.code+" 庫存 "+x.after).join("\\n");p.disabled=false;}).withFailureHandler(e=>{out.textContent=e.message+"\\n若結果不明，請重新預覽本交易；勿另建交易重送。";p.disabled=false;}).erpCommit(reviewed,token);};</script></body></html>';}

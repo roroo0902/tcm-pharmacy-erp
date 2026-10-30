@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import fs from 'node:fs';
+const c=vm.createContext({console});vm.runInContext(fs.readFileSync('gas/cloud/weekly-orders.gs','utf8'),c);
+const line={sheet:'科達單方',code:'A1',name:'測試',quantity:7};
+const order=(id,date='2026-10-31')=>({id,action:'訂貨',date});
+const cancel=id=>({id:'cancel-'+id,action:'取消訂貨',reverses:id,date:'2026-10-31'});
+const tx=(d,current,events=[],quantity=7)=>c.erpWeeklyTransition_(d,{...line,quantity},current,events,1);
+const event=(draft,w)=>({draft,weekly:w?[w]:[]});
+test('confirmed quantity replaces D and cancellation restores numeric or truly blank baseline',()=>{for(const before of [200,0,'']){const d=order('o1'),w=tx(d,before);assert.equal(w.after,7);const back=tx(cancel('o1'),7,[event(d,w)]);assert.equal(back.after,before);}});
+test('newest order wins; cancelling an older order never erases the newer quantity',()=>{const a=order('a'),b=order('b'),wa=tx(a,200),wb=tx(b,7,[event(a,wa)],9),events=[event(a,wa),event(b,wb)];const ca=tx(cancel('a'),9,events);assert.equal(ca.after,9);events.push(event(cancel('a'),ca));const cb=tx(cancel('b'),9,events);assert.equal(cb.after,200);});
+test('cancelling newest restores still-active previous confirmation',()=>{const a=order('a'),b=order('b'),wa=tx(a,''),wb=tx(b,7,[event(a,wa)],9);assert.equal(tx(cancel('b'),9,[event(a,wa),event(b,wb)]).after,7);});
+test('manual changes are never overwritten during cancellation',()=>{const a=order('a'),wa=tx(a,200);assert.throws(()=>tx(cancel('a'),8,[event(a,wa)]),/手動修改/);const b=order('b'),wb=tx(b,8,[event(a,wa)],9);assert.equal(wb.baseline,8);assert.equal(tx(cancel('a'),9,[event(a,wa),event(b,wb)]),null);assert.equal(tx(cancel('b'),9,[event(a,wa),event(b,wb)]).after,8);});
+test('old orders lacking weekly snapshots do not touch D, even if same drug',()=>assert.equal(tx(cancel('old'),200,[{draft:order('old')}]),null));
+test('new week creates a separate baseline and old cancellation preserves it',()=>{const a=order('a','2026-10-25'),wa=tx(a,200),b=order('b'),wb=tx(b,7,[event(a,wa)],9);assert.equal(tx(cancel('a'),9,[event(a,wa),event(b,wb)]),null);assert.equal(tx(cancel('b'),9,[event(a,wa),event(b,wb)]).after,7);});
+test('reject invalid prior quantities',()=>{for(const n of [-1,1.5,'5',NaN])assert.throws(()=>tx(order('x'),n),/有效整數/);});
+test('readback verifies the exact identity and quantity',()=>{const w={sheet:'科達單方',sheetId:1,row:2,code:'A1',name:'測試',after:7};for(const qty of [7,8]){const ss={getSheetByName:()=>({getSheetId:()=>1,getRange:()=>({getValues:()=>[['A1','測試',qty]]})})};if(qty===7)c.erpWeeklyVerify_(ss,[w]);else assert.throws(()=>c.erpWeeklyVerify_(ss,[w]),/讀回不符/);}});

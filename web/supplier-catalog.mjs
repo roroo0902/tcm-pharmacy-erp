@@ -23,3 +23,6 @@ export function supplierSelection(sources,brand,category){
  if(!categories.includes(category))category=categories[0]||'';
  return {brands,categories,brand,category,source:sources.find(s=>s.brand===brand&&s.category===category)};
 }
+
+// Share only in-flight reads; a later refresh always reads Google again.
+export function createSupplierLoader(read=loadSupplierCatalog){let pending;return ()=>{if(!pending)pending=Promise.resolve().then(read).finally(()=>{pending=undefined;});return pending;};}

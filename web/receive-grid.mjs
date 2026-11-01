@@ -1,6 +1,6 @@
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
-import {loadSupplierCatalog,supplierSelection} from './supplier-catalog.mjs';
+import {createSupplierLoader,supplierSelection} from './supplier-catalog.mjs';
 import {priceCents,money,pricingTotal} from './receipt-pricing.mjs?v=compact20261030';
 import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
 import {directEnabled,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
@@ -14,6 +14,7 @@ const KEY='tcm-cloud-pending-v1';
 export function mountReceiptGrid({esc,fmt,ask}){
  const c=document.querySelector('#content'),$=s=>c.querySelector(s),abort=new AbortController(),quantities=new Map(),prices=new Map();
  let rows=[],sources=[],source=null,brand='',category='',sort='code',direction='asc',alive=true,loading=false,loadFailed=false,ticket=0,reuseId='',pending=null;
+ const readCatalog=createSupplierLoader();
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
  c.innerHTML=`<section class="panel"><div class="panelhead"><div><h2>登錄本次進貨</h2><span class="muted">依工作表列出全部品項 · 留白不進貨 · 可跨廠牌整批入帳</span></div><a class="secondary" href="#items">＋ 新增品項</a></div><label>廠商</label><div class="order-tabs" id="receipt-brands" role="group" aria-label="進貨廠商"></div><label>類別</label><div class="order-tabs" id="receipt-categories" role="group" aria-label="進貨單方或複方"></div><form id="receipt-form"><div class="grid"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">備註<input id="receipt-note" maxlength="500"></label></div><div class="panelhead receive-tools"><input id="receipt-search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" id="receipt-refresh" class="secondary">重新讀取工作表</button></div><p id="receipt-state" role="status">正在讀取共用廠商與品項…</p><div class="tablewrap"><table id="receipt-grid"><thead><tr><th><button type="button" class="sort-heading" data-sort="code">藥品／編號 ↑</button></th><th>廠牌／類別</th><th class="num"><button type="button" class="sort-heading" data-sort="bottles">未拆封瓶數 ↕</button></th><th class="receipt-quantity"><button type="button" class="sort-heading" data-sort="quantity">進貨數量 ↕</button></th><th class="receipt-price-cell">單價（元／瓶）</th><th class="num">進貨小計（元）</th><th class="num">入庫後瓶數</th><th><button type="button" class="sort-heading" data-sort="updated">原表更新欄 ↕</button></th><th>缺藥標記／率</th><th>原表</th></tr></thead><tbody></tbody></table></div><div class="actions"><span id="receipt-summary" role="status"></span><button type="button" class="secondary" id="receipt-clear">清除本次輸入</button><button id="receipt-submit" disabled>確認並預覽整批進貨</button></div></form><div id="receipt-pending"></div><p class="muted">先在站內核對各品項原庫存、進貨量與入庫後瓶數，再按「確認入帳」。進貨只增加本次填入數量。單價由原表 E 欄帶入；確認入帳後，有填單價的進貨品項會同步更新 E 欄。留白不清除原表價格，0 為零元。金額依輸入單價計算，未另計稅額、折扣或運費。</p></section>`;
  function draw(){
@@ -42,7 +43,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  }
  async function load(){
   const run=++ticket;loading=true;loadFailed=false;status('正在讀取 '+(brand+category||'共用廠商與品項')+'…');$('#receipt-submit').disabled=true;
-  try{const data=await loadSupplierCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;draw();status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已填數量與單價保留`);}
+  try{const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;draw();status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已填數量與手動單價保留；原表庫存、單價與小計已更新`);}
   catch(e){if(alive&&run===ticket){loadFailed=true;status(e.message+'；已填數量仍保留，請重新讀取工作表重試');}}
   finally{if(alive&&run===ticket){loading=false;summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
  }

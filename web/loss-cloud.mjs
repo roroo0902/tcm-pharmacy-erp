@@ -3,9 +3,14 @@ export const LOSS_ENDPOINT='https://script.google.com/macros/s/AKfycbwsXafoCVk_U
 export const LOSS_SHEET='https://docs.google.com/spreadsheets/d/1zQr0awr9wJr2Fbsk2PQgiMd1C640AokVmT2pPU9-fU4/edit';
 export function lossExportUrl(source){return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${source.gid}&range=A1:ZZ5000`;}
 export function parseLossSheet(text,source,date){
- const grid=csvRows(text),columns=[];
- for(let c=13;c<(grid[0]||[]).length;c++)if((grid[0][c]||'').replaceAll('/','-')===date&&/^[一二三四五六日]$/.test(grid[1]?.[c]))columns.push(c);
- return parseSheet(text,source).map(r=>{const raw=columns.length===1?(grid[r.row-1][columns[0]]??''):null;const n=raw===''?0:raw!==null&&/^\d+(\.\d+)?$/.test(raw)?Number(raw):null;return {...r,posted:n};});
+ return lossPostedRows(parseSheet(text,source),{[source.name]:csvRows(text)},date);
+}
+export function lossPostedRows(rows,sheets,date){
+ const columnsBySheet=new Map();
+ return rows.map(r=>{const grid=sheets[r.name];if(!grid)throw Error('來源缺少 '+r.name);let columns=columnsBySheet.get(r.name);if(!columns){columns=[];
+ for(let c=13;c<(grid[0]||[]).length;c++)if(String(grid[0][c]||'').replaceAll('/','-')===date&&/^[一二三四五六日]$/.test(grid[1]?.[c]))columns.push(c);
+ columnsBySheet.set(r.name,columns);}
+ const raw=columns.length===1?(grid[r.row-1][columns[0]]??''):null;const n=raw===''?0:raw!==null&&/^\d+(\.\d+)?$/.test(raw)?Number(raw):null;return {...r,posted:n};});
 }
 export function lossDraft(lines,{date,actor,reason}){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date).toISOString().slice(0,10)!==date)throw Error('請選擇耗損日期');

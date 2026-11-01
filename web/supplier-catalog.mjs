@@ -1,7 +1,7 @@
 import {runDirect} from './direct-sync.mjs';
 import {parseSheet} from './sheets-data.mjs';
 
-// Both receipt and order screens use the server's enabled supplier registry.
+// Receipt, order and daily loss screens use the server's enabled supplier registry.
 export function parseSupplierCatalog(data){
  if(!Array.isArray(data?.sources)||!data.sources.length)throw Error('尚無已啟用的廠商分類');
  const ids=new Set(),groups=new Set();
@@ -13,7 +13,7 @@ export function parseSupplierCatalog(data){
   const csv=grid.map(row=>row.map(value=>'"'+String(value??'').replaceAll('"','""')+'"').join(',')).join('\n');
   return parseSheet(csv,source).map(row=>({...row,weekly:data.weekly?.[source.name]?.[row.code]??null}));
  });
- return {sources:data.sources,rows};
+ return {sources:data.sources,rows,sheets:data.sheets};
 }
 export async function loadSupplierCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog'));}
 export function supplierSelection(sources,brand,category){

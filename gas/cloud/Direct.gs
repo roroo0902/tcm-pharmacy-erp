@@ -56,10 +56,10 @@ function erpLossCatalog_(input){
  const date=loss3Date_(input?.date);if(date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不能讀取未來耗損日期');
  const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他交易處理中，請重新讀取');
  try{
- const data=erpOrderCatalog_(),ss=SpreadsheetApp.openById(LOSS3.inventory),log=ss.getSheetByName(LOSS3.log),latest=new Map();
+ const data={sources:erpOrderSources_(),sheets:{},weekly:{}},ss=SpreadsheetApp.openById(LOSS3.inventory),log=ss.getSheetByName(LOSS3.log),latest=new Map();
  if(log){if(log.getRange(1,1,1,2).getValues()[0].join('|')!=='版本ID|交易JSON_V3')throw Error('耗損紀錄表頭異常');if(log.getLastRow()>1)for(const r of log.getRange(2,2,log.getLastRow()-1,1).getValues()){const e=JSON.parse(r[0]);if(e.date===date)latest.set(JSON.stringify([e.sheet,e.code]),e);}}
  const loss=[];
- for(const source of data.sources){const range=ss.getSheetByName(source.name).getDataRange(),v=range.getValues(),f=range.getFormulas(),cols=[],codes=new Map();let headerError='';
+ for(const source of data.sources){const range=ss.getSheetByName(source.name).getDataRange(),v=range.getValues(),f=range.getFormulas(),cols=[],codes=new Map();data.sheets[source.name]=range.getDisplayValues();let headerError='';
  for(let c=13;c<(v[0]||[]).length;c++){if(!/^[一二三四五六日]$/.test(String(v[1]?.[c])))continue;try{if(loss3Date_(v[0][c])===date)cols.push(c);}catch{headerError='日期欄格式無法辨識，請核對原表';}}
  for(let i=2;i<v.length;i++){const code=String(v[i][1]||'').trim();if(code)codes.set(code,(codes.get(code)||0)+1);}
  for(let i=2;i<v.length;i++){const r=v[i],code=String(r[1]||'').trim(),name=String(r[3]||'').trim();if(!name)continue;const last=latest.get(JSON.stringify([source.name,code]));let error=headerError,posted=null,stock=r[6];

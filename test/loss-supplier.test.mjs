@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {createHash} from 'node:crypto';
 import {parseSupplierCatalog} from '../web/supplier-catalog.mjs';
 import {lossPostedRows,lossDraft} from '../web/loss-cloud.mjs';
 import {planCumulative} from '../src/loss-cumulative.mjs';
@@ -18,3 +19,11 @@ function backend(){const prepared=[];const c=vm.createContext({console,Spreadshe
 const draft=sheet=>({kind:'tcm-loss-cumulative',version:3,date:'2026-11-01',actor:'測試',reason:'',lines:[{sheet,code:'A1',name:'藥品',total:1}]});
 test('backend accepts enabled new suppliers and rejects missing or disabled sheets',()=>{const {c}=backend();assert.equal(c.loss3Draft_(draft('新增複方')).lines[0].sheet,'新增複方');assert.throws(()=>c.loss3Draft_(draft('科達單方')),/品項/);assert.throws(()=>c.loss3Draft_(draft('未知單方')),/品項/);});
 test('date preparation touches only submitted enabled categories, not every supplier',()=>{const {c,prepared}=backend();c.lossV3PrepareDate(draft('新增複方'));assert.deepEqual(prepared,[{date:'2026-11-01',names:['新增複方']}]);});
+test('revision guards and preview tokens preserve Chinese supplier identities with explicit UTF-8',()=>{
+ const {c}=backend();c.Utilities.DigestAlgorithm={SHA_256:'sha256'};c.Utilities.Charset={UTF_8:'utf8'};
+ c.Utilities.computeDigest=(algorithm,value,charset)=>{assert.equal(charset,'utf8');return [...createHash(algorithm).update(value,charset).digest()];};
+ const keys=['科達單方','富田單方','天明複方','富田複方'].map(sheet=>[JSON.stringify(['2026-10-25',sheet,'A083']),1]);
+ assert.equal(new Set(keys.map(k=>c.loss3Hash_(k))).size,4);
+ for(const key of keys)assert.equal(c.loss3Hash_(key),createHash('sha256').update(JSON.stringify(key),'utf8').digest('hex'));
+ assert.notEqual(c.loss3Hash_({actor:'黃泰祥',sheet:'科達單方'}),c.loss3Hash_({actor:'黃泰祥',sheet:'富田單方'}));
+});

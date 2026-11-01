@@ -3,7 +3,7 @@ const LOSS3 = Object.freeze({source:'1zQr0awr9wJr2Fbsk2PQgiMd1C640AokVmT2pPU9-fU
 function loss3Names_(){return erpOrderSources_(SpreadsheetApp.openById(LOSS3.inventory)).map(s=>s.name);}
 function loss3Actor_(){const a=Session.getActiveUser().getEmail(),e=Session.getEffectiveUser().getEmail();if(!a||a!==e)throw Error('請使用部署者的 Google 帳號登入，或在有編輯權限的耗損試算表操作');return a;}
 function loss3Date_(v){if(v instanceof Date)return Utilities.formatDate(v,'Asia/Taipei','yyyy-MM-dd');const s=String(v||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(s)||isNaN(Date.parse(s))||new Date(s).toISOString().slice(0,10)!==s)throw Error('請使用固定完整日期 yyyy-mm-dd');return s;}
-function loss3Hash_(v){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(v)).map(b=>(b&255).toString(16).padStart(2,'0')).join('');}
+function loss3Hash_(v){return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(v),Utilities.Charset.UTF_8).map(b=>(b&255).toString(16).padStart(2,'0')).join('');}
 function loss3Cell_(id,r,c,v){return {updateCells:{start:{sheetId:id,rowIndex:r,columnIndex:c},rows:[{values:[{userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v)}}]}],fields:'userEnteredValue'}};}
 function loss3Draft_(input){
  const d=typeof input==='string'?JSON.parse(input):input;

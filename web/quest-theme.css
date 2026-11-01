@@ -62,3 +62,12 @@ dialog:has(.direct-review-table){max-width:860px}dialog .direct-review-table{tab
 
 /* Align receipt values with the primary input row, not the helper-text row. */
 #receipt-grid tbody td{vertical-align:top;padding-top:16px;padding-bottom:16px;line-height:44px}#receipt-grid tbody td:nth-child(1),#receipt-grid tbody td:nth-child(2){line-height:22px}#receipt-grid tbody td:nth-child(1) b,#receipt-grid tbody td:nth-child(2){font-size:13px}#receipt-grid tbody td .muted{line-height:22px}#receipt-grid th:not(:first-child),#receipt-grid td:not(:first-child){text-align:center}#receipt-grid th.num,#receipt-grid td.num{text-align:center}#receipt-grid th .sort-heading{width:100%;text-align:inherit}#receipt-grid .quantity-stepper{line-height:normal}#receipt-grid .receipt-price-cell small{line-height:22px}
+
+/* Daily loss: compact controls, centered headers and values. */
+#loss-table th:nth-child(n+3):nth-child(-n+7),#loss-table td:nth-child(n+3):nth-child(-n+7){text-align:center!important;vertical-align:middle}
+#loss-table th .sort-heading{width:100%;text-align:inherit}
+#loss-table td:nth-child(5){min-width:204px}#loss-table td:nth-child(6),#loss-table td:nth-child(7){min-width:130px;font-variant-numeric:tabular-nums}
+#loss-table .quantity-stepper{grid-template-columns:32px 88px 32px;gap:8px;width:168px;margin-inline:auto}
+#loss-table .quantity-stepper input{height:40px;min-height:40px;padding:6px 8px;font-size:16px;font-weight:400}
+#loss-table .quantity-stepper .quantity-adjust{width:32px;min-width:32px;height:32px;min-height:32px;padding:0;font-size:20px;border-radius:5px;box-shadow:0 2px 0 #a58b50}
+#loss-table .quantity-stepper .quantity-clear{justify-self:center;height:22px;min-height:22px;line-height:22px;padding:0 6px;font-size:12px}

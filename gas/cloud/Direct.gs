@@ -62,11 +62,11 @@ function erpLossCatalog_(input){
  for(const source of data.sources){const range=ss.getSheetByName(source.name).getDataRange(),v=range.getValues(),f=range.getFormulas(),cols=[],codes=new Map();let headerError='';
  for(let c=13;c<(v[0]||[]).length;c++){if(!/^[一二三四五六日]$/.test(String(v[1]?.[c])))continue;try{if(loss3Date_(v[0][c])===date)cols.push(c);}catch{headerError='日期欄格式無法辨識，請核對原表';}}
  for(let i=2;i<v.length;i++){const code=String(v[i][1]||'').trim();if(code)codes.set(code,(codes.get(code)||0)+1);}
- for(let i=2;i<v.length;i++){const r=v[i],code=String(r[1]||'').trim(),name=String(r[3]||'').trim();if(!code||!name)continue;const last=latest.get(JSON.stringify([source.name,code]));let error=headerError,posted=null,stock=r[6];
+ for(let i=2;i<v.length;i++){const r=v[i],code=String(r[1]||'').trim(),name=String(r[3]||'').trim();if(!name)continue;const last=latest.get(JSON.stringify([source.name,code]));let error=headerError,posted=null,stock=r[6];
  if(cols.length>1)error='所選日期欄重複，請核對原表';
  else if(!cols.length){if(last&&(last.total!==0||last.name!==name))error='缺少日期欄但已有未歸零入帳紀錄，請核對原表';else if(!error)posted=0;}
  else {const raw=r[cols[0]];if(f[i]?.[cols[0]])error='每日耗損為公式，請核對原表';else if(raw===''||raw==null)posted=0;else if(Number.isInteger(raw)&&raw>=0&&raw<=1000000)posted=raw;else error='已入帳耗損不是有效整數';if(last&&(last.name!==name||last.total!==posted))error='每日欄與入帳紀錄不一致';}
- if(codes.get(code)!==1)error='藥品編號重複，請核對原表';
+ if(!code)error='缺少藥品編號，請先完成建帳';else if(codes.get(code)!==1)error='藥品編號重複，請核對原表';
  if(f[i]?.[6]||!Number.isInteger(stock)||stock<0)error=error||'庫存無法核對';
  if(error)posted=null;
  loss.push({sheet:source.name,code,name,row:i+1,stock:Number.isInteger(stock)?stock:null,posted,error});

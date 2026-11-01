@@ -36,7 +36,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   for(const [key,q] of quantities){const r=rows.find(x=>receiptKey(x)===key);if(!r||!Number.isInteger(Number(q))||Number(q)<1)continue;try{if(r.priceWarning&&!prices.has(key))throw Error();current.push({quantity:Number(q),unitPriceCents:priceCents(receiptPrice(r,prices))});}catch{priceInvalid=true;}}
   try{const cost=pricingTotal(current);$('#receipt-summary').textContent+=' · '+(priceInvalid?'請核對單價':(cost.missing?'已填單價小計 ':'進貨合計 ')+money(cost.cents)+(cost.missing?'（'+cost.missing+' 項未填單價）':''));}catch(e){$('#receipt-summary').textContent+=' · '+e.message;}
   c.querySelectorAll('[data-amount]').forEach(el=>{const key=el.dataset.amount,q=quantities.get(key),r=rows.find(x=>receiptKey(x)===key);el.textContent='—';if(!q||!r)return;try{const cents=priceCents(receiptPrice(r,prices));el.textContent=cents===undefined?'未提供':Number.isInteger(Number(q))&&Number(q)>0?money(cents*Number(q)):'數量無效';}catch{el.textContent='單價待核對';}});
-  #receipt-submit.disabled=loading||loadFailed||!count||invalid||priceInvalid;
+  $('#receipt-submit').disabled=loading||loadFailed||!count||invalid||priceInvalid;
   c.querySelectorAll('[data-after]').forEach(el=>{const v=quantities.get(el.dataset.after),r=rows.find(x=>receiptKey(x)===el.dataset.after),n=Number(v);el.textContent=v==null||v===''?'—':!Number.isInteger(n)||n<1||n>1000000?'數量無效':!Number.isInteger(r?.bottles)||r.bottles<0?'待核對':fmt(r.bottles+n)+' 瓶';});
  }
  async function load(){

@@ -4,7 +4,7 @@ const CLOUD_SHEETS=['科達單方','科達複方','天明單方','天明複方',
 function cloudDraft(input) {
  const d=typeof input==='string'?JSON.parse(input):input;
  if(!d||d.kind!=='tcm-cloud'||![1,2].includes(d.version)||!['建檔','進貨','訂貨','沖銷','取消訂貨'].includes(d.action))throw Error('不支援的雲端交易');
- if(d.version===2&&(!['進貨','沖銷'].includes(d.action)||d.currency!=='TWD'))throw Error('單價交易須為新台幣進貨或沖銷');
+ if(d.version===2&&(!['進貨','沖銷','訂貨','取消訂貨'].includes(d.action)||d.currency!=='TWD'))throw Error('單價交易須為新台幣進貨、訂貨或更正');
  if(typeof d.id!=='string'||!/^ERP-[a-zA-Z0-9-]{8,80}$/.test(d.id))throw Error('交易編號無效');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||isNaN(Date.parse(d.date))||new Date(d.date).toISOString().slice(0,10)!==d.date)throw Error('日期無效');
  if(typeof d.actor!=='string'||!d.actor.trim()||d.actor.length>80)throw Error('經手人必填，最多80字');
@@ -12,7 +12,7 @@ function cloudDraft(input) {
  if(!Array.isArray(d.lines)||!d.lines.length||d.lines.length>100)throw Error('每批1至100項');
  const seen=new Set();
  const lines=d.lines.map(l=>{
-  if(!CLOUD_SHEETS.includes(l.sheet)||typeof l.code!=='string'||!l.code.trim()||l.code.length>60||typeof l.name!=='string'||!l.name.trim()||l.name.length>120)throw Error('藥品編號、名稱或分頁無效');
+  if((!CLOUD_SHEETS.includes(l.sheet)&&!(typeof l.sheet==='string'&&/^[^|\r\n]{1,60}(?:單方|複方)$/.test(l.sheet)))||typeof l.code!=='string'||!l.code.trim()||l.code.length>60||typeof l.name!=='string'||!l.name.trim()||l.name.length>120)throw Error('藥品編號、名稱或分頁無效');
   if(!Number.isInteger(l.quantity)||l.quantity<0||l.quantity>1000000||(['進貨','訂貨'].includes(d.action)&&!l.quantity))throw Error('瓶數須為整數；進貨、訂貨須大於0');
   const key=l.sheet+'|'+l.code.trim();if(seen.has(key))throw Error('同批品項重複');seen.add(key);
   const price=Object.hasOwn(l,'unitPriceCents');
@@ -56,6 +56,7 @@ return {CLOUD_SHEETS,cloudDraft,cloudPlan};})();
 const ERP={inventory:LOSS3.inventory,orders:'1YcO7XRhN4T8wrL6wn-jD45lqif--rYQF4HCuBE-Nju8',log:'藥庫_同步紀錄',logId:904291001,orderLog:'藥庫_訂貨紀錄',orderLogId:904291002};
 function erpRead_(input){
  loss3Actor_();const draft=CloudTransaction.cloudDraft(input);
+ if(['訂貨','取消訂貨'].includes(draft.action)){const allowed=erpOrderSources_().map(s=>s.name);if(draft.lines.some(l=>!allowed.includes(l.sheet)))throw Error('訂貨來源未啟用或欄位格式不符');}
  if(draft.date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不可登錄未來日期');
  const ss=SpreadsheetApp.openById(['訂貨','取消訂貨'].includes(draft.action)?ERP.orders:ERP.inventory),title=['訂貨','取消訂貨'].includes(draft.action)?ERP.orderLog:ERP.log,log=ss.getSheetByName(title);
  if(log&&log.getRange(1,1).getValue()!=='交易編號')throw Error('紀錄表頭異常');
@@ -95,8 +96,8 @@ function erpCommit(input,token){
   if(s.draft.action==='取消訂貨'){const originalRow=s.events.findIndex(e=>e.draft.id===s.draft.reverses)+1;requests.push(loss3Cell_(id,originalRow,7,'已取消・未發送'));}
   requests.push(...(s.weekly?.requests||[]));
   const event={draft:s.draft,lines:s.plan.lines,weekly:s.weekly?.changes||[],time:new Date().toISOString()};
-  const priced=['進貨','沖銷'].includes(s.draft.action),missing=s.draft.lines.filter(l=>l.unitPriceCents===undefined).length,total=s.draft.lines.reduce((n,l)=>n+(l.unitPriceCents||0)*l.quantity,0);
-  const summary=s.draft.lines.map(l=>l.sheet+' '+l.code+' '+l.name+' '+l.quantity+'瓶'+(priced?(l.unitPriceCents===undefined?'（單價未提供）':' × NT$'+(l.unitPriceCents/100).toFixed(2)+' = NT$'+(l.unitPriceCents*l.quantity/100).toFixed(2)):'')).join('；')+(priced?'；'+(missing?'已填單價小計':'進貨金額合計')+' NT$'+(total/100).toFixed(2)+(missing?'（'+missing+'項未提供單價）':''):'');
+  const priced=['進貨','沖銷','訂貨','取消訂貨'].includes(s.draft.action),missing=s.draft.lines.filter(l=>l.unitPriceCents===undefined).length,total=s.draft.lines.reduce((n,l)=>n+(l.unitPriceCents||0)*l.quantity,0);
+  const summary=s.draft.lines.map(l=>l.sheet+' '+l.code+' '+l.name+' '+l.quantity+'瓶'+(priced?(l.unitPriceCents===undefined?'（單價未提供）':' × NT$'+(l.unitPriceCents/100).toFixed(2)+' = NT$'+(l.unitPriceCents*l.quantity/100).toFixed(2)):'')).join('；')+(priced?'；'+(missing?'已填單價小計':['訂貨','取消訂貨'].includes(s.draft.action)?'訂貨金額合計':'進貨金額合計')+' NT$'+(total/100).toFixed(2)+(missing?'（'+missing+'項未提供單價）':''):'');
   const values=[s.draft.id,JSON.stringify(event),s.draft.date,s.draft.action,s.draft.actor,s.draft.note,summary,s.draft.action==='訂貨'?'待發送・未入庫':s.draft.action==='取消訂貨'?'已取消・未發送':'已入帳',event.time];
   requests.push({appendCells:{sheetId:id,rows:[{values:values.map(v=>({userEnteredValue:{stringValue:v}}))}],fields:'userEnteredValue'}});
   Sheets.Spreadsheets.batchUpdate({requests},s.ss.getId());
@@ -145,7 +146,7 @@ function erpWeeklyRead_(draft,ss,tabs,events,plan){
     if(v[0][1]!=='編號'||v[0][2]!=='藥品名稱'||String(v[1][3]).replace(/\s/g,'')!=='本周訂貨量')throw Error(line.sheet+' 訂貨表頭已變動');
     t={id:sh.getSheetId(),v,f,max:sh.getMaxRows(),next:n};
    }else{
-    const index=CloudTransaction.CLOUD_SHEETS.indexOf(line.sheet),id=918410100+index;
+    const index=CloudTransaction.CLOUD_SHEETS.indexOf(line.sheet),id=index>=0?918410100+index:100000000+(Array.from(line.sheet).reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,0)%800000000);
     if(ss.getSheets().some(x=>x.getSheetId()===id))throw Error('新訂貨分頁編號衝突');
     const catalog=tabs[line.sheet].v.slice(2).filter(r=>String(r[1]||'').trim()&&String(r[3]||'').trim());
     const seen=new Set();for(const r of catalog){const c=String(r[1]).trim();if(seen.has(c))throw Error(line.sheet+' 庫存編號重複，不能建立訂貨名冊');seen.add(c);}
@@ -180,4 +181,19 @@ function erpWeeklyRead_(draft,ss,tabs,events,plan){
 }
 function erpWeeklyVerify_(ss,changes){
  for(const w of changes){const sh=ss.getSheetByName(w.sheet);if(!sh||sh.getSheetId()!==w.sheetId)throw Error('訂貨分頁讀回不符');const v=sh.getRange(w.row+1,2,1,3).getValues()[0];if(String(v[0]).trim()!==w.code||String(v[1]).trim()!==w.name||v[2]!==w.after)throw Error(w.code+' 本周訂貨量寫後讀回不符；請沿用交易編號核對');}
+}
+
+// Read only: identify standard supplier sheets; optional registry pins IDs across renames.
+function erpOrderSources_(){
+ const ss=SpreadsheetApp.openById(ERP.inventory),config=ss.getSheetByName('廠商設定');let candidates;
+ if(config){
+  const v=config.getDataRange().getValues();if(v.length>1000||v[0].slice(0,5).join('|')!=='啟用|廠商|類別|工作表ID|顯示順序')throw Error('廠商設定欄位應為：啟用、廠商、類別、工作表ID、顯示順序');
+  candidates=v.slice(1).filter(r=>r[0]===true||['是','啟用'].includes(String(r[0]).trim())).map(r=>{const sh=ss.getSheets().find(s=>s.getSheetId()===Number(r[3]));if(!sh)throw Error('廠商設定的工作表ID不存在');return {sh,brand:String(r[1]).trim(),category:String(r[2]).trim(),order:Number(r[4])||0};}).sort((a,b)=>a.order-b.order);
+ }else candidates=ss.getSheets().flatMap(sh=>{const m=sh.getName().match(/^(.+?)(單方|複方)$/);return m&&!/備份|測試|副本|封存/.test(m[1])?[{sh,brand:m[1],category:m[2]}]:[];});
+ const seen=new Set();return candidates.map(({sh,brand,category})=>{const name=sh.getName(),v=sh.getRange(1,1,2,7).getDisplayValues();if(!brand||!['單方','複方'].includes(category)||!/^.+(?:單方|複方)$/.test(name))throw Error('廠商名稱或分類無效');if(v[0][1]!=='編號'||v[0][3]!=='藥品名稱'||v[0][4]!=='價格'||v[1][6]!=='未拆封')throw Error(name+' 欄位格式不符，請依標準庫存表建立');const key=brand+'|'+category;if(seen.has(key))throw Error('廠商與類別設定重複');seen.add(key);return {name,brand,category,gid:sh.getSheetId()};});
+}
+function erpOrderCatalog_(){
+ const sources=erpOrderSources_(),inv=SpreadsheetApp.openById(ERP.inventory),orders=SpreadsheetApp.openById(ERP.orders),sheets={},weekly={};
+ for(const source of sources){sheets[source.name]=erpDirectValues_(inv.getSheetByName(source.name));const sh=orders.getSheetByName(source.name),map={};if(sh){const v=sh.getRange(1,1,Math.max(2,sh.getLastRow()),4).getValues();if(v[0][1]!=='編號'||v[0][2]!=='藥品名稱'||String(v[1][3]).replace(/\s/g,'')!=='本周訂貨量')throw Error(source.name+' 訂貨欄位格式不符');for(const r of v.slice(2)){const code=String(r[1]||'').trim();if(!code)continue;if(Object.prototype.hasOwnProperty.call(map,code))throw Error(source.name+' 訂貨編號重複');if(r[3]!==''&&(!Number.isInteger(r[3])||r[3]<0))throw Error(code+' 本周訂量格式不符');map[code]=r[3]===''?null:r[3];}}weekly[source.name]=map;}
+ return {sources,sheets,weekly};
 }

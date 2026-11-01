@@ -34,7 +34,7 @@ function erpWeeklyRead_(draft,ss,tabs,events,plan){
     if(v[0][1]!=='編號'||v[0][2]!=='藥品名稱'||String(v[1][3]).replace(/\s/g,'')!=='本周訂貨量')throw Error(line.sheet+' 訂貨表頭已變動');
     t={id:sh.getSheetId(),v,f,max:sh.getMaxRows(),next:n};
    }else{
-    const index=CloudTransaction.CLOUD_SHEETS.indexOf(line.sheet),id=918410100+index;
+    const index=CloudTransaction.CLOUD_SHEETS.indexOf(line.sheet),id=index>=0?918410100+index:100000000+(Array.from(line.sheet).reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,0)%800000000);
     if(ss.getSheets().some(x=>x.getSheetId()===id))throw Error('新訂貨分頁編號衝突');
     const catalog=tabs[line.sheet].v.slice(2).filter(r=>String(r[1]||'').trim()&&String(r[3]||'').trim());
     const seen=new Set();for(const r of catalog){const c=String(r[1]).trim();if(seen.has(c))throw Error(line.sheet+' 庫存編號重複，不能建立訂貨名冊');seen.add(c);}

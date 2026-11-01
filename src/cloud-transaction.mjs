@@ -2,7 +2,7 @@ export const CLOUD_SHEETS=['科達單方','科達複方','天明單方','天明�
 export function cloudDraft(input) {
  const d=typeof input==='string'?JSON.parse(input):input;
  if(!d||d.kind!=='tcm-cloud'||![1,2].includes(d.version)||!['建檔','進貨','訂貨','沖銷','取消訂貨'].includes(d.action))throw Error('不支援的雲端交易');
- if(d.version===2&&(!['進貨','沖銷'].includes(d.action)||d.currency!=='TWD'))throw Error('單價交易須為新台幣進貨或沖銷');
+ if(d.version===2&&(!['進貨','沖銷','訂貨','取消訂貨'].includes(d.action)||d.currency!=='TWD'))throw Error('單價交易須為新台幣進貨、訂貨或更正');
  if(typeof d.id!=='string'||!/^ERP-[a-zA-Z0-9-]{8,80}$/.test(d.id))throw Error('交易編號無效');
  if(!/^\d{4}-\d{2}-\d{2}$/.test(d.date)||isNaN(Date.parse(d.date))||new Date(d.date).toISOString().slice(0,10)!==d.date)throw Error('日期無效');
  if(typeof d.actor!=='string'||!d.actor.trim()||d.actor.length>80)throw Error('經手人必填，最多80字');
@@ -10,7 +10,7 @@ export function cloudDraft(input) {
  if(!Array.isArray(d.lines)||!d.lines.length||d.lines.length>100)throw Error('每批1至100項');
  const seen=new Set();
  const lines=d.lines.map(l=>{
-  if(!CLOUD_SHEETS.includes(l.sheet)||typeof l.code!=='string'||!l.code.trim()||l.code.length>60||typeof l.name!=='string'||!l.name.trim()||l.name.length>120)throw Error('藥品編號、名稱或分頁無效');
+  if((!CLOUD_SHEETS.includes(l.sheet)&&!(typeof l.sheet==='string'&&/^[^|\r\n]{1,60}(?:單方|複方)$/.test(l.sheet)))||typeof l.code!=='string'||!l.code.trim()||l.code.length>60||typeof l.name!=='string'||!l.name.trim()||l.name.length>120)throw Error('藥品編號、名稱或分頁無效');
   if(!Number.isInteger(l.quantity)||l.quantity<0||l.quantity>1000000||(['進貨','訂貨'].includes(d.action)&&!l.quantity))throw Error('瓶數須為整數；進貨、訂貨須大於0');
   const key=l.sheet+'|'+l.code.trim();if(seen.has(key))throw Error('同批品項重複');seen.add(key);
   const price=Object.hasOwn(l,'unitPriceCents');

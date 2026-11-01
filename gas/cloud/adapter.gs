@@ -2,6 +2,7 @@
 const ERP={inventory:LOSS3.inventory,orders:'1YcO7XRhN4T8wrL6wn-jD45lqif--rYQF4HCuBE-Nju8',log:'藥庫_同步紀錄',logId:904291001,orderLog:'藥庫_訂貨紀錄',orderLogId:904291002};
 function erpRead_(input){
  loss3Actor_();const draft=CloudTransaction.cloudDraft(input);
+ if(['訂貨','取消訂貨'].includes(draft.action)){const allowed=erpOrderSources_().map(s=>s.name);if(draft.lines.some(l=>!allowed.includes(l.sheet)))throw Error('訂貨來源未啟用或欄位格式不符');}
  if(draft.date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不可登錄未來日期');
  const ss=SpreadsheetApp.openById(['訂貨','取消訂貨'].includes(draft.action)?ERP.orders:ERP.inventory),title=['訂貨','取消訂貨'].includes(draft.action)?ERP.orderLog:ERP.log,log=ss.getSheetByName(title);
  if(log&&log.getRange(1,1).getValue()!=='交易編號')throw Error('紀錄表頭異常');
@@ -41,8 +42,8 @@ function erpCommit(input,token){
   if(s.draft.action==='取消訂貨'){const originalRow=s.events.findIndex(e=>e.draft.id===s.draft.reverses)+1;requests.push(loss3Cell_(id,originalRow,7,'已取消・未發送'));}
   requests.push(...(s.weekly?.requests||[]));
   const event={draft:s.draft,lines:s.plan.lines,weekly:s.weekly?.changes||[],time:new Date().toISOString()};
-  const priced=['進貨','沖銷'].includes(s.draft.action),missing=s.draft.lines.filter(l=>l.unitPriceCents===undefined).length,total=s.draft.lines.reduce((n,l)=>n+(l.unitPriceCents||0)*l.quantity,0);
-  const summary=s.draft.lines.map(l=>l.sheet+' '+l.code+' '+l.name+' '+l.quantity+'瓶'+(priced?(l.unitPriceCents===undefined?'（單價未提供）':' × NT$'+(l.unitPriceCents/100).toFixed(2)+' = NT$'+(l.unitPriceCents*l.quantity/100).toFixed(2)):'')).join('；')+(priced?'；'+(missing?'已填單價小計':'進貨金額合計')+' NT$'+(total/100).toFixed(2)+(missing?'（'+missing+'項未提供單價）':''):'');
+  const priced=['進貨','沖銷','訂貨','取消訂貨'].includes(s.draft.action),missing=s.draft.lines.filter(l=>l.unitPriceCents===undefined).length,total=s.draft.lines.reduce((n,l)=>n+(l.unitPriceCents||0)*l.quantity,0);
+  const summary=s.draft.lines.map(l=>l.sheet+' '+l.code+' '+l.name+' '+l.quantity+'瓶'+(priced?(l.unitPriceCents===undefined?'（單價未提供）':' × NT$'+(l.unitPriceCents/100).toFixed(2)+' = NT$'+(l.unitPriceCents*l.quantity/100).toFixed(2)):'')).join('；')+(priced?'；'+(missing?'已填單價小計':['訂貨','取消訂貨'].includes(s.draft.action)?'訂貨金額合計':'進貨金額合計')+' NT$'+(total/100).toFixed(2)+(missing?'（'+missing+'項未提供單價）':''):'');
   const values=[s.draft.id,JSON.stringify(event),s.draft.date,s.draft.action,s.draft.actor,s.draft.note,summary,s.draft.action==='訂貨'?'待發送・未入庫':s.draft.action==='取消訂貨'?'已取消・未發送':'已入帳',event.time];
   requests.push({appendCells:{sheetId:id,rows:[{values:values.map(v=>({userEnteredValue:{stringValue:v}}))}],fields:'userEnteredValue'}});
   Sheets.Spreadsheets.batchUpdate({requests},s.ss.getId());

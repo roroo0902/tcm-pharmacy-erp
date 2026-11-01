@@ -13,6 +13,7 @@ function erpDirect(operation,input,token){
   if(!names.length)throw Error('員工名冊尚未填寫姓名');
   return {names};
  }
+ if(operation==='readOrderCatalog')return erpOrderCatalog_();
  if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);
  if(operation==='readAll'){
   const ss=SpreadsheetApp.openById(LOSS3.inventory),sheets={};

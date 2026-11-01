@@ -1,3 +1,4 @@
+import {mountOrderGrid} from './order-grid.mjs';
 import {installStaffSelectors} from './staff.mjs?v=allstaff20261030';
 import {setupDirect} from './direct-sync.mjs?v=compact20261030';
 import {mountGoogleEntry,restoreGooglePage} from './google-entry.mjs?v=compact20261030';
@@ -28,7 +29,8 @@ function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuest
  if(r==='overview'||r==='cloud'){cloudCleanup=mountSheets({esc,fmt});return;}
  if(r==='receive'){cloudCleanup=mountReceiptGrid({esc,fmt,ask});return;}
  if(r==='photoReceive'){cloudCleanup=mountPhotoReceive({esc,fmt,ask});return;}
- if(['orders','items'].includes(r)){cloudCleanup=mountCloudEntry({esc,route:r,ask});return;}
+ if(r==='orders'){cloudCleanup=mountOrderGrid({esc,fmt,ask});return;}
+ if(['items'].includes(r)){cloudCleanup=mountCloudEntry({esc,route:r,ask});return;}
  if(r==='history'){cloudCleanup=mountCloudHistory({esc,ask});return;}
  if(r==='orderPlanning'){cloudCleanup=mountOrders({esc,fmt,ask});return;}
 

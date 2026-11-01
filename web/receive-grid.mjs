@@ -1,3 +1,4 @@
+import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
 import {loadSupplierCatalog,supplierSelection} from './supplier-catalog.mjs';
 import {priceCents,money,pricingTotal} from './receipt-pricing.mjs?v=compact20261030';
@@ -64,5 +65,5 @@ export function mountReceiptGrid({esc,fmt,ask}){
  $('#receipt-clear').onclick=()=>{quantities.clear();prices.clear();draw();status('已清除本次輸入，未修改工作表。');};
  c.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{direction=sort===b.dataset.sort&&direction==='asc'?'desc':'asc';sort=b.dataset.sort;draw();});
  $('#receipt-form').onsubmit=e=>{e.preventDefault();if(loading||loadFailed)return;try{const prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&reuseId!==prior.id)throw Error('上一筆尚未核對，請先讀回結果或按「修改未入帳內容」，避免重複入帳');const lines=receiptLines(rows,quantities,prices),priced=lines.some(l=>l.unitPriceCents!==undefined);const d=cloudDraft({kind:'tcm-cloud',version:priced?2:1,...(priced?{currency:'TWD'}:{}),id:reuseId||'ERP-'+crypto.randomUUID(),action:'進貨',date:$('#receipt-date').value,actor:$('#receipt-actor').value,note:$('#receipt-note').value,lines});localStorage.setItem(KEY,JSON.stringify(d));showPending();send(d);}catch(e){status(e.message);}};
- const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);sync();return()=>{alive=false;ticket++;abort.abort();window.removeEventListener('erp-synced',sync);};
+ const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);sync();return()=>{alive=false;stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);};
 }

@@ -1,3 +1,4 @@
+import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
 import {loadSupplierCatalog,supplierSelection} from './supplier-catalog.mjs';
 import {directReview,directLog} from './direct-sync.mjs';
@@ -32,5 +33,5 @@ export function mountOrderGrid({esc,fmt,ask}){
  function send(d){return directReview(d,ask,async()=>{localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));reuseId='';quantities.clear();prices.clear();if(alive){showPending();await load();}},status);}
  $('#order-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selectSource();}};$('#order-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selectSource();}};$('#og-search').oninput=draw;$('#og-only').onchange=draw;$('#og-date').onchange=draw;$('#og-refresh').onclick=load;$('#og-clear').onclick=()=>{quantities.clear();prices.clear();draw();};c.querySelectorAll('[data-og-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.ogSort;direction=sort===key&&direction==='asc'?'desc':'asc';sort=key;draw();});
  $('#order-grid-form').onsubmit=e=>{e.preventDefault();if(busy)return;try{const prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&reuseId!==prior.id)throw Error('上一筆尚未核對，請先讀回工作表結果');const d=cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id:reuseId||'ERP-'+crypto.randomUUID(),action:'訂貨',date:$('#og-date').value,actor:$('#og-actor').value,note:$('#og-note').value,lines:orderLines(rows,quantities,prices)});localStorage.setItem(KEY,JSON.stringify(d));showPending();send(d);}catch(e){status(e.message.replaceAll('進貨','訂貨'));}};
- showPending();load();return()=>{alive=false;};
+ const stopCatalogWatch=watchSupplierCatalog(load);showPending();load();return()=>{alive=false;stopCatalogWatch();};
 }

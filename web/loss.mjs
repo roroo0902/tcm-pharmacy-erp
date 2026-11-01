@@ -1,3 +1,4 @@
+import {watchSupplierCatalog} from './catalog-events.mjs';
 import {loadSupplierCatalog,supplierSelection} from './supplier-catalog.mjs';
 import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
 import {directEnabled,directReview} from './direct-sync.mjs?v=compact20261030';
@@ -25,5 +26,5 @@ export function mountLoss({esc,fmt,ask,message}){
  if(directEnabled()){directReview(draft,ask,async()=>{quantities.clear();cache.clear();await load(true);},text=>message(text));return;}
  ask(`<p>${esc(date)} · ${esc(draft.actor)} · 共 ${lines.length} 項</p><p>將開啟 Google 確認頁，讀取最新已入帳量並顯示差額。此步驟尚未扣庫。</p><p>請使用管理此耗損表的 Google 帳號。</p>`,()=>{const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(draft);form.append(input);document.body.append(form);form.submit();form.remove();message('已開啟 Google 核對頁。完成入帳後，請重新讀取工作表確認。');},'開啟 Google 核對頁');
  }catch(e){message(e.message,true);}};
- if(directEnabled()){$('#loss-submit').textContent='確認並預覽';const notes=$('#loss-submit').parentElement.parentElement.querySelectorAll(':scope > p.muted');notes[0].textContent='在站內核對差額後按確認入帳。相同累計不重扣；雲端資料變更時需重新預覽。';notes[1].textContent='新增品項請先至藥品建帳；預覽會準備缺少的日期欄，但確認入帳前不扣庫存。';}const sync=()=>load(true);window.addEventListener('erp-synced',sync);load();return()=>{disposed=true;generation++;window.removeEventListener('erp-synced',sync);};
+ if(directEnabled()){$('#loss-submit').textContent='確認並預覽';const notes=$('#loss-submit').parentElement.parentElement.querySelectorAll(':scope > p.muted');notes[0].textContent='在站內核對差額後按確認入帳。相同累計不重扣；雲端資料變更時需重新預覽。';notes[1].textContent='新增品項請先至藥品建帳；預覽會準備缺少的日期欄，但確認入帳前不扣庫存。';}const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>load(true);window.addEventListener('erp-synced',sync);load();return()=>{disposed=true;stopCatalogWatch();generation++;window.removeEventListener('erp-synced',sync);};
 }

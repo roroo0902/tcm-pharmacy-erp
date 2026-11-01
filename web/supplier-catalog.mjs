@@ -1,7 +1,7 @@
 import {runDirect} from './direct-sync.mjs';
 import {parseSheet} from './sheets-data.mjs';
 
-// Receipt, order and daily loss screens use the server's enabled supplier registry.
+// Registration, receipt, order and daily loss screens use the server's enabled supplier registry.
 export function parseSupplierCatalog(data){
  if(!Array.isArray(data?.sources)||!data.sources.length)throw Error('尚無已啟用的廠商分類');
  const ids=new Set(),groups=new Set();

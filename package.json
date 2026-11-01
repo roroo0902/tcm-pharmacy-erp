@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "build": "node scripts/build-hosted.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2"

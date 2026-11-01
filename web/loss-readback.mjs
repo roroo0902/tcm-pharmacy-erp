@@ -10,3 +10,6 @@ export function lossCalculation(value,row){
  if(row.posted===null||row.bottles===null||row.postedError)return {delta:'無法核對',after:'待核對',insufficient:false};
  const delta=n-row.posted,after=row.bottles-delta;return {delta:delta===0?'不變':delta>0?'扣 '+delta+' 罐':'加回 '+(-delta)+' 罐',after:after+' 罐',insufficient:after<0};
 }
+
+// Rapid supplier switches share one in-flight read of the same complete daily catalog.
+export function createLossLoader(read){const pending=new Map();return date=>{if(!pending.has(date)){const p=Promise.resolve().then(()=>read(date)).finally(()=>pending.delete(date));pending.set(date,p);}return pending.get(date);};}

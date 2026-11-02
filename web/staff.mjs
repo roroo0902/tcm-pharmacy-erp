@@ -11,7 +11,7 @@ export function staffLoader(read=()=>runDirect('readStaff')){
 }
 export function installStaffSelectors(){
  const load=staffLoader(), initialized=new WeakSet();
- if(!document.getElementById('staff-controls-style')){const style=document.createElement('style');style.id='staff-controls-style';style.textContent='.staff-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:6px}.staff-controls small{font-size:12px;line-height:1.5}.staff-controls button.staff-refresh{width:auto;min-width:0;min-height:32px;height:auto;padding:4px 10px;margin:0;font-size:12px;line-height:1.5;white-space:nowrap;flex:0 0 auto}@media(max-width:650px){.staff-controls button.staff-refresh{min-height:44px;padding:8px 10px}}';document.head.append(style);}
+ if(!document.getElementById('staff-controls-style')){const style=document.createElement('style');style.id='staff-controls-style';style.textContent='.staff-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:6px}.staff-controls small{font-size:12px;line-height:1.5}.staff-controls button.staff-refresh{width:auto;min-width:0;min-height:26px!important;height:26px;padding:2px 7px!important;margin:0;font-size:11px!important;line-height:1.4;box-shadow:none;white-space:nowrap;flex:0 0 auto}@media(max-width:650px){.staff-controls button.staff-refresh{min-height:30px!important;height:30px;padding:4px 7px!important}}';document.head.append(style);}
 
  function mount(){
   document.querySelectorAll('select[data-staff]').forEach(el=>{

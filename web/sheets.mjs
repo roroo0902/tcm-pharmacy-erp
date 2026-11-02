@@ -6,6 +6,7 @@ export function mountSheets({esc,fmt}){
  const content=document.querySelector('#content');let alive=true,busy=false,page=0,statusFilter='all',sortKey='code',sortDirection='asc';const sortYear=Number(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}).slice(0,4));const controller=new AbortController(),snapshots=new Map(),errors=new Map();
  content.innerHTML=`<style>
 #cloud-cards button.card{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;min-width:0;background:#fffdf5}
+#cloud-cards [data-cloud-filter="warning"]::after{background-image:url("./web/assets/checklist-scroll.png");opacity:1;image-rendering:pixelated}
 #cloud-cards button.card:hover{background:#f8f0da;border-color:#8a6a2d}
 #cloud-cards button.card[aria-pressed="true"]{border-color:#315e81;box-shadow:inset 0 0 0 2px #315e81,0 3px 0 #d8dccf}
 #cloud-cards button.card:focus-visible{outline:3px solid #315e81;outline-offset:4px}

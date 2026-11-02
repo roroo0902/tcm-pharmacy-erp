@@ -16,7 +16,9 @@ const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String
 let data,ledger,pending,locked=false,ready=false;
 const fmt=n=>Number(n).toLocaleString('zh-TW',{maximumFractionDigits:2});
 let cloudCleanup=()=>{};
-const titles={orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',cloud:'雲端庫存查詢',overview:'庫存總覽',receive:'進貨登錄',photoReceive:'AI 拍照進貨',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
+const titles={orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',overview:'庫存總覽',receive:'進貨登錄',photoReceive:'AI 拍照進貨',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
+// Older Apps Script shells still contain the retired navigation entry.
+document.querySelectorAll('nav a[href="#cloud"]').forEach(a=>a.remove());
 const route=()=>Object.hasOwn(titles,location.hash.slice(1))?location.hash.slice(1):'overview';
 function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
 function read(){const raw=localStorage.getItem(KEY);data=raw?JSON.parse(raw):empty();ledger=validate(data);}
@@ -26,7 +28,7 @@ function rows(items){return items.map(i=>`<tr data-category="${esc(i.category)}"
 const emptyHtml='<div class="empty"><strong>從第一筆藥品開始</strong>先建立藥品與實際盤點瓶數，就能登錄進貨和耗損。<br><a href="#items">前往藥品建帳 →</a></div>';
 function table(items){return `<div class="tablewrap"><table><thead><tr><th>藥品名稱／編號</th><th>廠牌</th><th>類別</th><th class="num">目前瓶數</th><th class="num">安全瓶數</th><th>狀態</th></tr></thead><tbody id="stockrows">${rows(items)}</tbody></table></div>`;}
 function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuestTheme(r);$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');
- if(r==='overview'||r==='cloud'){cloudCleanup=mountSheets({esc,fmt});return;}
+ if(r==='overview'){cloudCleanup=mountSheets({esc,fmt});return;}
  if(r==='receive'){cloudCleanup=mountReceiptGrid({esc,fmt,ask});return;}
  if(r==='photoReceive'){cloudCleanup=mountPhotoReceive({esc,fmt,ask});return;}
  if(r==='orders'){cloudCleanup=mountOrderGrid({esc,fmt,ask});return;}

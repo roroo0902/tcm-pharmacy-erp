@@ -17,9 +17,15 @@ export function mountReceiptGrid({esc,fmt,ask}){
  const readCatalog=createSupplierLoader();
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
  c.innerHTML=`<style>
-#receipt-grid .receipt-price{width:104px;height:36px;min-height:36px;padding:6px 8px;margin-top:4px;line-height:22px}
+#receipt-grid .receipt-price{display:block;width:88px;height:34px;min-height:34px;padding:4px 8px;margin:0 auto;font-size:14px;line-height:22px;text-align:center;appearance:textfield;-moz-appearance:textfield}
+#receipt-grid .receipt-price::-webkit-inner-spin-button,#receipt-grid .receipt-price::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+#receipt-grid tbody td{vertical-align:top;padding-top:16px;padding-bottom:16px;line-height:34px}
+#receipt-grid tbody td:nth-child(1),#receipt-grid tbody td:nth-child(2),#receipt-grid tbody td .muted{line-height:17px}
+#receipt-grid .quantity-stepper{grid-template-columns:26px 64px 26px;gap:6px;width:128px;line-height:normal;margin-inline:auto}
+#receipt-grid .quantity-stepper input{width:64px;height:34px;min-height:34px;padding:4px;font-size:14px}
+#receipt-grid .quantity-stepper .quantity-adjust{width:26px;min-width:26px;height:28px;min-height:28px;font-size:18px}
+#receipt-grid .quantity-clear{line-height:22px}
 #receipt-grid .receipt-price-cell small:empty{display:none}
-@media(max-width:760px){#receipt-grid .receipt-price{width:96px;height:44px;min-height:44px;margin-top:0}}
 </style><section class="panel"><div class="panelhead"><div><h2>登錄本次進貨</h2><span class="muted">依工作表列出全部品項 · 留白不進貨 · 可跨廠牌整批入帳</span></div><a class="secondary" href="#items">＋ 新增品項</a></div><label>廠商</label><div class="order-tabs" id="receipt-brands" role="group" aria-label="進貨廠商"></div><label>類別</label><div class="order-tabs" id="receipt-categories" role="group" aria-label="進貨單方或複方"></div><form id="receipt-form"><div class="grid"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">備註<input id="receipt-note" maxlength="500"></label></div><div class="panelhead receive-tools"><input id="receipt-search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" id="receipt-refresh" class="secondary">同步工作表庫存與單價</button></div><p id="receipt-state" role="status">正在讀取共用廠商與品項…</p><div class="tablewrap"><table id="receipt-grid"><thead><tr><th><button type="button" class="sort-heading" data-sort="code">藥品／編號 ↑</button></th><th>廠牌／類別</th><th class="num"><button type="button" class="sort-heading" data-sort="bottles">未拆封瓶數 ↕</button></th><th class="receipt-quantity"><button type="button" class="sort-heading" data-sort="quantity">進貨數量 ↕</button></th><th class="receipt-price-cell">單價（元／瓶）</th><th class="num">進貨小計（元）</th><th class="num">入庫後瓶數</th><th><button type="button" class="sort-heading" data-sort="updated">原表更新欄 ↕</button></th><th>缺藥標記／率</th><th>原表</th></tr></thead><tbody></tbody></table></div><div class="actions"><span id="receipt-summary" role="status"></span><button type="button" class="secondary" id="receipt-clear">清除本次輸入</button><button id="receipt-submit" disabled>確認並預覽整批進貨</button></div></form><div id="receipt-pending"></div><p class="muted">先在站內核對各品項原庫存、進貨量與入庫後瓶數，再按「確認入帳」。進貨只增加本次填入數量。按「同步工作表庫存與單價」會以最新 E 欄取代所有本次手動單價，保留已填數量。單價由原表 E 欄帶入；確認入帳後，有填單價的進貨品項會同步更新 E 欄。留白不清除原表價格，0 為零元。金額依輸入單價計算，未另計稅額、折扣或運費。</p></section>`;
  function draw(){
   if(!alive)return;

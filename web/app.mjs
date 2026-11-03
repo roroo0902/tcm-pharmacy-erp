@@ -1,3 +1,4 @@
+import {isProcessing} from './processing-screen.mjs';
 import {pageScope,allowLeave} from './page-safety.mjs';
 import {mountShortage} from './shortage.mjs';
 import {mountOrderGrid} from './order-grid.mjs';
@@ -54,7 +55,7 @@ function render(){scope.invalidate();pending=null;if($('#confirm').open)$('#conf
 }
 function showAsk(html,action,label='確認入帳'){$('#commit').textContent=label;pending=action;$('#confirm-detail').innerHTML=html;const form=$('#confirm form');if(form)form.onsubmit=e=>e.preventDefault();$('#confirm').showModal();}
 $('#cancel').onclick=()=>$('#confirm').close();$('#commit').onclick=async()=>{const form=$('#confirm form');if(form&&!form.reportValidity())return;const action=pending;pending=null;$('#confirm').close();if(action)await action();};
-window.addEventListener('hashchange',()=>{if(ready){if(!allowLeave(cloudCleanup,window.confirm.bind(window))){history.replaceState(null,'',location.pathname+location.search+renderedHash);return;}message('');render();}});window.addEventListener('beforeunload',e=>{if(cloudCleanup.hasUnsavedChanges?.()){e.preventDefault();e.returnValue='';}});window.addEventListener('storage',e=>{if(e.key===KEY&&ready){try{read();render();message('已載入其他分頁的最新資料');}catch(err){message(err.message,true);}}});
+window.addEventListener('hashchange',()=>{if(ready){if(isProcessing()){history.replaceState(null,'',location.pathname+location.search+renderedHash);return;}if(!allowLeave(cloudCleanup,window.confirm.bind(window))){history.replaceState(null,'',location.pathname+location.search+renderedHash);return;}message('');render();}});window.addEventListener('beforeunload',e=>{if(cloudCleanup.hasUnsavedChanges?.()){e.preventDefault();e.returnValue='';}});window.addEventListener('storage',e=>{if(e.key===KEY&&ready&&!isProcessing()){try{read();render();message('已載入其他分頁的最新資料');}catch(err){message(err.message,true);}}});
 async function start(){await restoreGooglePage(globalThis.google,location);setupDirect();mountGoogleEntry();installStaffSelectors();const loaded=loadLegacy(()=>localStorage,KEY);data=loaded.data;ledger=loaded.ledger;ready=true;render();if(loaded.error)message('舊本機資料無法讀取，已保留原資料；雲端功能仍可使用。請由備份頁保留原始資料後再處理。',true);}
 start().catch(e=>message(e.message,true));
 

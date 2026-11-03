@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import {pathToFileURL} from 'node:url';
 
 function server(email='owner@example.com',allowed='owner@example.com'){
  const calls=[];
@@ -41,7 +42,7 @@ async function client(t){
  t.after(()=>{for(const [k,v] of Object.entries(saved))if(v===undefined)delete globalThis[k];else globalThis[k]=v;});
  globalThis.google={accounts:{oauth2:{hasGrantedAllScopes:()=>true,initTokenClient:o=>({requestAccessToken:()=>queueMicrotask(()=>o.callback({access_token:'test-only',expires_in:3600}))})}}};
  globalThis.document={querySelectorAll:()=>[]};globalThis.window={dispatchEvent:()=>{}};
- const source=fs.readFileSync('web/direct-sync.mjs','utf8').replace("import {DIRECT} from './direct-config.mjs';","const DIRECT={enabled:true,clientId:'test-client',deploymentId:'api-deployment',pollMs:15000};");
+ const source=fs.readFileSync('web/direct-sync.mjs','utf8').replace("'./processing-screen.mjs'",JSON.stringify(pathToFileURL(process.cwd()+'/web/processing-screen.mjs').href)).replace("import {DIRECT} from './direct-config.mjs';","const DIRECT={enabled:true,clientId:'test-client',deploymentId:'api-deployment',pollMs:15000};");
  const mod=await import('data:text/javascript;base64,'+Buffer.from(source+'\n//'+serial++).toString('base64'));
  return mod;
 }
@@ -51,8 +52,8 @@ test('price review rejects missing server prices and confirms exact cents with E
  const d={kind:'tcm-cloud',version:2,action:'進貨',lines:[line]};let asked=false,status='',confirm,committed;
  globalThis.fetch=async()=>response({token:'p',lines:[{...line,unitPriceCents:undefined}]});
  await m.directReview(d,()=>asked=true,async()=>{},s=>status=s);assert.equal(asked,false);assert.match(status,/單價預覽不一致/);
- globalThis.fetch=async(u,init)=>{const [op,payload]=JSON.parse(init.body).parameters;if(op==='commit'){committed=payload;return response({message:'ok',lines:[line]});}return response({token:'p',lines:[{...line,amountCents:54075,priceBefore:180,priceAfter:180.25,before:5,after:8}]});};
- await m.directReview(d,(html,fn)=>{assert.match(html,/540.75/);assert.match(html,/E欄/);confirm=fn;},async()=>{},()=>{});
+ globalThis.fetch=async(u,init)=>{const [op,payload]=JSON.parse(init.body).parameters;if(op==='commit'){committed=payload;return response({message:'ok',lines:payload.lines});}return response({token:'p',lines:[{...line,amountCents:54075,priceBefore:180,priceAfter:180.25,before:5,after:8}]});};
+ await m.directReview(d,(html,fn)=>{assert.match(html,/540.75/);if(!html.includes('同步完成')){assert.match(html,/E欄/);confirm=fn;}},async()=>{},()=>{});
  d.lines[0].unitPriceCents=0;await confirm();assert.equal(committed.lines[0].unitPriceCents,18025);
 });
 test('client needs login, uses authenticated API deployment, and coalesces six sheet reads',async t=>{
@@ -102,4 +103,17 @@ test('staff RPC reads only B names, trims blanks, deduplicates and checks header
  c.SpreadsheetApp.openById=id=>{assert.equal(id,'stock');return {getSheetByName:name=>{assert.equal(name,'員工名冊');return {getLastRow:()=>5,getRange:(...args)=>{ranges.push(args);return {getDisplayValue:()=>header,getDisplayValues:()=>[[' 甲 '],[''],['甲'],['乙']]};}};}};};
  assert.deepEqual(Array.from(c.erpDirect('readStaff').names),['甲','乙']);assert.deepEqual(ranges,[[1,2],[2,2,4,1]]);
  header='其他';assert.throws(()=>c.erpDirect('readStaff'),/B1/);
+});
+
+
+test('commit lock ignores a second confirmation while the first request is pending',async t=>{
+ const m=await client(t);let confirm,release,writes=0,success=0;const statuses=[];
+ globalThis.fetch=async(u,init)=>{const op=JSON.parse(init.body).parameters[0];if(op==='commit'){writes++;await new Promise(r=>release=r);return response({message:'ok'});}return response({token:'p',lines:[]});};
+ await m.directReview({kind:'tcm-cloud',lines:[]},(h,fn)=>confirm=fn,async()=>success++,s=>statuses.push(s));
+ const first=confirm();await Promise.resolve();await confirm();assert.equal(writes,1);release();await first;assert.equal(success,1);
+});
+test('ambiguous commit displays a visible pending result and never retries automatically',async t=>{
+ const m=await client(t);let confirm,writes=0,success=0;const dialogs=[];
+ globalThis.fetch=async(u,init)=>{if(JSON.parse(init.body).parameters[0]==='commit'){writes++;throw Error('<network lost>');}return response({token:'p',lines:[]});};
+ await m.directReview({kind:'tcm-cloud',lines:[]},(h,fn)=>{dialogs.push(h);confirm=fn;},async()=>success++,()=>{});await confirm();assert.equal(writes,1);assert.equal(success,0);assert.match(dialogs.at(-1),/結果尚待核對/);assert.match(dialogs.at(-1),/&lt;network lost&gt;/);assert.ok(!dialogs.at(-1).includes('同步完成'));
 });

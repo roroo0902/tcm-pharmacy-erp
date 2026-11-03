@@ -36,7 +36,7 @@ function harness(legacy = true) {
     getRange: (r, c, n = 1, m = 1) => {
       if (r === 'B2:B3') { r = 2; c = 2; n = 2; m = 1; }
       const values = () => Array.from({length: n}, (_, i) => Array.from({length: m}, (_, j) => s.values[r - 1 + i]?.[c - 1 + j] ?? ''));
-      return {getValues: values, setValues: rows => rows.forEach((row, i) => row.forEach((value, j) => { s.values[r - 1 + i] ??= []; s.values[r - 1 + i][c - 1 + j] = value; }))};
+      return {getValues: values,getDisplayValues:()=>values().map(r=>r.map(String)), setValues: rows => rows.forEach((row, i) => row.forEach((value, j) => { s.values[r - 1 + i] ??= []; s.values[r - 1 + i][c - 1 + j] = value; }))};
     },
     getDataRange: () => ({getValues: () => copy(s.values), getFormulas: () => copy(s.formulas || []),getDisplayValues:()=>copy(s.values).map(r=>r.map(String))})
   });
@@ -246,4 +246,8 @@ test('generated period backend exactly matches the pure core and adapter sources
  });
  test('catalog uses ledger totals, retains missing-code errors and ignores source date formulas',()=>{
  const h=harness(false);h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=999';vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8'),h.ctx);assert.equal(h.ctx.erpLossCatalog_({date:dates[2]}).loss[0].posted,2);h.state(source.name).values[2][1]='';const r=h.ctx.erpLossCatalog_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);assert.equal(h.batches.length,0);
+ });
+
+ test('planning projection uses ledger only and preserves source while enforcing range bounds',()=>{
+ const h=harness(false),s=h.state(source.name);s.values[2][16]=999;vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8'),h.ctx);const r=h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:dates[2]});assert.deepEqual(Array.from(r.values[2].slice(13)),[3,5,2]);assert.equal(s.values[2][16],999);assert.equal(h.batches.length,0);assert.throws(()=>h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:'2026-11-04'}),/63/);
  });

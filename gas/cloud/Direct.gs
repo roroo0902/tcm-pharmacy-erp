@@ -13,6 +13,7 @@ function erpDirect(operation,input,token){
   if(!names.length)throw Error('員工名冊尚未填寫姓名');
   return {names};
  }
+ if(operation==='readLossPlanning')return lossLedgerPlanning_(input);
  if(operation==='readLossPeriod')return periodRead_(input);
  if(operation==='saveLossPeriodSettings')return periodSaveSettings_(input);
  if(operation==='readLossDay')return periodDay_(input);
@@ -69,5 +70,18 @@ function erpLossCatalog_(input){
  loss.push({sheet:source.name,code:row.code,name,row:i+1,stock:Number.isInteger(stock)?stock:null,posted:error?null:row.values[date]??0,error});
  }}
  return {...data,date,loss,readAt:new Date().toISOString()};
+ }finally{lock.releaseLock();}
+}
+
+// In-memory compatibility grid for the planning calculator, never written to Sheets.
+function lossLedgerPlanning_(input){
+ const start=loss3Date_(input?.start),end=loss3Date_(input?.end),days=(Date.parse(end)-Date.parse(start))/86400000+1;
+ if(!Number.isInteger(days)||days<1||days>63||end>periodToday_())throw Error('請選擇不超過今天的 1 至 63 天期間');
+ const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他交易處理中');
+ try{const ss=SpreadsheetApp.openById(LOSS3.inventory),source=erpOrderSources_().find(s=>s.name===input.sheet);if(!source)throw Error('廠商分類不存在');
+ const dates=Array.from({length:days},(_,i)=>new Date(Date.parse(start)+i*86400000).toISOString().slice(0,10)),ledger=lossLedgerRead_(ss),snap=lossLedgerSnapshot_(ss,source,dates,ledger),sh=ss.getSheetByName(source.name),grid=sh.getRange(1,1,Math.max(2,sh.getLastRow()),13).getDisplayValues();
+ grid[0].push(...dates);grid[1].push(...dates.map(d=>'日一二三四五六'[new Date(d).getUTCDay()]));let i=0;
+ for(const row of grid.slice(2)){if(!String(row[3]||'').trim()){row.push(...dates.map(()=>''));continue;}const r=snap.rows[i++];row.push(...dates.map(d=>r.errors[d]?'待核對':r.values[d]??''));}
+ return {values:grid,source:'每日耗損明細'};
  }finally{lock.releaseLock();}
 }

@@ -13,6 +13,8 @@ function erpDirect(operation,input,token){
   if(!names.length)throw Error('員工名冊尚未填寫姓名');
   return {names};
  }
+ if(operation==='readShortage')return shortageRead_();
+ if(operation==='saveShortage')return shortageSave_(input);
  if(operation==='readOrderCatalog')return erpOrderCatalog_();
  if(operation==='readLossCatalog')return erpLossCatalog_(input);
  if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);

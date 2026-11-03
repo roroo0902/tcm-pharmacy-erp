@@ -19,7 +19,10 @@ export function cloudDraft(input) {
  });
  if(['沖銷','取消訂貨'].includes(d.action)&&(!/^ERP-[a-zA-Z0-9-]{8,80}$/.test(d.reverses||'')||!d.note.trim()))throw Error('沖銷須提供原交易與原因');
  const total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);if(!Number.isSafeInteger(total))throw Error('金額超出可精確計算範圍');
- return {kind:d.kind,version:d.version,...(d.version===2?{currency:'TWD'}:{}),id:d.id,action:d.action,date:d.date,actor:d.actor.trim(),note:d.note.trim(),lines,...(['沖銷','取消訂貨'].includes(d.action)?{reverses:d.reverses}:{})};
+ const shortageLinks=['沖銷','取消訂貨'].includes(d.action)?[]:Array.isArray(d.shortageLinks)?d.shortageLinks:[];
+ if(shortageLinks.length>100)throw Error('缺藥關聯過多');const linked=new Set();
+ for(const a of shortageLinks){const l=lines.find(l=>l.sheet===a.sheet&&l.code===a.code);if(!['訂貨','進貨'].includes(d.action)||!/^SH-[0-9a-f-]{36}$/i.test(a.shortageId)||!l||!Number.isInteger(a.quantity)||a.quantity<1||a.quantity>l.quantity||linked.has(a.sheet+'|'+a.code))throw Error('缺藥關聯無效');linked.add(a.sheet+'|'+a.code);}
+ return {kind:d.kind,version:d.version,...(d.version===2?{currency:'TWD'}:{}),...(shortageLinks.length?{shortageLinks:shortageLinks.map(a=>({shortageId:a.shortageId,sheet:a.sheet,code:a.code,quantity:a.quantity}))}:{}),id:d.id,action:d.action,date:d.date,actor:d.actor.trim(),note:d.note.trim(),lines,...(['沖銷','取消訂貨'].includes(d.action)?{reverses:d.reverses}:{})};
 }
 export function cloudPlan(d,rows,events=[]) {
  const old=events.find(e=>e.draft.id===d.id);

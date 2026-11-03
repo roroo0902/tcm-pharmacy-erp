@@ -18,6 +18,8 @@ function erpRead_(input){
   if(draft.version===2&&v[0][4]!=='價格')throw Error('E欄價格表頭異常，尚未入帳');
   tabs[name]={sh,v,f};for(let r=2;r<v.length;r++)if(v[r][1]||v[r][3])rows.push({sheet:name,code:String(v[r][1]).trim(),name:String(v[r][3]).trim(),stock:v[r][6],formula:f[r][6],price:v[r][4],priceFormula:f[r][4],row:r,sheetId:sh.getSheetId()});
  }
+ if(draft.shortageLinks?.length&&!events.some(e=>e.draft.id===draft.id)){const state=shortageRead_(),allocations=state.events.filter(e=>e.allocation).map(e=>e.allocation);for(const a of draft.shortageLinks){const r=state.records.find(r=>r.id===a.shortageId),line=draft.lines.find(l=>l.sheet===a.sheet&&l.code===a.code);if(!r||r.sheet!==a.sheet||r.code!==a.code||r.name!==line.name||['closed','cancelled','deferred'].includes(r.status))throw Error('缺藥追蹤紀錄已變動，請重新確認');const progress=Shortage.shortageProgress(r,allocations,state.orders,state.receipts);if(a.quantity>(draft.action==='訂貨'?progress.toOrder:progress.outstanding))throw Error('關聯數量超過待補或待到貨數量，請回缺藥管理重新核對');}}
+
  const plan=CloudTransaction.cloudPlan(draft,rows,events);
  const weekly=erpWeeklyRead_(draft,ss,tabs,events,plan);
  return {draft,ss,title,log,events,tabs,plan,weekly,token:loss3Hash_({draft,plan,rows,weekly})};

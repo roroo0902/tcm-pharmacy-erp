@@ -1,3 +1,4 @@
+import {mountShortage} from './shortage.mjs';
 import {mountOrderGrid} from './order-grid.mjs';
 import {installStaffSelectors} from './staff.mjs?v=allstaff20261030';
 import {setupDirect} from './direct-sync.mjs?v=compact20261030';
@@ -16,19 +17,21 @@ const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String
 let data,ledger,pending,locked=false,ready=false;
 const fmt=n=>Number(n).toLocaleString('zh-TW',{maximumFractionDigits:2});
 let cloudCleanup=()=>{};
-const titles={orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',overview:'庫存總覽',receive:'進貨登錄',photoReceive:'AI 拍照進貨',loss:'每日耗損',history:'交易紀錄',items:'藥品建帳',backup:'備份與還原'};
+const titles={shortage:'缺藥管理系統',orderPlanning:'批次訂貨規劃',orders:'廠商訂貨',overview:'庫存總覽',receive:'進貨登錄',photoReceive:'AI 拍照進貨',loss:'每日耗損',history:'交易紀錄',items:'藥品建檔',backup:'備份與還原'};
 // Older Apps Script shells still contain the retired navigation entry.
 document.querySelectorAll('nav a[href="#cloud"]').forEach(a=>a.remove());
+const itemNav=document.querySelector('nav a[href="#items"]');if(itemNav){itemNav.querySelector('span').textContent='藥品建檔';if(!document.querySelector('nav a[href="#shortage"]'))itemNav.insertAdjacentHTML('afterend','<a href="#shortage"><span>缺藥管理系統</span></a>');}
 const route=()=>Object.hasOwn(titles,location.hash.slice(1))?location.hash.slice(1):'overview';
 function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
 function read(){const raw=localStorage.getItem(KEY);data=raw?JSON.parse(raw):empty();ledger=validate(data);}
 async function mutate(fn){if(locked)return;locked=true;try{if(!navigator.locks)throw Error('請使用新版 Chrome 或 Edge，以避免多分頁同時入帳衝突');await navigator.locks.request(KEY,async()=>{read();const next=fn(data);validate(next);localStorage.setItem(KEY,JSON.stringify(next));data=next;ledger=validate(data);});render();message('已儲存在此瀏覽器。請定期匯出備份。');}catch(e){message(e.message,true);}finally{locked=false;}}
 function stock(i){return ledger.balance(i.id);}function badge(i){const n=stock(i);return `<span class="pill ${n===0?'out':n<=i.safety?'warn':''}">${n===0?'無庫存':n<=i.safety?'低庫存':'庫存正常'}</span>`;}
 function rows(items){return items.map(i=>`<tr data-category="${esc(i.category)}"><td><b>${esc(i.name)}</b><div class="muted">${esc(i.code||'未填編號')}</div></td><td>${esc(i.brand)}</td><td>${esc(i.category)}</td><td class="num"><b>${fmt(stock(i))}</b> 瓶</td><td class="num">${fmt(i.safety)}</td><td>${badge(i)}</td></tr>`).join('');}
-const emptyHtml='<div class="empty"><strong>從第一筆藥品開始</strong>先建立藥品與實際盤點瓶數，就能登錄進貨和耗損。<br><a href="#items">前往藥品建帳 →</a></div>';
+const emptyHtml='<div class="empty"><strong>從第一筆藥品開始</strong>先建立藥品與實際盤點瓶數，就能登錄進貨和耗損。<br><a href="#items">前往藥品建檔 →</a></div>';
 function table(items){return `<div class="tablewrap"><table><thead><tr><th>藥品名稱／編號</th><th>廠牌</th><th>類別</th><th class="num">目前瓶數</th><th class="num">安全瓶數</th><th>狀態</th></tr></thead><tbody id="stockrows">${rows(items)}</tbody></table></div>`;}
 function render(){cloudCleanup();cloudCleanup=()=>{};const r=route();updateQuestTheme(r);$('#title').textContent=titles[r];$('#today').textContent=today();document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('active',a.hash==='#'+r));const c=$('#content');
  if(r==='overview'){cloudCleanup=mountSheets({esc,fmt});return;}
+ if(r==='shortage'){cloudCleanup=mountShortage({esc,ask});return;}
  if(r==='receive'){cloudCleanup=mountReceiptGrid({esc,fmt,ask});return;}
  if(r==='photoReceive'){cloudCleanup=mountPhotoReceive({esc,fmt,ask});return;}
  if(r==='orders'){cloudCleanup=mountOrderGrid({esc,fmt,ask});return;}

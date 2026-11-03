@@ -21,7 +21,10 @@ function cloudDraft(input) {
  });
  if(['沖銷','取消訂貨'].includes(d.action)&&(!/^ERP-[a-zA-Z0-9-]{8,80}$/.test(d.reverses||'')||!d.note.trim()))throw Error('沖銷須提供原交易與原因');
  const total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);if(!Number.isSafeInteger(total))throw Error('金額超出可精確計算範圍');
- return {kind:d.kind,version:d.version,...(d.version===2?{currency:'TWD'}:{}),id:d.id,action:d.action,date:d.date,actor:d.actor.trim(),note:d.note.trim(),lines,...(['沖銷','取消訂貨'].includes(d.action)?{reverses:d.reverses}:{})};
+ const shortageLinks=['沖銷','取消訂貨'].includes(d.action)?[]:Array.isArray(d.shortageLinks)?d.shortageLinks:[];
+ if(shortageLinks.length>100)throw Error('缺藥關聯過多');const linked=new Set();
+ for(const a of shortageLinks){const l=lines.find(l=>l.sheet===a.sheet&&l.code===a.code);if(!['訂貨','進貨'].includes(d.action)||!/^SH-[0-9a-f-]{36}$/i.test(a.shortageId)||!l||!Number.isInteger(a.quantity)||a.quantity<1||a.quantity>l.quantity||linked.has(a.sheet+'|'+a.code))throw Error('缺藥關聯無效');linked.add(a.sheet+'|'+a.code);}
+ return {kind:d.kind,version:d.version,...(d.version===2?{currency:'TWD'}:{}),...(shortageLinks.length?{shortageLinks:shortageLinks.map(a=>({shortageId:a.shortageId,sheet:a.sheet,code:a.code,quantity:a.quantity}))}:{}),id:d.id,action:d.action,date:d.date,actor:d.actor.trim(),note:d.note.trim(),lines,...(['沖銷','取消訂貨'].includes(d.action)?{reverses:d.reverses}:{})};
 }
 function cloudPlan(d,rows,events=[]) {
  const old=events.find(e=>e.draft.id===d.id);
@@ -72,6 +75,8 @@ function erpRead_(input){
   if(draft.version===2&&v[0][4]!=='價格')throw Error('E欄價格表頭異常，尚未入帳');
   tabs[name]={sh,v,f};for(let r=2;r<v.length;r++)if(v[r][1]||v[r][3])rows.push({sheet:name,code:String(v[r][1]).trim(),name:String(v[r][3]).trim(),stock:v[r][6],formula:f[r][6],price:v[r][4],priceFormula:f[r][4],row:r,sheetId:sh.getSheetId()});
  }
+ if(draft.shortageLinks?.length&&!events.some(e=>e.draft.id===draft.id)){const state=shortageRead_(),allocations=state.events.filter(e=>e.allocation).map(e=>e.allocation);for(const a of draft.shortageLinks){const r=state.records.find(r=>r.id===a.shortageId),line=draft.lines.find(l=>l.sheet===a.sheet&&l.code===a.code);if(!r||r.sheet!==a.sheet||r.code!==a.code||r.name!==line.name||['closed','cancelled','deferred'].includes(r.status))throw Error('缺藥追蹤紀錄已變動，請重新確認');const progress=Shortage.shortageProgress(r,allocations,state.orders,state.receipts);if(a.quantity>(draft.action==='訂貨'?progress.toOrder:progress.outstanding))throw Error('關聯數量超過待補或待到貨數量，請回缺藥管理重新核對');}}
+
  const plan=CloudTransaction.cloudPlan(draft,rows,events);
  const weekly=erpWeeklyRead_(draft,ss,tabs,events,plan);
  return {draft,ss,title,log,events,tabs,plan,weekly,token:loss3Hash_({draft,plan,rows,weekly})};

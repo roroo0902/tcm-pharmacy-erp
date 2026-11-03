@@ -1,4 +1,5 @@
 const pages={
+ shortage:['SUPPLY WATCH / 補給追蹤','缺藥與替代管理','確認缺藥、安排補貨，追蹤每一筆到貨進度。'],
  cloud:['01 / WORLD INVENTORY','補給地圖','查看各廠牌的藥品庫存，為下一次補給做好準備。'],
  overview:['02 / SUPPLY CHEST','藥庫寶箱','直接同步 Google 工作表，掌握最新品項與庫存。'],
  orders:['03 / MERCHANT GUILD','商人公會','核對訂貨品項與瓶數，將待發送訂單存入 Google 工作表。'],

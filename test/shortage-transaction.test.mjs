@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {cloudDraft} from '../src/cloud-transaction.mjs';
+const d={kind:'tcm-cloud',version:1,id:'ERP-12345678',action:'訂貨',date:'2026-11-03',actor:'驗收',note:'',lines:[{sheet:'科達單方',code:'A1',name:'測試',quantity:4}],shortageLinks:[{shortageId:'SH-12345678-1234-1234-1234-123456789abc',sheet:'科達單方',code:'A1',quantity:4}]};
+test('shortage links survive canonical draft and reject over allocation',()=>{assert.deepEqual(cloudDraft(d).shortageLinks,d.shortageLinks);assert.throws(()=>cloudDraft({...d,shortageLinks:[{...d.shortageLinks[0],quantity:5}]}));assert.throws(()=>cloudDraft({...d,shortageLinks:[...d.shortageLinks,...d.shortageLinks]}));});
+test('cancellation strips shortage links but preserves original transaction lines',()=>{const r=cloudDraft({...d,id:'ERP-87654321',action:'取消訂貨',reverses:d.id,note:'取消驗收'});assert.equal(r.shortageLinks,undefined);assert.deepEqual(r.lines,d.lines);});

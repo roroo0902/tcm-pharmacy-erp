@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {selectOrderExport,orderExportRows,exportOrder} from '../web/order-export.mjs';import {orderKey} from '../web/order-grid-data.mjs';
+const rows=['科達','天明','富田'].flatMap(brand=>['單方','複方'].flatMap(category=>Array.from({length:60},(_,i)=>({name:brand+category,brand,category,code:'A'+i,drug:'藥'+i,bottles:3,unitPriceCents:12345}))));
+test('six classes export current filters, edited quantities/prices and sorted complete rows without mutation',()=>{
+ const q=new Map(),p=new Map(),before=JSON.stringify(rows);for(const brand of ['科達','天明','富田'])for(const category of ['單方','複方']){const f={brand,category,query:'',sort:'code',direction:'desc',date:'2026-11-03'};assert.equal(exportOrder(rows,q,p,f).count,60);const r=rows.find(r=>r.brand===brand&&r.category===category),k=orderKey(r);q.set(k,'3');p.set(k,'12.34');const selected=orderExportRows(rows,q,p,{...f,only:true,query:'a0'});assert.equal(selected.length,1);assert.equal(selected[0][5],3);assert.equal(selected[0][6],12.34);assert.equal(selected[0][7],37.02);assert.equal(selectOrderExport(rows,q,p,f)[0].code,'A59');assert.equal(q.get(k),'3');assert.equal(p.get(k),'12.34');}assert.equal(JSON.stringify(rows),before);
+});
+test('blank, zero price and invalid input stay explicit without fabricated subtotals',()=>{
+ const r=rows[0],k=orderKey(r),f={brand:r.brand,category:r.category,query:'A0'};assert.equal(orderExportRows(rows,new Map(),new Map(),f)[0][5],'');assert.equal(orderExportRows(rows,new Map(),new Map(),f)[0][7],'');assert.equal(orderExportRows(rows,new Map([[k,'2']]),new Map([[k,'0']]),f)[0][7],0);const bad=orderExportRows(rows,new Map([[k,'1.5']]),new Map([[k,'bad']]),f)[0];assert.equal(bad[7],'');assert.match(bad[11],/待核對/);assert.throws(()=>exportOrder(rows,new Map(),new Map(),{...f,query:'不存在'}));
+});

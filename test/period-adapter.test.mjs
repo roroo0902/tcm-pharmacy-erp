@@ -74,9 +74,9 @@ function harness(legacy = true) {
     LockService: {getScriptLock: () => ({tryLock: () => available, waitLock:()=>{if(!available)throw Error("locked");}, releaseLock: () => released++})},
     Sheets: {Spreadsheets: {batchUpdate: apply}}
   });
-  vm.runInContext(fs.readFileSync('gas/loss/Code.gs', 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync('gas/loss/Code.gs','utf8').replaceAll('\r\n','\n'), ctx);
   ctx.loss3Hash_=hash;ctx.loss3Date_=value=>{if(value instanceof Date)return dateString(value);if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw Error('日期格式錯誤');return String(value);};ctx.loss3Actor_=()=> 'fixture';ctx.loss3RefreshPosted_=()=>{};
-  vm.runInContext(fs.readFileSync('gas/cloud/Period.gs', 'utf8'), ctx);
+  vm.runInContext(fs.readFileSync('gas/cloud/Period.gs','utf8').replaceAll('\r\n','\n'), ctx);
   if(legacy){ctx.lossLedgerRead_=ss=>ctx.periodEvents_(ss,null);ctx.periodSnapshot_=ctx.periodLegacySnapshot_;}
   ctx.periodToday_ = () => dates[2];
   return {ctx, state, book, batches, apply, hash, released: () => released, setLock: value => available = value, setReject: value => rejectBatch = value,
@@ -218,8 +218,8 @@ test('lock and atomic failure preserve completion status and always release acqu
 });
 
 test('generated period backend exactly matches the pure core and adapter sources', () => {
-  const expected = 'const LossPeriod=(function(){\n' + fs.readFileSync('src/loss-period.mjs', 'utf8').replaceAll('export ', '') + '\nreturn {lossPeriod,summarizeLossPeriod};})();\n' + fs.readFileSync('gas/cloud/period-adapter.gs', 'utf8');
-  assert.equal(fs.readFileSync('gas/cloud/Period.gs', 'utf8'), expected);
+  const expected = 'const LossPeriod=(function(){\n' + fs.readFileSync('src/loss-period.mjs','utf8').replaceAll('\r\n','\n').replaceAll('export ', '') + '\nreturn {lossPeriod,summarizeLossPeriod};})();\n' + fs.readFileSync('gas/cloud/period-adapter.gs','utf8').replaceAll('\r\n','\n');
+  assert.equal(fs.readFileSync('gas/cloud/Period.gs','utf8').replaceAll('\r\n','\n'), expected);
 });
 
  test('ledger statistics ignore original daily formulas and columns, and never write',()=>{
@@ -245,9 +245,9 @@ test('generated period backend exactly matches the pure core and adapter sources
  const h=harness(false);h.state('每日耗損明細').name='old fixture';h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=2';const before=copy(h.state(source.name));const result=h.ctx.lossLedgerMigrate();assert.equal(result.sourceUnchanged,true);assert.deepEqual(h.state(source.name),before);assert.equal(h.ctx.lossLedgerMigrate().alreadyMigrated,true);assert.equal(h.batches.length,1);assert.equal(h.read().rows[0].total,null);assert.ok(h.state('耗損明細移轉核對').values.some(r=>String(r[3]).includes('公式')));
  });
  test('catalog uses ledger totals, retains missing-code errors and ignores source date formulas',()=>{
- const h=harness(false);h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=999';vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8'),h.ctx);assert.equal(h.ctx.erpLossCatalog_({date:dates[2]}).loss[0].posted,2);h.state(source.name).values[2][1]='';const r=h.ctx.erpLossCatalog_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);assert.equal(h.batches.length,0);
+ const h=harness(false);h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=999';vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8').replaceAll('\r\n','\n'),h.ctx);assert.equal(h.ctx.erpLossCatalog_({date:dates[2]}).loss[0].posted,2);h.state(source.name).values[2][1]='';const r=h.ctx.erpLossCatalog_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);assert.equal(h.batches.length,0);
  });
 
  test('planning projection uses ledger only and preserves source while enforcing range bounds',()=>{
- const h=harness(false),s=h.state(source.name);s.values[2][16]=999;vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8'),h.ctx);const r=h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:dates[2]});assert.deepEqual(Array.from(r.values[2].slice(13)),[3,5,2]);assert.equal(s.values[2][16],999);assert.equal(h.batches.length,0);assert.throws(()=>h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:'2026-11-04'}),/63/);
+ const h=harness(false),s=h.state(source.name);s.values[2][16]=999;vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8').replaceAll('\r\n','\n'),h.ctx);const r=h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:dates[2]});assert.deepEqual(Array.from(r.values[2].slice(13)),[3,5,2]);assert.equal(s.values[2][16],999);assert.equal(h.batches.length,0);assert.throws(()=>h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:'2026-11-04'}),/63/);
  });

@@ -13,3 +13,5 @@ export function validate(data){
 }
 export function addItem(data,item){const next=structuredClone(data);next.items.push(item);validate(next);return next;}
 export function addEntry(data,entry){const next=structuredClone(data);next.entries.push(entry);validate(next);return next;}
+
+export function loadLegacy(storage,key){try{const raw=(typeof storage==='function'?storage():storage).getItem(key),data=raw?JSON.parse(raw):empty();return {data,ledger:validate(data),error:null};}catch(error){const data=empty();return {data,ledger:validate(data),error};}}

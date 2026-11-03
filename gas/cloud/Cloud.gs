@@ -120,7 +120,7 @@ function erpCommit(input,token){
   SpreadsheetApp.flush();
   const check=erpRead_(s.draft);if(!check.plan.duplicate)throw Error('寫入結果待核對，請用同一交易編號重新預覽');
   for(const l of s.plan.lines)if(s.draft.action==='建檔'){const v=check.tabs[l.sheet].v[l.row];if(!v||String(v[1]).trim()!==l.code||String(v[3]).trim()!==l.name||v[6]!==l.after)throw Error('建帳後品項或庫存讀回不一致，請用同一交易編號核對，勿另建交易');}
-  for(const l of s.plan.lines)if(s.draft.action==='進貨'&&l.unitPriceCents!==undefined){const v=check.tabs[l.sheet].v[l.row];if(v[4]!==l.unitPriceCents/100||v[6]!==l.after)throw Error('入帳後價格或庫存讀回不一致，請用同一交易編號核對，勿另建交易');}
+  for(const l of s.plan.lines)if(['進貨','沖銷'].includes(s.draft.action)){const v=check.tabs[l.sheet]?.v?.[l.row];if(!v||String(v[1]).trim()!==l.code||String(v[3]).trim()!==l.name||v[6]!==l.after||(s.draft.action==='進貨'&&l.unitPriceCents!==undefined&&v[4]!==l.unitPriceCents/100))throw Error('入帳後價格或庫存讀回不一致，請用同一交易編號核對，勿另建交易');}
   erpWeeklyVerify_(s.ss,s.weekly?.changes||[]);
   return {id:s.draft.id,lines:s.plan.lines,message:'Google 工作表已寫入並讀回核對。'+(s.draft.action==='訂貨'?'本周訂貨量已同步；訂單待發送，尚未入庫。':s.draft.action==='取消訂貨'?'訂單已取消，本周訂貨量已還原，沒有庫存異動。':'')};
  }finally{lock.releaseLock();}

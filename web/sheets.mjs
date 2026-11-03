@@ -7,6 +7,7 @@ export function mountSheets({esc,fmt}){
  content.innerHTML=`<style>
 #cloud-cards button.card{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;min-width:0;background:#fffdf5}
 #cloud-cards [data-cloud-filter="warning"]::after{background-image:url("./web/assets/checklist-scroll.png");opacity:1;image-rendering:pixelated}
+#cloud-cards [data-cloud-filter="zero"]::after{background-image:url("./web/assets/empty-treasure-chest.png");width:56px;height:56px;filter:none;opacity:1;image-rendering:pixelated}
 #cloud-cards button.card:hover{background:#f8f0da;border-color:#8a6a2d}
 #cloud-cards button.card[aria-pressed="true"]{border-color:#315e81;box-shadow:inset 0 0 0 2px #315e81,0 3px 0 #d8dccf}
 #cloud-cards button.card:focus-visible{outline:3px solid #315e81;outline-offset:4px}

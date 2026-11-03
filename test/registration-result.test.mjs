@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {registrationResult} from '../web/registration-result.mjs';
+const p={id:'ERP-TEST',action:'建檔',date:'2026-11-03',actor:'驗收',lines:[{sheet:'科達單方',code:'QA-1',name:'驗收藥品',quantity:0}]};
+test('unrelated completed transaction is not shown or mutated',()=>{const x={...p,action:'沖銷',verified:true},before=JSON.stringify(x);const h=registrationResult(x);assert.doesNotMatch(h,/ERP-TEST|沖銷|QA-1/);assert.equal(JSON.stringify(x),before);});
+test('unrelated unresolved operation retains lookup but cannot be retried from registration',()=>{const h=registrationResult({...p,action:'進貨'});assert.match(h,/entry-check/);assert.doesNotMatch(h,/entry-resume|entry-edit|entry-hide|ERP-TEST/);});
+test('registration stays pending until confirmed, with lookup, retry, edit and closed details',()=>{const h=registrationResult(p);assert.match(h,/尚未確認完成/);for(const id of ['check','resume','edit'])assert.match(h,new RegExp('entry-'+id));assert.doesNotMatch(h,/建帳完成|entry-hide|<details open/);assert.match(h,/<details>.*ERP-TEST.*<\/details>/);});
+test('verified registration can be hidden without mutation; new result remains visible',()=>{const x={...p,verified:true},before=JSON.stringify(x);const h=registrationResult(x);assert.match(h,/藥品建帳完成/);assert.match(h,/entry-hide/);assert.doesNotMatch(h,/entry-resume|entry-edit/);assert.doesNotMatch(registrationResult(x,p.id),/ERP-TEST/);assert.match(registrationResult({...x,id:'NEW'},p.id),/藥品建帳完成/);assert.equal(JSON.stringify(x),before);});
+test('hidden result cannot hide unresolved operation',()=>{assert.match(registrationResult(p,p.id),/entry-resume/);});
+test('all transaction fields are escaped',()=>{const h=registrationResult({...p,id:'<script>',note:'<img>',actor:'<b>',lines:[{sheet:'<svg>',name:'<img>',code:'<b>',quantity:0}]});assert.doesNotMatch(h,/<script>|<img>|<svg>|<b>/);assert.match(h,/&lt;script&gt;/);});

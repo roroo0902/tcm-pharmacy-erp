@@ -71,3 +71,5 @@ dialog:has(.direct-review-table){max-width:860px}dialog .direct-review-table{tab
 #loss-table .quantity-stepper input{height:40px;min-height:40px;padding:6px 8px;font-size:16px;font-weight:400}
 #loss-table .quantity-stepper .quantity-adjust{width:32px;min-width:32px;height:32px;min-height:32px;padding:0;font-size:20px;border-radius:5px;box-shadow:0 2px 0 #a58b50}
 #loss-table .quantity-stepper .quantity-clear{justify-self:center;height:22px;min-height:22px;line-height:22px;padding:0 6px;font-size:12px}
+/* Shortage forms use a light panel; keep headings readable on mobile and desktop. */
+dialog:has(#shortage-edit) h2,dialog:has(#shortage-edit) h3,dialog:has(#shortage-edit) p,dialog:has(#sub-edit) h2,dialog:has(#sub-edit) h3,dialog:has(#sub-edit) p,dialog:has(#allocation-edit) h2,dialog:has(#allocation-edit) h3,dialog:has(#allocation-edit) p{color:#24445a}

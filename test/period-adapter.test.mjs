@@ -8,7 +8,7 @@ const dates = ['2026-11-01', '2026-11-02', '2026-11-03'];
 const source = {name: '驗收單方', brand: '驗收', category: '單方', gid: 101};
 const statusHeaders = ['日期', '廠商／類別', '登錄狀態', '經手人', '更新時間', '資料指紋'];
 const copy = value => structuredClone(value);
-function harness() {
+function harness(legacy = true) {
   const headers = Array(17).fill(''), weekdays = Array(17).fill('');
   headers[1] = '編號'; headers[3] = '藥品名稱'; weekdays[6] = '未拆封';
   headers[13] = new Date('2026-10-31T16:00:00Z'); weekdays[13] = '日';
@@ -22,6 +22,7 @@ function harness() {
     {id: 101, name: source.name, values: [headers, weekdays, first, second], formulas: []},
     {id: 102, name: '訂貨統計設定', values: [['設定', '值'], ['擷取天數', 3], ['包含今天', true], ['統計起日', ''], ['統計迄日', ''], ['設定狀態', '設定完成']]},
     {id: 103, name: '耗損登錄狀態', values: [statusHeaders]},
+    {id:105,name:'每日耗損明細',values:[['日期','廠商／類別','藥品編號','藥品名稱','當日累計瓶數','版本','來源','核對狀態','備註','經手人','更新時間'],...[[dates[0],'QA1',3],[dates[1],'QA1',5],[dates[2],'QA1',2],[dates[1],'QA2',0]].map(([d,c,n])=>[d,source.name,c,c==='QA1'?'測試藥一':'測試藥二',n,0,'歷史移轉','已核對','','',''])]},
     {id: 104, name: '耗損V3_更正紀錄', values: [['版本ID', '交易JSON_V3']]}
   ];
   let available = true, released = 0, rejectBatch = false;
@@ -29,6 +30,7 @@ function harness() {
   const state = name => states.find(s => s.name === name);
   const sheet = s => ({
     getSheetId: () => s.id,
+    getMaxColumns:()=>17, getMaxRows:()=>100,
     getLastRow: () => s.values.length,
     getLastColumn: () => Math.max(...s.values.map(r => r.length)),
     getRange: (r, c, n = 1, m = 1) => {
@@ -36,7 +38,7 @@ function harness() {
       const values = () => Array.from({length: n}, (_, i) => Array.from({length: m}, (_, j) => s.values[r - 1 + i]?.[c - 1 + j] ?? ''));
       return {getValues: values, setValues: rows => rows.forEach((row, i) => row.forEach((value, j) => { s.values[r - 1 + i] ??= []; s.values[r - 1 + i][c - 1 + j] = value; }))};
     },
-    getDataRange: () => ({getValues: () => copy(s.values), getFormulas: () => copy(s.formulas || [])})
+    getDataRange: () => ({getValues: () => copy(s.values), getFormulas: () => copy(s.formulas || []),getDisplayValues:()=>copy(s.values).map(r=>r.map(String))})
   });
   const book = {getSheetByName: name => { const s = state(name); return s ? sheet(s) : null; }};
   const dateString = date => new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'}).format(date);
@@ -45,7 +47,8 @@ function harness() {
     if (rejectBatch) throw Error('fixture atomic rejection');
     batches.push(copy(requests));
     for (const request of requests) {
-      if (request.addNamedRange) continue;
+      if (request.addNamedRange || request.repeatCell || request.updateDimensionProperties) continue;
+      if(request.addSheet){const p=request.addSheet.properties;states.push({id:p.sheetId,name:p.title,values:[]});continue;}
       if (request.appendCells || request.updateCells) {
         const u = request.appendCells || request.updateCells;
         const s = states.find(s => s.id === (u.sheetId ?? u.start.sheetId));
@@ -68,10 +71,13 @@ function harness() {
       if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) throw Error('日期格式錯誤');
       return value;
     }, loss3Hash_: hash,
-    LockService: {getScriptLock: () => ({tryLock: () => available, releaseLock: () => released++})},
+    LockService: {getScriptLock: () => ({tryLock: () => available, waitLock:()=>{if(!available)throw Error("locked");}, releaseLock: () => released++})},
     Sheets: {Spreadsheets: {batchUpdate: apply}}
   });
+  vm.runInContext(fs.readFileSync('gas/loss/Code.gs', 'utf8'), ctx);
+  ctx.loss3Hash_=hash;ctx.loss3Date_=value=>{if(value instanceof Date)return dateString(value);if(!/^\d{4}-\d{2}-\d{2}$/.test(value))throw Error('日期格式錯誤');return String(value);};ctx.loss3Actor_=()=> 'fixture';ctx.loss3RefreshPosted_=()=>{};
   vm.runInContext(fs.readFileSync('gas/cloud/Period.gs', 'utf8'), ctx);
+  if(legacy){ctx.lossLedgerRead_=ss=>ctx.periodEvents_(ss,null);ctx.periodSnapshot_=ctx.periodLegacySnapshot_;}
   ctx.periodToday_ = () => dates[2];
   return {ctx, state, book, batches, apply, hash, released: () => released, setLock: value => available = value, setReject: value => rejectBatch = value,
     read: input => ctx.periodRead_(input), day: date => ctx.periodDay_({date, sheet: source.name}),
@@ -79,7 +85,7 @@ function harness() {
     event: (date, total, revision = 1, code = 'QA1', name = '測試藥一') => state('耗損V3_更正紀錄').values.push(['revision-' + revision, JSON.stringify({date, sheet: source.name, code, name, total, revision})])};
 }
 
-test('period backend uses Taipei raw dates, final daily totals, and excludes weekly subtotal columns', () => {
+test('legacy migration reader uses Taipei raw dates, final daily totals, and excludes weekly subtotal columns', () => {
   const h = harness();
   h.event(dates[1], 3, 1); h.event(dates[1], 5, 2);
   const before = copy(h.state(source.name).values), result = h.read();
@@ -176,20 +182,20 @@ test('loss invalidations deduplicate source/date, remain read-only until include
   assert.equal(h.ctx.periodInvalidations_(h.book, [], '隔離測試員', '').length, 0);
 });
 
-test('actual cumulative commit writes daily loss, stock, audit and completion invalidation in one atomic batch', () => {
-  const h = harness(); h.complete(dates[2]);
-  vm.runInContext(fs.readFileSync('gas/loss/Code.gs', 'utf8'), h.ctx);
+test('actual cumulative commit writes independent ledger, stock, audit and completion invalidation in one atomic batch', () => {
+  const h = harness(false); h.complete(dates[2]);
   h.ctx.loss3Actor_ = () => 'fixture@example.invalid';
   h.ctx.loss3Hash_ = h.hash;
   h.ctx.loss3RefreshPosted_ = () => {};
   const plan = {key: 'QA1-day', date: dates[2], sheet: source.name, code: 'QA1', name: '測試藥一', sheetId: 101, row: 2, col: 16, total: 4, before: 2, delta: 2, stockAfter: 48, revision: 0};
-  h.ctx.loss3Read_ = () => ({ss: h.book, log: h.book.getSheetByName('耗損V3_更正紀錄'), token: 'review', plan: [plan], draft: {date: dates[2], actor: '隔離測試員'}});
+  h.ctx.loss3Read_ = () => ({ss: h.book, log: h.book.getSheetByName('耗損V3_更正紀錄'), ledger:h.ctx.lossLedgerRead_(h.book), token: 'review', plan: [plan], draft: {date: dates[2], actor: '隔離測試員'}});
   const before = h.batches.length;
   h.ctx.lossV3Commit({}, 'review');
   assert.equal(h.batches.length, before + 1);
   const batch = h.batches.at(-1);
   assert.ok(batch.some(r => r.updateCells?.start.columnIndex === 6));
-  assert.ok(batch.some(r => r.updateCells?.start.columnIndex === 16));
+  assert.ok(!batch.some(r => r.updateCells?.start.columnIndex === 16));
+  assert.ok(batch.some(r => r.appendCells?.sheetId === 105));
   assert.ok(batch.some(r => r.appendCells?.sheetId === 104));
   assert.ok(batch.some(r => r.appendCells?.sheetId === 103));
   assert.equal(h.state(source.name).values[2][6], 48);
@@ -215,3 +221,29 @@ test('generated period backend exactly matches the pure core and adapter sources
   const expected = 'const LossPeriod=(function(){\n' + fs.readFileSync('src/loss-period.mjs', 'utf8').replaceAll('export ', '') + '\nreturn {lossPeriod,summarizeLossPeriod};})();\n' + fs.readFileSync('gas/cloud/period-adapter.gs', 'utf8');
   assert.equal(fs.readFileSync('gas/cloud/Period.gs', 'utf8'), expected);
 });
+
+ test('ledger statistics ignore original daily formulas and columns, and never write',()=>{
+ const h=harness(false),s=h.state(source.name);s.formulas[2]=[];s.formulas[2][16]='=999';s.values[2][16]=999;s.values[0][17]='broken';s.values[1][17]='三';
+ const before=copy(s);assert.equal(h.read().rows[0].total,10);assert.deepEqual(s,before);assert.equal(h.batches.length,0);
+ });
+ test('ledger completion detects latest revisions but ignores legacy cell edits',()=>{
+ const h=harness(false);for(const d of dates)h.complete(d);h.state(source.name).values[2][16]=999;assert.equal(h.day(dates[2]).complete,true);
+ h.state('每日耗損明細').values.push([dates[2],source.name,'QA1','測試藥一',4,1,'耗損入帳','已核對','','','']);assert.equal(h.read().rows[0].total,12);assert.equal(h.day(dates[2]).complete,false);
+ });
+ test('ledger errors, missing migration and duplicate revisions fail closed',()=>{
+ const h=harness(false),s=h.state('每日耗損明細');s.values[1][7]='待核對';s.values[1][8]='公式待核對';assert.equal(h.read().rows[0].total,null);assert.throws(()=>h.complete(dates[0]),/待核對/);
+ s.values.push(copy(s.values[2]));assert.throws(()=>h.read(),/版本/);s.name='missing';assert.throws(()=>h.read(),/尚未完成移轉/);
+ });
+ test('real ledger preview and commit preserve all source date columns and formulas',()=>{
+ const h=harness(false),s=h.state(source.name);s.formulas[2]=[];s.formulas[2][16]='=2';const before=copy(s);const draft={kind:'tcm-loss-cumulative',version:3,date:dates[2],actor:'test',lines:[{sheet:source.name,code:'QA1',name:'測試藥一',total:4}]};
+ const preview=h.ctx.lossV3Preview(draft);assert.equal(preview.lines[0].before,2);h.ctx.lossV3Commit(draft,preview.token);assert.equal(s.values[2][6],48);assert.equal(s.values[2][16],2);assert.deepEqual(s.formulas,before.formulas);assert.equal(h.read().rows[0].total,12);
+ assert.equal(h.ctx.lossV3Commit(draft,h.ctx.lossV3Preview(draft).token).count,0);
+ draft.lines[0].total=0;draft.reason='更正';h.ctx.lossV3Commit(draft,h.ctx.lossV3Preview(draft).token);assert.equal(s.values[2][6],52);assert.equal(h.read().rows[0].total,8);
+ });
+
+ test('migration is idempotent, excludes weekly totals, retains formula errors and never changes source',()=>{
+ const h=harness(false);h.state('每日耗損明細').name='old fixture';h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=2';const before=copy(h.state(source.name));const result=h.ctx.lossLedgerMigrate();assert.equal(result.sourceUnchanged,true);assert.deepEqual(h.state(source.name),before);assert.equal(h.ctx.lossLedgerMigrate().alreadyMigrated,true);assert.equal(h.batches.length,1);assert.equal(h.read().rows[0].total,null);assert.ok(h.state('耗損明細移轉核對').values.some(r=>String(r[3]).includes('公式')));
+ });
+ test('catalog uses ledger totals, retains missing-code errors and ignores source date formulas',()=>{
+ const h=harness(false);h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=999';vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8'),h.ctx);assert.equal(h.ctx.erpLossCatalog_({date:dates[2]}).loss[0].posted,2);h.state(source.name).values[2][1]='';const r=h.ctx.erpLossCatalog_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);assert.equal(h.batches.length,0);
+ });

@@ -62,22 +62,12 @@ function erpLossCatalog_(input){
  const date=loss3Date_(input?.date);if(date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不能讀取未來耗損日期');
  const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他交易處理中，請重新讀取');
  try{
- const data={sources:erpOrderSources_(),sheets:{},weekly:{}},ss=SpreadsheetApp.openById(LOSS3.inventory),log=ss.getSheetByName(LOSS3.log),latest=new Map();
- if(log){if(log.getRange(1,1,1,2).getValues()[0].join('|')!=='版本ID|交易JSON_V3')throw Error('耗損紀錄表頭異常');if(log.getLastRow()>1)for(const r of log.getRange(2,2,log.getLastRow()-1,1).getValues()){const e=JSON.parse(r[0]);if(e.date===date)latest.set(JSON.stringify([e.sheet,e.code]),e);}}
- const loss=[];
- for(const source of data.sources){const range=ss.getSheetByName(source.name).getDataRange(),v=range.getValues(),f=range.getFormulas(),cols=[],codes=new Map();data.sheets[source.name]=range.getDisplayValues();let headerError='';
- for(let c=13;c<(v[0]||[]).length;c++){if(!/^[一二三四五六日]$/.test(String(v[1]?.[c])))continue;try{if(loss3Date_(v[0][c])===date)cols.push(c);}catch{headerError='日期欄格式無法辨識，請核對原表';}}
- for(let i=2;i<v.length;i++){const code=String(v[i][1]||'').trim();if(code)codes.set(code,(codes.get(code)||0)+1);}
- for(let i=2;i<v.length;i++){const r=v[i],code=String(r[1]||'').trim(),name=String(r[3]||'').trim();if(!name)continue;const last=latest.get(JSON.stringify([source.name,code]));let error=headerError,posted=null,stock=r[6];
- if(cols.length>1)error='所選日期欄重複，請核對原表';
- else if(!cols.length){if(last&&(last.total!==0||last.name!==name))error='缺少日期欄但已有未歸零入帳紀錄，請核對原表';else if(!error)posted=0;}
- else {const raw=r[cols[0]];if(f[i]?.[cols[0]])error='每日耗損為公式，請核對原表';else if(raw===''||raw==null)posted=0;else if(Number.isInteger(raw)&&raw>=0&&raw<=1000000)posted=raw;else error='已入帳耗損不是有效整數';if(last&&(last.name!==name||last.total!==posted))error='每日欄與入帳紀錄不一致';}
- if(!code)error='缺少藥品編號，請先完成建帳';else if(codes.get(code)!==1)error='藥品編號重複，請核對原表';
- if(f[i]?.[6]||!Number.isInteger(stock)||stock<0)error=error||'庫存無法核對';
- if(error)posted=null;
- loss.push({sheet:source.name,code,name,row:i+1,stock:Number.isInteger(stock)?stock:null,posted,error});
- }
- }
+ const data={sources:erpOrderSources_(),sheets:{},weekly:{}},ss=SpreadsheetApp.openById(LOSS3.inventory),ledger=lossLedgerRead_(ss),loss=[];
+ for(const source of data.sources){const range=ss.getSheetByName(source.name).getDataRange(),v=range.getValues(),f=range.getFormulas(),snap=lossLedgerSnapshot_(ss,source,[date],ledger);data.sheets[source.name]=range.getDisplayValues();let ri=0;
+ for(let i=2;i<v.length;i++){const r=v[i],name=String(r[3]||'').trim();if(!name)continue;const row=snap.rows[ri++],stock=r[6];let error=row.errors[date]||'';
+ if(f[i]?.[6]||f[i]?.[5]||!Number.isInteger(stock)||stock<0)error=error||'庫存或更新日期無法核對';
+ loss.push({sheet:source.name,code:row.code,name,row:i+1,stock:Number.isInteger(stock)?stock:null,posted:error?null:row.values[date]??0,error});
+ }}
  return {...data,date,loss,readAt:new Date().toISOString()};
  }finally{lock.releaseLock();}
 }

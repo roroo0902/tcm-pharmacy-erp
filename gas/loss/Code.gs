@@ -39,28 +39,30 @@ function loss3Draft_(input){
 function loss3Read_(input){
  loss3Actor_();const draft=loss3Draft_(input),ss=SpreadsheetApp.openById(LOSS3.inventory),log=ss.getSheetByName(LOSS3.log),events=log&&log.getLastRow()>1?log.getRange(2,1,log.getLastRow()-1,2).getValues().map(r=>JSON.parse(r[1])):[];
  if(log&&log.getRange(1,1,1,2).getValues()[0].join('|')!=='版本ID|交易JSON_V3')throw Error('交易紀錄表頭異常');
+ const ledger=lossLedgerRead_(ss);
  const sheets={},rows=draft.lines.map(l=>{
   let sh=sheets[l.sheet];if(!sh){const tab=ss.getSheetByName(l.sheet);if(!tab)throw Error('找不到庫存分頁：'+l.sheet);const range=tab.getDataRange();sh=sheets[l.sheet]={tab,values:range.getValues(),formulas:range.getFormulas(),cols:tab.getMaxColumns()};}
   const v=sh.values;if(v[0][1]!=='編號'||v[0][3]!=='藥品名稱'||v[1][6]!=='未拆封')throw Error('庫存欄位已變更');
   const matches=v.map((r,i)=>({r,i})).filter(x=>x.i>=2&&String(x.r[1]).trim()===l.code.trim());if(matches.length!==1||String(matches[0].r[3]).trim()!==l.name.trim())throw Error(l.code+' '+l.name+'：編號或名稱不符，請重新讀取庫存表');
-  const {r,i}=matches[0],cols=[];for(let c=13;c<v[0].length;c++){if(!/^[一二三四五六日]$/.test(String(v[1][c])))continue;let dt;try{dt=loss3Date_(v[0][c]);}catch(e){continue;}if(dt===draft.date)cols.push(c);}
-  if(cols.length!==1)throw Error(l.sheet+'：缺少或重複每日日期 '+draft.date+'，請先用選單「建立所選日期欄」');
-  const col=cols[0];if(sh.formulas[i][6]||sh.formulas[i][col])throw Error(l.name+'：庫存或每日耗損是公式，停止覆寫');
-  const before=r[col]===''?0:r[col];LossCumulative.lossUnits(before);LossCumulative.lossUnits(r[6]);
-  const key=JSON.stringify([draft.date,l.sheet,l.code.trim()]),prior=events.filter(e=>e.key===key),last=prior[prior.length-1];
-  if(last&&(last.total!==before||last.name!==l.name.trim()))throw Error(l.name+'：每日欄與交易紀錄不一致，請先核對人工修改');
-  return {key,sheet:l.sheet,sheetId:sh.tab.getSheetId(),row:i,col,code:l.code.trim(),name:l.name.trim(),date:draft.date,before,total:l.total,stock:r[6],revision:prior.length,reason:l.reason||draft.reason||''};
+  const {r,i}=matches[0];if(sh.formulas[i]?.[6]||sh.formulas[i]?.[5])throw Error(l.name+'：庫存或更新日期是公式，停止覆寫');
+  const key=JSON.stringify([draft.date,l.sheet,l.code.trim()]),entry=ledger.latest.get(key),prior=events.filter(e=>e.key===key),last=prior[prior.length-1];
+  if(entry?.error)throw Error(l.name+'：'+entry.error);
+  if(entry&&entry.name!==l.name.trim())throw Error(l.name+'：明細藥名不符');
+  const before=entry?.total??0,revision=entry?.revision??0;LossCumulative.lossUnits(before);LossCumulative.lossUnits(r[6]);
+  if(last&&(last.total!==before||last.name!==l.name.trim()||last.revision!==revision))throw Error(l.name+'：明細與入帳紀錄不一致，請先核對');
+  return {key,sheet:l.sheet,sheetId:sh.tab.getSheetId(),row:i,code:l.code.trim(),name:l.name.trim(),date:draft.date,before,total:l.total,stock:r[6],revision,reason:l.reason||draft.reason||''};
  });
  const plan=LossCumulative.planCumulative(rows,draft.reason);
- return {ss,log,draft,plan,token:loss3Hash_({draft,rows})};
+ return {ss,log,ledger,draft,plan,token:loss3Hash_({draft,rows})};
 }
 function lossV3Preview(input){const s=loss3Read_(input);return {token:s.token,lines:s.plan,count:s.plan.filter(r=>r.delta!==0).length};}
 function lossV3Commit(input,token){
  if(!token)throw Error('請先預覽');const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('另一筆耗損正在處理，請重新預覽');
  try{const s=loss3Read_(input);if(s.token!==token)throw Error('雲端資料已變動，請重新預覽後再確認');const changes=s.plan.filter(r=>r.delta!==0),requests=[],actor=loss3Actor_(),time=new Date().toISOString();
  if(changes.length){const id=s.log?s.log.getSheetId():LOSS3.logId;if(!s.log){requests.push({addSheet:{properties:{sheetId:id,title:LOSS3.log,gridProperties:{rowCount:1000,columnCount:14,frozenRowCount:1}}}});['版本ID','交易JSON_V3','日期','分頁','編號','藥名','原累計','新累計','差額','入帳後庫存','原因','經手人','帳號','時間'].forEach((h,c)=>requests.push(loss3Cell_(id,0,c,h)));}
- for(const r of changes){const guard='loss_v3_'+loss3Hash_([r.key,r.revision+1]);requests.push({addNamedRange:{namedRange:{namedRangeId:guard,name:guard,range:{sheetId:id,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:1}}}},loss3Cell_(r.sheetId,r.row,6,r.stockAfter),loss3Cell_(r.sheetId,r.row,r.col,r.total),loss3Cell_(r.sheetId,r.row,5,Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd')));}
+ for(const r of changes){const guard='loss_v3_'+loss3Hash_([r.key,r.revision+1]);requests.push({addNamedRange:{namedRange:{namedRangeId:guard,name:guard,range:{sheetId:id,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:1}}}},loss3Cell_(r.sheetId,r.row,6,r.stockAfter),loss3Cell_(r.sheetId,r.row,5,Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd')));}
  requests.push({appendCells:{sheetId:id,rows:changes.map(r=>({values:[{userEnteredValue:{stringValue:loss3Hash_([r.key,r.revision+1])}},{userEnteredValue:{stringValue:JSON.stringify({...r,revision:r.revision+1,actor,operator:s.draft.actor||'',time})}},...[r.date,r.sheet,r.code,r.name,r.before,r.total,r.delta,r.stockAfter,r.reason,s.draft.actor||'',actor,time].map(v=>({userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v||'')}}))]})),fields:'userEnteredValue'}});
+ requests.push(lossLedgerAppend_(s.ledger.sh,lossLedgerRows_(changes,s.draft.actor||actor,time)));
  if(typeof periodInvalidations_==='function')requests.push(...periodInvalidations_(s.ss,changes,s.draft.actor||actor,time));
  Sheets.Spreadsheets.batchUpdate({requests},LOSS3.inventory);}
  let warning='';try{loss3RefreshPosted_(s.draft.date);}catch(e){warning='耗損表顯示尚未更新，請按「載入已入帳耗損」。';}
@@ -73,15 +75,71 @@ function lossV3ReadOnlyCheck(){loss3Actor_();const d=loss3SourceDraft_(),result=
 function lossV2ReadOnlyCheck(){return lossV3ReadOnlyCheck();}
 function syncLossToInventory(){throw Error('已升級當日累計版，請重新開啟預覽確認');}
 function openCuteConfirmDialog(){loss3Actor_();SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(loss3Html_(JSON.stringify(loss3SourceDraft_()))).setWidth(780).setHeight(620),'每日耗損｜當日累計');}
-function loss3RefreshPosted_(date){const src=SpreadsheetApp.openById(LOSS3.source),inv=SpreadsheetApp.openById(LOSS3.inventory);for(const name of loss3Names_()){const sh=src.getSheetByName(name),target=inv.getSheetByName(name);if(!sh||!target||loss3Date_(sh.getRange('D1').getValue())!==date)continue;const data=target.getDataRange().getValues(),cols=[];for(let c=13;c<data[0].length;c++){if(!/^[一二三四五六日]$/.test(String(data[1][c])))continue;try{if(loss3Date_(data[0][c])===date)cols.push(c);}catch(e){}}
- const values=sh.getRange(3,2,Math.max(1,sh.getLastRow()-2),2).getValues().map(r=>{if(!r[0]&&!r[1])return [''];const matches=data.slice(2).filter(x=>String(x[1]).trim()===String(r[0]).trim()&&String(x[3]).trim()===String(r[1]).trim());return [cols.length===1&&matches.length===1?(matches[0][cols[0]]||0):'待核對'];});sh.getRange(3,5,values.length,1).setValues(values);sh.getRange('E1').setValue(date);}}
+function loss3RefreshPosted_(date){const src=SpreadsheetApp.openById(LOSS3.source),ledger=lossLedgerRead_(SpreadsheetApp.openById(LOSS3.inventory));for(const name of loss3Names_()){const sh=src.getSheetByName(name);if(!sh||loss3Date_(sh.getRange('D1').getValue())!==date)continue;
+ const range=sh.getRange(3,5,Math.max(1,sh.getLastRow()-2),1);if(range.getFormulas().some(r=>r[0])||sh.getRange('E1').getFormula())throw Error('耗損輸入表顯示欄含公式，保留原公式');
+ const values=sh.getRange(3,2,Math.max(1,sh.getLastRow()-2),2).getValues().map(r=>{if(!r[0]&&!r[1])return [''];const e=ledger.latest.get(JSON.stringify([date,name,String(r[0]).trim()]));return [e?.error||e&&e.name!==String(r[1]).trim()?'待核對':e?.total??0];});range.setValues(values);sh.getRange('E1').setValue(date);}}
 function lossV3LoadDate(){loss3Actor_();const sh=SpreadsheetApp.getActiveSheet();if(!loss3Names_().includes(sh.getName()))throw Error('請先選擇藥品分頁');const date=loss3Date_(sh.getRange('D1').getValue());if(String(sh.getRange('E1').getDisplayValue())!==date&&sh.getRange(3,4,sh.getLastRow()-2,1).getValues().some(r=>r[0]!=='')){SpreadsheetApp.getUi().alert('切換日期前請先核對並清除 D 欄舊輸入，避免把前一天數量當成今日累計。');return;}loss3RefreshPosted_(date);}
 function lossV3CreateDate(){loss3Actor_();const sh=SpreadsheetApp.getActiveSheet();if(!loss3Names_().includes(sh.getName()))throw Error('請先選擇藥品分頁');const date=loss3Date_(sh.getRange('D1').getValue());if(date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不可建立未來日期');const lock=LockService.getScriptLock();lock.waitLock(30000);try{loss3EnsureDate_(date);loss3RefreshPosted_(date);}finally{lock.releaseLock();}}
-function loss3EnsureDate_(date,names=loss3Names_()){const ss=SpreadsheetApp.openById(LOSS3.inventory),serial=Math.round((Date.parse(date)-Date.UTC(1899,11,30))/86400000),weekday='日一二三四五六'[new Date(date).getUTCDay()],requests=[];for(const name of names){const sh=ss.getSheetByName(name);if(!sh)throw Error('缺少 '+name);const v=sh.getDataRange().getValues();let found=false;for(let c=13;c<v[0].length;c++){try{if(/^[一二三四五六日]$/.test(String(v[1][c]))&&loss3Date_(v[0][c])===date)found=true;}catch(e){}}if(found)continue;const col=Math.max(13,sh.getLastColumn());if(col>=sh.getMaxColumns())requests.push({appendDimension:{sheetId:sh.getSheetId(),dimension:'COLUMNS',length:col+1-sh.getMaxColumns()}});requests.push(loss3Cell_(sh.getSheetId(),0,col,serial),loss3Cell_(sh.getSheetId(),1,col,weekday),{repeatCell:{range:{sheetId:sh.getSheetId(),startRowIndex:0,endRowIndex:1,startColumnIndex:col,endColumnIndex:col+1},cell:{userEnteredFormat:{numberFormat:{type:'DATE',pattern:'yyyy/MM/dd'}}},fields:'userEnteredFormat.numberFormat'}});}
- if(requests.length)Sheets.Spreadsheets.batchUpdate({requests},LOSS3.inventory);
-}
-function onOpen(){SpreadsheetApp.getUi().createMenu('💊 庫存管理系統').addItem('① 載入已入帳耗損','lossV3LoadDate').addItem('② 預覽累計並確認差額','openCuteConfirmDialog').addItem('建立所選日期欄（缺日期時）','lossV3CreateDate').addItem('匯入網站耗損清單','lossV3OpenImport').addToUi();}
+function loss3EnsureDate_(date,names=loss3Names_()){loss3Date_(date);lossLedgerRead_(SpreadsheetApp.openById(LOSS3.inventory));return {prepared:true};}
+function onOpen(){SpreadsheetApp.getUi().createMenu('💊 庫存管理系統').addItem('① 載入已入帳耗損','lossV3LoadDate').addItem('② 預覽累計並確認差額','openCuteConfirmDialog').addItem('匯入網站耗損清單','lossV3OpenImport').addToUi();}
 function lossV3OpenImport(){loss3Actor_();SpreadsheetApp.getUi().showModalDialog(HtmlService.createHtmlOutput(loss3Html_('')).setWidth(780).setHeight(620),'匯入累計耗損');}
-function loss3Html_(payload){return '<!doctype html><meta charset="utf-8"><style>body{font:16px system-ui;color:#174c41;background:#f6f6ef;padding:24px}textarea{width:95%;height:85px;font-size:16px}button{min-height:44px;font:inherit;padding:12px 20px;margin:8px;border:0;border-radius:8px;background:#205c4c;color:white}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}button:disabled{opacity:.5}</style><h2>每日耗損｜當日累計</h2><p>耗損以整罐計算，不接受小數。相同數量不重扣；增加只扣差額；調低或歸零須填更正原因。</p><label id="draft-label">耗損清單<textarea id="draft"></textarea></label><button id="preview">準備日期並預覽</button><pre id="result">先預覽，再確認入帳。</pre><button id="commit" disabled>確認差額入帳</button><script>const draft=document.getElementById("draft"),out=document.getElementById("result"),p=document.getElementById("preview"),b=document.getElementById("commit");draft.value='+JSON.stringify(payload).replace(/</g,'\\u003c')+';document.getElementById("draft-label").hidden=!!draft.value;let token,reviewed;draft.oninput=()=>{b.disabled=true;};p.onclick=()=>{b.disabled=true;p.disabled=true;reviewed=draft.value;out.textContent="正在核對雲端…";const readPreview=()=>{google.script.run.withSuccessHandler(r=>{token=r.token;out.textContent=r.lines.map(x=>x.date+" "+x.sheet+" "+x.code+" "+x.name+"：已入帳 "+x.before+" → 累計 "+x.total+"；"+(x.delta>=0?"扣除 ":"加回 ")+Math.abs(x.delta)+" 罐；庫存 "+x.stock+" → "+x.stockAfter+(x.reason?"；原因："+x.reason:"")).join("\\n");b.disabled=false;p.disabled=false;}).withFailureHandler(e=>{out.textContent=e.message;p.disabled=false;}).lossV3Preview(reviewed);};google.script.run.withSuccessHandler(readPreview).withFailureHandler(e=>{out.textContent=e.message;p.disabled=false;}).lossV3PrepareDate(reviewed);};b.onclick=()=>{b.disabled=true;p.disabled=true;google.script.run.withSuccessHandler(r=>{out.textContent=r.message+" "+r.warning;p.disabled=false;}).withFailureHandler(e=>{out.textContent=e.message;p.disabled=false;}).lossV3Commit(reviewed,token);};</script>';}
+function loss3Html_(payload){return '<!doctype html><meta charset="utf-8"><style>body{font:16px system-ui;color:#174c41;background:#f6f6ef;padding:24px}textarea{width:95%;height:85px;font-size:16px}button{min-height:44px;font:inherit;padding:12px 20px;margin:8px;border:0;border-radius:8px;background:#205c4c;color:white}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:white;padding:20px}button:disabled{opacity:.5}</style><h2>每日耗損｜當日累計</h2><p>耗損以整罐計算，不接受小數。相同數量不重扣；增加只扣差額；調低或歸零須填更正原因。</p><label id="draft-label">耗損清單<textarea id="draft"></textarea></label><button id="preview">預覽累計</button><pre id="result">先預覽，再確認入帳。</pre><button id="commit" disabled>確認差額入帳</button><script>const draft=document.getElementById("draft"),out=document.getElementById("result"),p=document.getElementById("preview"),b=document.getElementById("commit");draft.value='+JSON.stringify(payload).replace(/</g,'\\u003c')+';document.getElementById("draft-label").hidden=!!draft.value;let token,reviewed;draft.oninput=()=>{b.disabled=true;};p.onclick=()=>{b.disabled=true;p.disabled=true;reviewed=draft.value;out.textContent="正在核對雲端…";const readPreview=()=>{google.script.run.withSuccessHandler(r=>{token=r.token;out.textContent=r.lines.map(x=>x.date+" "+x.sheet+" "+x.code+" "+x.name+"：已入帳 "+x.before+" → 累計 "+x.total+"；"+(x.delta>=0?"扣除 ":"加回 ")+Math.abs(x.delta)+" 罐；庫存 "+x.stock+" → "+x.stockAfter+(x.reason?"；原因："+x.reason:"")).join("\\n");b.disabled=false;p.disabled=false;}).withFailureHandler(e=>{out.textContent=e.message;p.disabled=false;}).lossV3Preview(reviewed);};google.script.run.withSuccessHandler(readPreview).withFailureHandler(e=>{out.textContent=e.message;p.disabled=false;}).lossV3PrepareDate(reviewed);};b.onclick=()=>{b.disabled=true;p.disabled=true;google.script.run.withSuccessHandler(r=>{out.textContent=r.message+" "+r.warning;p.disabled=false;}).withFailureHandler(e=>{out.textContent=e.message;p.disabled=false;}).lossV3Commit(reviewed,token);};</script>';}
 
 function lossV3PrepareDate(input){loss3Actor_();const d=loss3Draft_(input),lock=LockService.getScriptLock();lock.waitLock(30000);try{loss3EnsureDate_(d.date,[...new Set(d.lines.map(l=>l.sheet))]);}finally{lock.releaseLock();}return {prepared:true};}
+
+// Append-only daily cumulative ledger. Source inventory date columns are never written.
+const LOSS_LEDGER='每日耗損明細';
+const LOSS_LEDGER_HEADERS=['日期','廠商／類別','藥品編號','藥品名稱','當日累計瓶數','版本','來源','核對狀態','備註','經手人','更新時間'];
+function lossLedgerRead_(ss){
+ const sh=ss.getSheetByName(LOSS_LEDGER);if(!sh)throw Error('獨立耗損明細尚未完成移轉，請聯絡維護人員');
+ if(sh.getLastRow()>100000)throw Error('耗損明細已達讀取上限，請先封存');
+ const v=sh.getDataRange().getValues(),latest=new Map();
+ if(v[0].slice(0,11).join('|')!==LOSS_LEDGER_HEADERS.join('|'))throw Error('每日耗損明細表頭已變更');
+ for(const r of v.slice(1)){if(r.every(x=>x===''))continue;const date=loss3Date_(r[0]),key=JSON.stringify([date,String(r[1]),String(r[2])]);
+ if(!r[1]||!r[2]||!r[3]||!Number.isInteger(r[5])||r[5]<0||!['已核對','待核對'].includes(r[7]))throw Error('每日耗損明細格式待核對');
+ if(r[7]==='已核對')LossCumulative.lossUnits(r[4]);
+ const old=latest.get(key);if(old&&r[5]<=old.revision)throw Error('每日耗損明細版本重複或倒退');
+ latest.set(key,{key,date,sheet:String(r[1]),code:String(r[2]),name:String(r[3]),total:r[4],revision:r[5],error:r[7]==='待核對'?String(r[8]||'歷史資料待核對'):'',origin:r[6]});}
+ return {sh,latest};
+}
+function lossLedgerRows_(changes,actor,time){return changes.map(r=>[r.date,r.sheet,r.code,r.name,r.total,r.revision+1,'耗損入帳','已核對',r.reason||'',actor,time]);}
+function lossLedgerAppend_(sh,rows){return {appendCells:{sheetId:sh.getSheetId(),rows:rows.map(r=>({values:r.map(v=>({userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v)}}))})),fields:'userEnteredValue'}};}
+function lossLedgerSnapshot_(ss,source,dates,ledger){
+ const sh=ss.getSheetByName(source.name);if(!sh||sh.getLastRow()>10000)throw Error('來源範圍異常');
+ const v=sh.getRange(1,1,Math.max(2,sh.getLastRow()),7).getValues(),counts=new Map();
+ for(const r of v.slice(2)){const code=String(r[1]||'').trim();if(code)counts.set(code,(counts.get(code)||0)+1);}
+ const rows=v.slice(2).filter(r=>String(r[3]||'').trim()).map(r=>{const code=String(r[1]||'').trim(),name=String(r[3]).trim(),values={},errors={};for(const date of dates){const entry=ledger.latest.get(JSON.stringify([date,source.name,code]));values[date]=entry?.error?null:entry?.total??null;const error=!code||counts.get(code)!==1?'編號缺少或重複':entry?.error|| (entry&&entry.name!==name?'明細藥名與目前品項不符':'');if(error)errors[date]=error;}return {sheet:source.name,code,name,values,errors};});
+ const fingerprints={};for(const d of dates)fingerprints[d]=loss3Hash_(['ledger-v1',source.gid,d,rows.map(r=>[r.code,r.name,r.values[d],r.errors[d]||'',ledger.latest.get(JSON.stringify([d,source.name,r.code]))?.revision||0])]);
+ return {rows,fingerprints};
+}
+// Explicit one-time migration, never called by period reads or preview. No inventory writes.
+function lossLedgerMigrate(){
+ loss3Actor_();const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{const ss=SpreadsheetApp.openById(LOSS3.inventory);if(ss.getSheetByName(LOSS_LEDGER))return {alreadyMigrated:true,entries:lossLedgerRead_(ss).latest.size};
+ const sources=erpOrderSources_(),rows=[],issues=[],time=new Date().toISOString(),before=lossLedgerSourceHash_(ss,sources);
+ for(const source of sources){const sh=ss.getSheetByName(source.name),v=sh.getDataRange().getValues(),dates=new Set(),bad=[];
+ for(let c=13;c<(v[0]||[]).length;c++){if(!/^[一二三四五六日]$/.test(String(v[1]?.[c])))continue;try{dates.add(loss3Date_(v[0][c]));}catch{bad.push(c+1);}}
+ const allEvents=periodEvents_(ss,null);for(const e of allEvents.values())if(e.sheet===source.name)dates.add(e.date);
+ if(bad.length)issues.push([source.name,'','', '日期標題無法辨識：欄 '+bad.join(','),'原表保留，未移入',time]);
+ const snap=periodLegacySnapshot_(ss,source,[...dates],allEvents);
+ for(const r of snap.rows){if(!r.code){issues.push([source.name,'',r.name,'缺少編號','原表保留，未移入',time]);continue;}
+ for(const date of dates){const e=allEvents.get(JSON.stringify([date,source.name,r.code])),error=r.errors[date]||'',total=r.values[date];
+ if(total===null&&!error&&!e)continue;
+ rows.push([date,source.name,r.code,r.name,error?'':total??0,e?.revision||0,'歷史移轉',error?'待核對':'已核對',error,'系統移轉',time]);if(error)issues.push([source.name,date,r.code,error,'保留待核對，不計入合計',time]);}}
+ }
+ // Duplicate source codes cannot produce multiple ledger identities.
+ const unique=new Map();for(const r of rows){const key=JSON.stringify(r.slice(0,3));if(unique.has(key)){r[4]='';r[7]='待核對';r[8]='編號重複';}unique.set(key,r);}
+ const id=1850311040,issueId=1850311041,requests=[];
+ for(const [sheetId,title,headers,body] of [[id,LOSS_LEDGER,LOSS_LEDGER_HEADERS,[...unique.values()]],[issueId,'耗損明細移轉核對',['廠商／類別','日期','編號／藥名','待核對原因','處理狀態','移轉時間'],issues]]){
+ requests.push({addSheet:{properties:{sheetId,title,gridProperties:{rowCount:Math.max(1000,body.length+100),columnCount:headers.length,frozenRowCount:1}}}});
+ requests.push(lossLedgerAppend_({getSheetId:()=>sheetId},[headers,...body]));
+ requests.push({repeatCell:{range:{sheetId,startRowIndex:0,endRowIndex:1},cell:{userEnteredFormat:{backgroundColor:{red:.13,green:.24,blue:.34},textFormat:{bold:true,foregroundColor:{red:1,green:1,blue:1}}}},fields:'userEnteredFormat'}});
+ requests.push({updateDimensionProperties:{range:{sheetId,dimension:'COLUMNS',startIndex:0,endIndex:headers.length},properties:{pixelSize:150},fields:'pixelSize'}});
+ }
+ if(before!==lossLedgerSourceHash_(ss,sources))throw Error('來源在移轉期間變更，請重新執行');
+ Sheets.Spreadsheets.batchUpdate({requests},LOSS3.inventory);SpreadsheetApp.flush();
+ const after=lossLedgerSourceHash_(ss,sources);if(before!==after)throw Error('原表在移轉期間發生變更，請核對');
+ const result={migrated:true,entries:unique.size,issues:issues.length,sourceUnchanged:true,sourceHash:after};console.log(JSON.stringify(result));return result;
+ }finally{lock.releaseLock();}
+}
+function lossLedgerSourceHash_(ss,sources){return loss3Hash_(sources.map(s=>{const sh=ss.getSheetByName(s.name),r=sh.getDataRange();return [s.name,sh.getMaxColumns(),sh.getMaxRows(),r.getValues(),r.getFormulas()];}));}

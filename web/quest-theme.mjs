@@ -27,12 +27,10 @@ const brand = document.querySelector('.brand');
 if (brand) {
  brand.setAttribute('aria-label', '瑞恩藥庫，前往庫存總覽');
  const label = brand.querySelector('span');
- if (label) label.innerHTML = '<b class="rpg-brand-name">瑞恩藥庫</b><small>ADVENTURER’S APOTHECARY</small>';
+ if (label) label.innerHTML = '瑞恩藥庫<small>ADVENTURER’S APOTHECARY</small>';
 }
 document.title = document.title.replace('本草藥庫', '瑞恩藥庫');
 for (const el of document.querySelectorAll('.local, .footer-title')) {
  for (const node of el.childNodes) if (node.nodeType === 3) node.textContent = node.textContent.replaceAll('本草藥庫', '瑞恩藥庫');
 }
-const brandStyle = document.createElement('style');
-brandStyle.textContent = `.brand .rpg-brand-name{display:block;font-family:"DFKai-SB","BiauKai","KaiTi","STKaiti","PMingLiU",serif;font-size:1.13em;font-weight:900;letter-spacing:2px;white-space:nowrap;line-height:1.3;color:#ffe3a0;text-shadow:1px 1px 0 #8c6231,2px 2px 0 #08172a,0 0 10px #d5b47235;-webkit-text-stroke:.25px #f9d68c}.brand small{text-shadow:none}`;
-document.head.append(brandStyle);
+

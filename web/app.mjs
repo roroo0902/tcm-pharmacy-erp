@@ -21,6 +21,8 @@ const titles={shortage:'缺藥管理系統',orderPlanning:'批次訂貨規劃',o
 // Older Apps Script shells still contain the retired navigation entry.
 document.querySelectorAll('nav a[href="#cloud"]').forEach(a=>a.remove());
 const itemNav=document.querySelector('nav a[href="#items"]');if(itemNav){itemNav.querySelector('span').textContent='藥品建檔';if(!document.querySelector('nav a[href="#shortage"]'))itemNav.insertAdjacentHTML('afterend','<a href="#shortage"><span>缺藥管理系統</span></a>');}
+// Match the icon slot used by every other navigation entry, including older hosted shells.
+const shortageNav=document.querySelector('nav a[href="#shortage"]');if(shortageNav&&!shortageNav.querySelector('svg'))shortageNav.insertAdjacentHTML('afterbegin','<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 2 21h20L12 3Zm0 6v6m0 3v1"/></svg>');
 const route=()=>Object.hasOwn(titles,location.hash.slice(1))?location.hash.slice(1):'overview';
 function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
 function read(){const raw=localStorage.getItem(KEY);data=raw?JSON.parse(raw):empty();ledger=validate(data);}

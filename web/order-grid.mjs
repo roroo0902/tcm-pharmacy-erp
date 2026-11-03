@@ -33,8 +33,6 @@ export function mountOrderGrid({esc,fmt,ask}){
  function draw(){if(!alive)return;
   applyPeriod();
   ({brand,category}=supplierSelection(sources,brand,category));
-  const source=sources.find(s=>s.brand===brand&&s.category===category),coverage=periodData?.completion?.[source?.name]||[];
-  if($('#period-coverage'))$('#period-coverage').textContent=coverage.length?source.name+'：已完成 '+coverage.filter(x=>x.complete).length+'／'+coverage.length+' 天'+(coverage.some(x=>!x.complete)?'；未完成：'+coverage.filter(x=>!x.complete).map(x=>x.date).join('、'):''):'尚未取得期間資料';
   const heading=$('[data-og-sort="periodLoss"]');if(heading)heading.textContent=(periodData?.period.label||'期間耗損量')+' ↕';
   const selection=supplierSelection(sources,brand,category);({brand,category}=selection);const brands=selection.brands,cats=selection.categories;
   $('#order-brands').innerHTML=brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b)}</button>`).join('');

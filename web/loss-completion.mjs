@@ -1,0 +1,9 @@
+import {runDirect} from './direct-sync.mjs';
+export const lossCompletionMarkup='<div class="loss-completion"><button type="button" class="secondary" id="loss-complete">完成所選日期登錄</button><span id="loss-completion-state" role="status">完成前請確認未填品項代表當日零耗損。</span></div>';
+export function mountLossCompletion(root,{context,ask,esc}){
+ let disposed=false,ticket=0,busy=false;
+ const button=root.querySelector('#loss-complete'),state=root.querySelector('#loss-completion-state');
+ async function refresh(){const n=++ticket,ctx=context();if(!ctx.sheet)return;button.disabled=true;try{const r=await runDirect('readLossDay',ctx);if(disposed||n!==ticket)return;state.textContent=`${r.date} ${r.sheet}：${r.error|| (r.complete?'已完成登錄':'尚未完成或需重新確認')}`;button.disabled=!!r.error||busy;}catch(e){if(!disposed&&n===ticket)state.textContent=e.message;}}
+ button.onclick=async()=>{if(busy)return;const ctx=context();try{if(ctx.blocked)throw Error(ctx.blocked);if(!ctx.actor)throw Error('請選擇經手人');busy=true;button.disabled=true;const r=await runDirect('readLossDay',ctx);if(disposed)return;if(r.error)throw Error(r.error);ask(`<p>確認 ${esc(ctx.date)} ${esc(ctx.sheet)} 的所有耗損已登錄完成？</p><p>未填品項將視為當日零耗損。此操作只記錄完成狀態，不扣庫存；後續更正耗損會改回待確認。</p>`,async()=>{try{const now=context();if(now.blocked||now.sheet!==ctx.sheet||now.date!==ctx.date)throw Error(now.blocked||'日期或廠商已切換，請重新確認');await runDirect('completeLossDay',{...ctx,fingerprint:r.fingerprint,confirmBlankZero:true});const check=await runDirect('readLossDay',ctx);if(!check.complete)throw Error('完成狀態讀回不一致，請重新確認');if(!disposed)state.textContent=`${ctx.date} ${ctx.sheet} 已完成，工作表讀回一致。`;window.dispatchEvent(new Event('erp-synced'));}catch(e){if(!disposed)state.textContent=e.message;}},'確認完成登錄');}catch(e){if(!disposed)state.textContent=e.message;}finally{busy=false;if(!disposed)button.disabled=false;}};
+ return {refresh,dispose:()=>{disposed=true;ticket++;}};
+}

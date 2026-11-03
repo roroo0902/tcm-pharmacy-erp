@@ -6,3 +6,5 @@ await writeFile(new URL('../gas/cloud/Cloud.gs',import.meta.url),'// Generated b
 await writeFile(new URL('../gas/cloud/Cloud.gs',import.meta.url),(await readFile(new URL('../gas/cloud/Cloud.gs',import.meta.url),'utf8'))+'\n'+await readFile(new URL('../gas/cloud/order-catalog.gs',import.meta.url),'utf8'));
 
 await writeFile('gas/cloud/Shortage.gs','const Shortage=(function(){\n'+(await readFile('src/shortage.mjs','utf8')).replaceAll('export ','')+'\nreturn {normalizeShortage,normalizeSubstitution,validateAllocation,shortageProgress};})();\n'+await readFile('gas/cloud/shortage-adapter.gs','utf8'));
+
+await writeFile('gas/cloud/Period.gs','const LossPeriod=(function(){\n'+(await readFile('src/loss-period.mjs','utf8')).replaceAll('export ','')+'\nreturn {lossPeriod,summarizeLossPeriod};})();\n'+await readFile('gas/cloud/period-adapter.gs','utf8'));

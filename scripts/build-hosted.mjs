@@ -11,6 +11,8 @@ for(const path of ['web/style.css','web/quest-theme.css','web/mobile.css']){
  html=html.replace(new RegExp('<link rel="stylesheet" href="\\./'+path.replaceAll('.','\\.')+'[^\"]*">'),()=>'<style>'+css+'</style>');
 }
 html=html.replaceAll('./web/assets/',origin+'web/assets/');
+const planningCompat=await readFile('web/planning-compat.js','utf8');
+html=html.replace('</body>','<script>'+planningCompat.replaceAll('</script','<\\/script')+'</script></body>');
 await writeFile('gas/cloud/App.html',html);
 console.log('Built authenticated hosted app:',Buffer.byteLength(html),'bytes');
 

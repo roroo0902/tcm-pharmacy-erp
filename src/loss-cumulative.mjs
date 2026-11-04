@@ -1,6 +1,6 @@
 // Pure V3 accounting. Daily loss is counted in whole jars; never round submitted values.
 export function lossUnits(value) {
-  if (!Number.isInteger(value) || value < 0 || value > 1000000) throw Error('罐數須為 0 或正整數，不接受小數；既有小數資料請先核對');
+  if (!Number.isInteger(value) || value < 0 || value > 1000000) throw Error('瓶數須為 0 或正整數，不接受小數；既有小數資料請先核對');
   return value;
 }
 export function planCumulative(rows, reason = '') {

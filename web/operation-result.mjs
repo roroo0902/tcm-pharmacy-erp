@@ -13,7 +13,7 @@ export function operationResult(p,type,hiddenId=''){
  const resultBody=receipt?`<p><strong>${esc(receipt.totalText)}</strong></p><div class="receipt-result-table"><table><thead><tr><th>廠商／藥品／編號</th><th>本次進貨</th><th>入庫前</th><th>入庫後</th><th>單價</th><th>小計</th></tr></thead><tbody>${receipt.lines.map(l=>`<tr><td>${esc(l.sheet)}<br>${esc(l.name)}／${esc(l.code)}</td><td>${esc(l.quantity)} 瓶</td><td>${esc(l.beforeText)}</td><td>${esc(l.afterText)}</td><td>${esc(l.priceText)}</td><td>${esc(l.amountText)}</td></tr>`).join('')}</tbody></table></div><p>入庫前後瓶數為本次交易當時的紀錄；後續進貨或耗損會影響目前庫存。</p>`:'';
  const time=p.receiptEvent?.time;
  const recordedTime=time&&!isNaN(Date.parse(time))?new Date(time).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'未記錄';
- return `<h3>${heading}</h3><p>${description}</p>${resultBody}<ul>${(receipt?[]:d.lines||[]).map(l=>`<li>${esc(l.sheet)}｜${esc(l.name)} ${esc(l.code)} · ${loss?'當日累計 '+esc(l.total)+' 罐':'進貨 '+esc(l.quantity)+' 瓶'}</li>`).join('')}</ul><details><summary>${loss?'查看交易明細':'查看本次進貨紀錄'}</summary><p>日期：${esc(d.date)} · 經手人：${esc(d.actor)}</p><p>${loss?'操作識別碼（供重試）':'交易編號'}：${esc(p.id)}</p>${loss&&(d.note||d.reason)?`<p>備註：${esc(d.note||d.reason)}</p>`:''}${!loss?`<p>備註：${esc(d.note||'無')}</p><p>入帳時間：${esc(p.verified?recordedTime:'尚未確認')}</p><p>紀錄位置：藥庫_同步紀錄</p>`:''}</details><div class="actions"><button type="button" id="${prefix}-check">${p.verified?'重新核對同步結果':'查詢同步結果'}</button>${p.verified?`<button type="button" class="secondary" id="${prefix}-hide">隱藏此提示</button>`:`<button type="button" id="${prefix}-resume">重新確認這筆操作</button>${loss?'<button type="button" class="secondary" id="loss-edit">修改尚未確認累計</button>':`<button type="button" class="secondary" id="receipt-edit">修改尚未入帳內容</button>`}`}</div>`;
+ return `<h3>${heading}</h3><p>${description}</p>${resultBody}<ul>${(receipt?[]:d.lines||[]).map(l=>`<li>${esc(l.sheet)}｜${esc(l.name)} ${esc(l.code)} · ${loss?'當日累計 '+esc(l.total)+' 瓶':'進貨 '+esc(l.quantity)+' 瓶'}</li>`).join('')}</ul><details><summary>${loss?'查看交易明細':'查看本次進貨紀錄'}</summary><p>日期：${esc(d.date)} · 經手人：${esc(d.actor)}</p><p>${loss?'操作識別碼（供重試）':'交易編號'}：${esc(p.id)}</p>${loss&&(d.note||d.reason)?`<p>備註：${esc(d.note||d.reason)}</p>`:''}${!loss?`<p>備註：${esc(d.note||'無')}</p><p>入帳時間：${esc(p.verified?recordedTime:'尚未確認')}</p><p>紀錄位置：藥庫_同步紀錄</p>`:''}</details><div class="actions"><button type="button" id="${prefix}-check">${p.verified?'重新核對同步結果':'查詢同步結果'}</button>${p.verified?`<button type="button" class="secondary" id="${prefix}-hide">隱藏此提示</button>`:`<button type="button" id="${prefix}-resume">重新確認這筆操作</button>${loss?'<button type="button" class="secondary" id="loss-edit">修改尚未確認累計</button>':`<button type="button" class="secondary" id="receipt-edit">修改尚未入帳內容</button>`}`}</div>`;
 }
 
 // Read-only reconciliation. Matching totals do not prove who posted an operation.
@@ -22,7 +22,7 @@ export function checkLossResult(draft,data){
  for(const line of draft.lines){
   const matches=data.loss.filter(x=>x.sheet===line.sheet&&x.code===line.code&&x.name===line.name);
   if(matches.length!==1||matches[0].error||!Number.isInteger(matches[0].posted))throw Error(line.name+'：目前無法核對已入帳累計，請重新讀取工作表');
-  if(matches[0].posted!==line.total)throw Error(line.name+'：工作表累計 '+matches[0].posted+' 罐，這筆填寫 '+line.total+' 罐；尚未一致，請核對最新數字後再決定是否重試');
+  if(matches[0].posted!==line.total)throw Error(line.name+'：工作表累計 '+matches[0].posted+' 瓶，這筆填寫 '+line.total+' 瓶；尚未一致，請核對最新數字後再決定是否重試');
  }
  return true;
 }

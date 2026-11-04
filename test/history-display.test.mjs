@@ -12,9 +12,24 @@ test('split columns keep each product with its historical supplier and quantity,
  const h=renderHistory(historyEntries([{s,rows:[row('multi','進貨',{lines})]}]));
  const rows=[...h.matchAll(/<tr class="history-item-row">(.*?)<\/tr>/g)].map(m=>m[1]);
  assert.equal(rows.length,3);assert.match(rows[0],/第一品項.*A01.*科達.*單方.*進貨 2 瓶/);assert.match(rows[1],/第二品項.*B02.*其他廠商.*複方.*進貨 7 瓶/);assert.match(rows[2],/第三品項.*歷史未分類工作表.*未記錄.*進貨 0 瓶/);
- assert.equal((h.match(/data-reverse=/g)||[]).length,1);assert.match(h,/rowspan="3"/);assert.match(h,/>藥品／編號<.*>廠牌／類別<.*>數量</);
+ assert.equal((h.match(/data-reverse=/g)||[]).length,1);assert.match(h,/rowspan="3"/);assert.match(h,/>藥品／編號<.*>廠牌／類別<.*>數量／本次進貨</);
 });
 test('loss quantity retains before and after totals and escaped supplier fields',()=>{
  const e=historyEntries([{s:{...s,title:'耗損'},rows:[['loss','{}','2026-11-03','<img>複方','A1','藥品',3,0,-3,7,'更正','甲','','time']]}]);
  const h=renderHistory(e);assert.match(h,/當日累計：3 → 0 瓶/);assert.match(h,/&lt;img&gt;/);assert.doesNotMatch(h,/<img>/);assert.match(h,/加回 3 瓶/);
+});
+test('receipt history uses transaction snapshots and the same execution explanation as Sheets',async()=>{
+ const {receiptExplanation}=await import('../src/receipt-explanation.mjs');
+ const r=row('receipt','進貨',{lines:[{sheet:'科達單方',code:'A01',name:'品項甲',quantity:2,unitPriceCents:26000},{sheet:'科達單方',code:'A02',name:'品項乙',quantity:1}]});
+ const event=JSON.parse(r[1]);event.lines=[{...event.draft.lines[0],before:8,after:10},{...event.draft.lines[1],before:0,after:1}];r[1]=JSON.stringify(event);
+ const h=renderHistory(historyEntries([{s,rows:[r]}]));
+ assert.match(h,/>8 瓶<\/td><td>10 瓶<\/td><td>260 元／瓶<\/td><td>520 元/);
+ assert.match(h,/單價未提供/);assert.match(h,/小計未計算/);
+ assert.ok(h.includes(receiptExplanation(event).text.replaceAll('\n','<br>')));
+ assert.match(h,/入庫前後瓶數為本次交易當時的紀錄/);
+});
+test('legacy receipt history never fabricates before or after stock',()=>{
+ const h=renderHistory(historyEntries([{s,rows:[row('old','進貨')]}]));
+ assert.match(h,/>未記錄<\/td><td>未記錄<\/td>/);
+ assert.match(h,/入庫前庫存：未記錄 → 入庫後庫存：未記錄/);
 });

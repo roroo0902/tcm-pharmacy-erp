@@ -7,3 +7,14 @@ test('test marks derive from explicit QA fields and inherit to reversals, never 
 test('identifiers and original references only appear inside closed details',()=>{const h=renderHistory(historyEntries([{s,rows:[row('ERP-secret','沖銷',{reverses:'ERP-original'})]}]));assert.match(h,/<details><summary>查看明細<\/summary>.*ERP-secret.*ERP-original.*<\/details>/);assert.doesNotMatch(h,/<details open/);assert.doesNotMatch(h.replace(/<details>.*?<\/details>/g,''),/ERP-secret|ERP-original/);});
 test('malformed records remain visible without action controls and user fields escaped',()=>{const e=historyEntries([{s,rows:[['BAD','invalid','2026-11-03','進貨','<script>','','<img>','已入帳','']]}]);const h=renderHistory(e);assert.match(h,/內容待核對/);assert.doesNotMatch(h,/data-reverse|<script>|<img>/);assert.match(h,/&lt;img&gt;/);});
 test('empty, filtering and multiple item summaries remain clear',()=>{assert.match(renderHistory([]),/沒有符合條件/);const lines=Array.from({length:5},(_,i)=>({code:'A'+i,name:'藥品'+i,quantity:1}));const h=renderHistory(historyEntries([{s,rows:[row('multi','訂貨',{lines})]}]));assert.match(h,/另有 2 項/);assert.match(h,/尚未入庫/);});
+test('split columns keep each product with its historical supplier and quantity, with one transaction action',()=>{
+ const lines=[{sheet:'科達單方',code:'A01',name:'第一品項',quantity:2},{sheet:'其他廠商複方',code:'B02',name:'第二品項',quantity:7},{sheet:'歷史未分類工作表',code:'C03',name:'第三品項',quantity:0}];
+ const h=renderHistory(historyEntries([{s,rows:[row('multi','進貨',{lines})]}]));
+ const rows=[...h.matchAll(/<tr class="history-item-row">(.*?)<\/tr>/g)].map(m=>m[1]);
+ assert.equal(rows.length,3);assert.match(rows[0],/第一品項.*A01.*科達.*單方.*進貨 2 瓶/);assert.match(rows[1],/第二品項.*B02.*其他廠商.*複方.*進貨 7 瓶/);assert.match(rows[2],/第三品項.*歷史未分類工作表.*未記錄.*進貨 0 瓶/);
+ assert.equal((h.match(/data-reverse=/g)||[]).length,1);assert.match(h,/rowspan="3"/);assert.match(h,/>藥品／編號<.*>廠牌／類別<.*>數量</);
+});
+test('loss quantity retains before and after totals and escaped supplier fields',()=>{
+ const e=historyEntries([{s:{...s,title:'耗損'},rows:[['loss','{}','2026-11-03','<img>複方','A1','藥品',3,0,-3,7,'更正','甲','','time']]}]);
+ const h=renderHistory(e);assert.match(h,/當日累計：3 → 0 瓶/);assert.match(h,/&lt;img&gt;/);assert.doesNotMatch(h,/<img>/);assert.match(h,/加回 3 瓶/);
+});

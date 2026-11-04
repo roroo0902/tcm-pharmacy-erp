@@ -28,7 +28,25 @@ export function filterHistoryEntries(entries,{type='全部',test='全部',from='
  const terms=searchText(drug).split(/\s+/).filter(Boolean),person=searchText(actor);
  return entries.filter(e=>{const date=historyDate(e.date);return (type==='全部'||e.type===type)&&(test==='全部'||(test==='測試'?e.marked:!e.marked))&&(!start||date&&date>=start)&&(!end||date&&date<=end)&&(!person||searchText(e.actor).includes(person))&&(!terms.length||(e.lines.length?e.lines.some(l=>{const text=searchText([l.name,l.code].join(' '));return terms.every(t=>text.includes(t));}):terms.every(t=>searchText(e.fallback).includes(t))));});
 }
+function supplierLabel(line){
+ const sheet=String(line.sheet??'').trim(),match=sheet.match(/^(.*?)\s*(單方|複方)$/);
+ return match?[match[1]||'未記錄',match[2]]:[sheet||'未記錄','未記錄'];
+}
+function quantityLabel(entry,line){
+ if(entry.type==='耗損')return '當日累計：'+(entry.before??'待核對')+' → '+(entry.total??'待核對')+' 瓶';
+ const prefix=entry.type==='建帳'?'期初 ':entry.action==='取消訂貨'?'取消訂貨 ':entry.action==='沖銷'?'沖銷 ':entry.action==='訂貨'?'訂貨 ':'進貨 ';
+ return prefix+(line.quantity??'待核對')+' 瓶';
+}
 export function renderHistory(entries,filters={}){
  let shown;try{shown=filterHistoryEntries(entries,filters);}catch(e){return '<p role="alert">'+esc(e.message)+'</p>';}
- return `<p role="status">顯示 ${shown.length} 筆，共 ${entries.length} 筆；${entries.filter(e=>e.marked).length} 筆有測試標記。</p><div class="tablewrap"><table class="history-readable"><thead><tr><th>日期</th><th>類型</th><th>品項與數量</th><th>結果</th><th>經手人</th><th>明細</th></tr></thead><tbody>${shown.map(e=>`<tr><td>${esc(e.date)}</td><td><strong>${esc(e.label)}</strong>${e.marked?'<div><span class="pill warn">測試紀錄</span></div>':''}</td><td>${e.lines.slice(0,3).map(l=>esc(lineText(e,l))).join('<br>')||esc(e.fallback||'內容待核對')}${e.lines.length>3?`<br>另有 ${e.lines.length-3} 項，請展開明細`:''}${e.type==='耗損'?`<div>當日累計：${esc(e.before??'待核對')} → ${esc(e.total??'待核對')} 瓶</div>`:''}</td><td>${esc(e.status)}</td><td>${esc(e.actor||'未記錄')}</td><td><details><summary>查看明細</summary><p>交易編號：${esc(e.id)}</p>${e.reverses?`<p>對應原交易：${esc(e.reverses)}</p>`:''}<p>記錄時間：${esc(e.time||'未記錄')}</p><p>備註：${esc(e.note||'無')}</p>${e.marked?'<p>測試標記來自品項編號、備註、經手人或對應原交易；標記本身不代表已還原。</p>':''}${e.lines.length?`<ul>${e.lines.map(l=>`<li>${esc(lineText(e,l))}</li>`).join('')}</ul>`:''}${e.type==='耗損'?`<p>此筆入帳後庫存：${esc(e.stock??'待核對')} 瓶（歷史數字，不是目前庫存）</p>`:''}<p>原始狀態：${esc(e.rawStatus||(e.type==='耗損'?'耗損更正紀錄':'未記錄'))}</p><a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/${esc(e.source.id)}/edit#gid=${esc(e.source.gid)}">查看原始工作表 ↗</a>${e.canReverse?`<p><button type="button" class="secondary" data-reverse="${esc(e.id)}">${e.action==='訂貨'?'取消這筆訂貨':'沖銷這筆進貨'}</button></p>`:''}</details></td></tr>`).join('')||'<tr><td colspan="6">沒有符合條件的紀錄</td></tr>'}</tbody></table></div>`;
+ const rows=shown.map(e=>{
+  const lines=e.lines.length?e.lines.slice(0,3):[null],span=lines.length;
+  return lines.map((line,index)=>{
+   const [brand,category]=supplierLabel(line||{});
+   const product=line?'<b>'+esc(line.name||'未記錄藥品')+'</b><div class="muted">'+esc(line.code||'未填編號')+'</div>':esc(e.fallback||'內容待核對');
+   const more=index===span-1&&e.lines.length>3?'<div class="muted">另有 '+(e.lines.length-3)+' 項，請展開明細</div>':'';
+   return `<tr class="history-item-row">${index===0?`<td rowspan="${span}">${esc(e.date)}</td><td rowspan="${span}"><strong>${esc(e.label)}</strong>${e.marked?'<div><span class="pill warn">測試紀錄</span></div>':''}</td>`:''}<td class="history-product">${product}${more}</td><td class="history-supplier">${esc(brand)}<div class="muted">${esc(category)}</div></td><td class="history-quantity">${line?esc(quantityLabel(e,line)):'待核對'}</td>${index===0?`<td rowspan="${span}">${esc(e.status)}</td><td rowspan="${span}">${esc(e.actor||'未記錄')}</td><td rowspan="${span}"><details><summary>查看明細</summary><p>交易編號：${esc(e.id)}</p>${e.reverses?`<p>對應原交易：${esc(e.reverses)}</p>`:''}<p>記錄時間：${esc(e.time||'未記錄')}</p><p>備註：${esc(e.note||'無')}</p>${e.marked?'<p>測試標記來自品項編號、備註、經手人或對應原交易；標記本身不代表已還原。</p>':''}${e.lines.length?`<ul>${e.lines.map(l=>`<li>${esc(lineText(e,l))}</li>`).join('')}</ul>`:''}${e.type==='耗損'?`<p>此筆入帳後庫存：${esc(e.stock??'待核對')} 瓶（歷史數字，不是目前庫存）</p>`:''}<p>原始狀態：${esc(e.rawStatus||(e.type==='耗損'?'耗損更正紀錄':'未記錄'))}</p><a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/${esc(e.source.id)}/edit#gid=${esc(e.source.gid)}">查看原始工作表 ↗</a>${e.canReverse?`<p><button type="button" class="secondary" data-reverse="${esc(e.id)}">${e.action==='訂貨'?'取消這筆訂貨':'沖銷這筆進貨'}</button></p>`:''}</details></td>`:''}</tr>`;
+  }).join('');
+ }).join('');
+ return `<p role="status">顯示 ${shown.length} 筆，共 ${entries.length} 筆；${entries.filter(e=>e.marked).length} 筆有測試標記。</p><div class="tablewrap"><table class="history-readable"><thead><tr><th>日期</th><th>類型</th><th class="history-product">藥品／編號</th><th class="history-supplier">廠牌／類別</th><th>數量</th><th>結果</th><th>經手人</th><th>明細</th></tr></thead><tbody>${rows||'<tr><td colspan="8">沒有符合條件的紀錄</td></tr>'}</tbody></table></div>`;
 }

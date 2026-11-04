@@ -32,3 +32,19 @@
 .period-controls{border:1px solid #c6c9bc;border-radius:8px;padding:16px;margin:18px 0}.period-controls legend{font-weight:700;padding:0 8px}.period-presets,.period-fields{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.period-fields{margin-top:12px}.period-fields label{margin:0}.period-fields input[type=number]{max-width:150px}.period-controls p{overflow-wrap:anywhere}.loss-completion{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:18px 0}
 @media(max-width:760px){.period-controls{padding:12px}.period-presets{display:grid;grid-template-columns:1fr 1fr}.period-presets button{white-space:normal;padding:8px}.period-fields{display:grid;grid-template-columns:1fr 1fr}.period-fields button{grid-column:1/-1}.period-fields input[type=number]{width:100%;max-width:100%}.period-controls input:not([type=checkbox]){min-height:44px}.period-fields .check-label{align-self:end}
 body[data-page=orders] #order-grid{min-width:0;width:100%;display:block}body[data-page=orders] #order-grid thead{display:block}body[data-page=orders] #order-grid thead tr{display:flex;flex-wrap:wrap;padding:8px;gap:8px}body[data-page=orders] #order-grid thead th{padding:0;border:0;font-size:12px}body[data-page=orders] #order-grid thead th:nth-child(n+4){display:none}body[data-page=orders] #order-grid tbody{display:block}body[data-page=orders] #order-grid tbody tr{display:block;border:1px solid #ccc7b6;border-radius:8px;margin:12px 0;padding:8px;background:#fffdf5}body[data-page=orders] #order-grid tbody td{display:flex!important;align-items:center;justify-content:space-between;gap:8px;text-align:right!important;padding:8px!important;line-height:1.5;flex-wrap:wrap;border:0}body[data-page=orders] #order-grid tbody td::before{content:attr(data-label);font-size:12px;color:#526c7a;text-align:left;margin-right:auto}body[data-page=orders] #order-grid tbody td:first-child{display:block!important;text-align:left!important}body[data-page=orders] #order-grid tbody td:first-child::before{display:none}body[data-page=orders] #order-grid tbody td small{flex-basis:100%;line-height:1.5}body[data-page=orders] #order-grid .quantity-stepper{margin:0;width:180px;grid-template-columns:36px 74px 36px 16px}body[data-page=orders] #order-grid .quantity-adjust{width:36px;min-height:44px}body[data-page=orders] #order-grid .quantity-stepper input{width:74px;min-height:44px}body[data-page=orders] #order-grid .order-price{margin:0;min-height:44px;font-size:16px}body[data-page=orders] .tablewrap:has(#order-grid){overflow:visible}}
+
+/* Mobile cloud previews keep reviewed quantities visible without horizontal scrolling. */
+@media(max-width:760px){
+ dialog:has(.direct-review-table){width:calc(100% - 24px);max-width:calc(100% - 24px);padding:18px;overflow-wrap:anywhere}
+ dialog .tablewrap:has(.direct-review-table){overflow:visible}
+ dialog .direct-review-table{display:block;min-width:0!important;width:100%;table-layout:auto;white-space:normal}
+ dialog .direct-review-table thead{display:none}
+ dialog .direct-review-table tbody{display:block}
+ dialog .direct-review-table tr{display:block;border:1px solid #a8b9c3;border-radius:6px;overflow:hidden;margin:12px 0;background:#fffbee}
+ dialog .direct-review-table td{display:flex;justify-content:space-between;gap:12px;width:100%;padding:9px 12px;text-align:right!important;white-space:normal;border:0;min-width:0;font-size:14px;color:#203b55}
+ dialog .direct-review-table td::before{content:attr(data-label);flex:0 0 45%;text-align:left;color:#405c73}
+ dialog .direct-review-table td:first-child{display:block;text-align:left!important;font-weight:600;background:#e8f0ec;overflow-wrap:anywhere}
+ dialog .direct-review-table td:first-child::before{display:block;font-size:12px;margin-bottom:5px;font-weight:400}
+ dialog:has(.direct-review-table) .actions{gap:10px;flex-wrap:wrap}
+ dialog:has(.direct-review-table) .actions button{min-height:44px;max-width:100%;white-space:normal}
+}

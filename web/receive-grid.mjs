@@ -27,7 +27,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
 #receipt-grid .receipt-price::-webkit-inner-spin-button,#receipt-grid .receipt-price::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 #receipt-grid tbody td{vertical-align:top;padding-top:16px;padding-bottom:16px;line-height:34px}
 #receipt-grid tbody td:nth-child(1),#receipt-grid tbody td:nth-child(2),#receipt-grid tbody td .muted{line-height:17px}
-#receipt-grid .quantity-stepper{grid-template-columns:26px 64px 16px 26px;gap:6px;width:150px;line-height:normal;margin-inline:auto}
+#receipt-grid .quantity-stepper{grid-template-columns:26px 64px 26px 16px;gap:6px;width:150px;line-height:normal;margin-inline:auto}
 #receipt-grid .quantity-stepper input{width:64px;height:34px;min-height:34px;padding:4px;font-size:14px}
 #receipt-grid .quantity-stepper .quantity-adjust{width:26px;min-width:26px;height:28px;min-height:28px;font-size:18px}
 #receipt-grid .quantity-clear{line-height:22px}
@@ -44,7 +44,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   c.querySelectorAll('.receipt-qty').forEach(el=>el.oninput=()=>{if(el.value==='')quantities.delete(el.dataset.key);else quantities.set(el.dataset.key,el.value);summary();});
   c.querySelectorAll('.receipt-price').forEach(el=>el.oninput=()=>{prices.set(el.dataset.priceKey,el.value);el.closest('.receipt-price-cell').querySelector('small').textContent='本次輸入';summary();});
   quantitySteppers(c,'.receipt-qty');
-  c.querySelectorAll('.receipt-qty').forEach(input=>input.insertAdjacentHTML('afterend','<span class="quantity-unit">瓶</span>'));
+  c.querySelectorAll('.receipt-qty').forEach(input=>input.parentElement.querySelector('.quantity-clear').insertAdjacentHTML('beforebegin','<span class="quantity-unit">瓶</span>'));
   summary();
  }
  function summary(){

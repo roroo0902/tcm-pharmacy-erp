@@ -21,3 +21,9 @@ dialog{max-height:90vh;overflow:auto}.check-label{display:flex;gap:10px;align-it
 .loss-insufficient{color:#ad5443;font-weight:700}
 
 .receipt-result-table{max-width:100%;overflow-x:auto}.receipt-result-table table{min-width:650px;width:100%}.receipt-result-table th,.receipt-result-table td{text-align:center;vertical-align:middle}
+
+/* Jar center shares the drug-heading axis; names remain to its right. */
+#content #order-grid .aligned-drug{display:flex;align-items:center;gap:10px;width:100%;padding-left:calc(50% - 20px);box-sizing:border-box;text-align:left;max-width:100%}
+#content #order-grid .aligned-drug-text{min-width:0;white-space:normal;overflow-wrap:anywhere}
+#content #order-grid tbody td:first-child:not([colspan]){min-width:260px}
+@media(max-width:760px){#content #order-grid thead th:first-child{flex:0 0 100%;width:100%;box-sizing:border-box;padding:0!important}#content #order-grid tbody td:first-child:not([colspan]){min-width:0}}

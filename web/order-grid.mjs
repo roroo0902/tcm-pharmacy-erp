@@ -31,7 +31,7 @@ export function mountOrderGrid({esc,fmt,ask}){
 #order-grid .order-price-unit{flex:none}
 #order-grid .order-price{box-sizing:border-box;min-width:72px;flex:0 0 72px;display:block;margin:0;text-align:center;appearance:textfield;-moz-appearance:textfield}
 #order-grid .order-price::-webkit-inner-spin-button,#order-grid .order-price::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
-#order-grid .quantity-clear{line-height:22px}
+#order-grid .quantity-clear{grid-column:2;justify-self:center;line-height:22px}
 #order-grid .quantity-unit{font-size:13px;line-height:34px;text-align:center}
 #content #order-grid th:first-child,#content #order-grid td:first-child{text-align:center;padding-left:60px;padding-right:60px}
 #order-grid .order-brand-category{line-height:17px;white-space:nowrap}

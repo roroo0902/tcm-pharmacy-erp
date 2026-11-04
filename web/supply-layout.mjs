@@ -16,4 +16,5 @@ export const supplyLayout = `<style>
 #content #order-grid .quantity-stepper{grid-template-columns:26px 72px 16px 26px;width:158px}
 #content :is(#order-grid,#receipt-grid) th .sort-heading{width:100%;text-align:center}
 @media(max-width:760px){#content #order-grid .quantity-stepper{grid-template-columns:32px 72px 16px 32px;width:170px}}
+@media(max-width:760px){#content #order-grid tbody td:first-child{text-align:center!important}}
 </style>`;

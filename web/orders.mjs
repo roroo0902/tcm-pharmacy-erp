@@ -1,3 +1,4 @@
+import {installPlanningMobile} from './planning-mobile.mjs';
 import {planningLayout} from './planning-layout.mjs';
 import {sortOrderRows,ORDER_COLUMNS} from './order-sort.mjs';
 import {directEnabled,directReview,directSheet,runDirect} from './direct-sync.mjs?v=compact20261030';
@@ -10,6 +11,7 @@ const ORDER_SHEET='1YcO7XRhN4T8wrL6wn-jD45lqif--rYQF4HCuBE-Nju8',GIDS={'科達�
 export function mountOrders({esc,fmt,ask:askBase}){
  const ask=(html,action)=>askBase(html,action,'確認');
  const host=document.querySelector('#content'),abort=new AbortController();let alive=true,busy=false,snapshot=null,quantities={},source=SOURCES[0],legacy=new Map(),lastSync='',page=0,sortKey='code',sortDirection='asc';
+ installPlanningMobile(host);
  const stored=()=>{const s=JSON.parse(localStorage.getItem(KEY)||'{"drafts":{},"orders":[]}');return validateOrderStore(s);};
  const download=(name,text,type='application/json')=>{const u=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
  host.innerHTML=`${planningLayout}<style>

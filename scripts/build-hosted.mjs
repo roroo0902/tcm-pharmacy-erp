@@ -13,6 +13,9 @@ for(const path of ['web/style.css','web/quest-theme.css','web/mobile.css']){
 html=html.replaceAll('./web/assets/',origin+'web/assets/');
 const planningCompat=await readFile('web/planning-compat.js','utf8');
 html=html.replace('</body>','<script>'+planningCompat.replaceAll('</script','<\\/script')+'</script></body>');
+const wordAxisSource=(await readFile('web/order-word-axis.mjs','utf8')).replace('export function','function');
+const wordAxisInline='<script>(()=>{'+wordAxisSource+';let previous=null,stop=()=>{};const root=document.querySelector("#content");const attach=()=>{const table=root.querySelector("#order-grid");if(table===previous)return;stop();previous=table;stop=table?alignOrderWord(table):()=>{};};new MutationObserver(attach).observe(root,{childList:true,subtree:true});attach();})();</script>';
+html=html.replace('</body>',()=>wordAxisInline+'</body>');
 await writeFile('gas/cloud/App.html',html);
 console.log('Built authenticated hosted app:',Buffer.byteLength(html),'bytes');
 

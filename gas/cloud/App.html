@@ -164,6 +164,15 @@ const heading=Array.from(root.querySelectorAll('h2')).find(h=>h.textContent==='�
 root.querySelectorAll('#order-table th').forEach(th=>{const b=th.querySelector('[data-order-sort]');if(!b)return;const sub=subs[b.dataset.orderSort];if(!sub||th.querySelector('.planning-subtitle'))return;const label=b.querySelector('span');if(label?.querySelector('br'))label.textContent=label.innerHTML.split('<br>')[0];const small=document.createElement('span');small.className='planning-subtitle';small.textContent=sub;b.after(small);});
 root.querySelectorAll('#order-table tbody tr').forEach(row=>Array.from(row.cells).forEach((cell,i)=>{if(!cell.dataset.label)cell.dataset.label=labels[i]||'';}));
 }
-new MutationObserver(update).observe(root,{childList:true,subtree:true});update();})();</script></body></html>
+new MutationObserver(update).observe(root,{childList:true,subtree:true});update();})();</script><script>(()=>{function alignOrderWord(table){
+ if(table.dataset.wordAxis)return ()=>{};table.dataset.wordAxis='true';
+ let frame=0;
+ const update=()=>{frame=0;const heading=table.querySelector('[data-og-sort="code"]');if(!heading)return;const text=[...heading.childNodes].find(n=>n.nodeType===3&&n.textContent.includes('藥品'));if(!text)return;const start=text.textContent.indexOf('藥品'),range=document.createRange();range.setStart(text,start);range.setEnd(text,start+2);const word=range.getBoundingClientRect(),box=heading.getBoundingClientRect();if(!box.width)return;const shift=(word.x+word.width/2-box.x-box.width/2)*heading.offsetWidth/box.width;table.style.setProperty('--order-word-shift',shift+'px');};
+ const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};
+ const mutations=new MutationObserver(schedule);mutations.observe(table,{childList:true,characterData:true,subtree:true});
+ const resize=new ResizeObserver(schedule);resize.observe(table);resize.observe(table.querySelector('[data-og-sort="code"]'));schedule();
+ return ()=>{mutations.disconnect();resize.disconnect();cancelAnimationFrame(frame);delete table.dataset.wordAxis;};
+}
+;let previous=null,stop=()=>{};const root=document.querySelector("#content");const attach=()=>{const table=root.querySelector("#order-grid");if(table===previous)return;stop();previous=table;stop=table?alignOrderWord(table):()=>{};};new MutationObserver(attach).observe(root,{childList:true,subtree:true});attach();})();</script></body></html>
 
 

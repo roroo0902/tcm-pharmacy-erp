@@ -6,6 +6,9 @@ import {SOURCES,parseSheet,sheetUrl,exportUrl} from './sheets-data.mjs?v=compact
 export function mountSheets({esc,fmt}){
  const content=document.querySelector('#content');let alive=true,busy=false,page=0,statusFilter='all',sortKey='code',sortDirection='asc';const sortYear=Number(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}).slice(0,4));const controller=new AbortController(),snapshots=new Map(),errors=new Map();
  content.innerHTML=`<style>
+#content #cloud-table th:nth-child(-n+2),#content #cloud-table td:nth-child(-n+2){text-align:center;vertical-align:middle}
+#content #cloud-table tbody td:first-child{padding-left:54px;padding-right:54px}
+#content #cloud-table th:nth-child(-n+2) .sort-heading{text-align:center}
 #cloud-cards button.card{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;min-width:0;background:#fffdf5}
 #cloud-cards [data-cloud-filter="warning"]::after{background-image:url("./web/assets/checklist-scroll.png");opacity:1;image-rendering:pixelated}
 #cloud-cards [data-cloud-filter="zero"]::after{background-image:url("./web/assets/empty-treasure-chest.png");width:56px;height:56px;filter:none;opacity:1;image-rendering:pixelated}

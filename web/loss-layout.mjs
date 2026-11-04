@@ -13,4 +13,14 @@ export const lossLayout = `<style>
  #content #loss-table .quantity-stepper input{height:40px;min-height:40px;font-size:16px}
  #content #loss-table .quantity-stepper .quantity-adjust{width:32px;min-width:32px;height:40px;min-height:40px}
 }
+
+#content #loss-table tbody td{vertical-align:middle;text-align:center;line-height:1.5}
+#content #loss-table tbody td:first-child:not([colspan]){padding:16px;text-align:center!important}
+#content #loss-table tbody td:first-child::before{display:none!important}
+#loss-table .aligned-drug{display:inline-flex;align-items:center;gap:10px;text-align:left;max-width:100%}
+#loss-table .aligned-drug-text{display:block;min-width:0;white-space:normal;line-height:1.5}
+#loss-table .aligned-drug-icon{display:block;flex:0 0 40px;width:40px;height:44px;background:url('./web/assets/herbal-powder.png') center/contain no-repeat;image-rendering:pixelated}
+#loss-table tr[data-category="複方"] .aligned-drug-icon{background-image:url('./web/assets/potion-categories.png');background-size:200% 100%;background-position:right center}
+#content #loss-table .quantity-stepper .quantity-clear{display:flex;align-items:center;justify-content:center;justify-self:stretch;box-sizing:border-box;line-height:1;height:28px;min-height:28px;padding:0 4px;margin:0}
+@media(max-width:760px){#content #loss-table .quantity-stepper .quantity-clear{height:44px;min-height:44px}}
 </style>`;

@@ -17,4 +17,14 @@ export const supplyLayout = `<style>
 #content :is(#order-grid,#receipt-grid) th .sort-heading{width:100%;text-align:center}
 @media(max-width:760px){#content #order-grid .quantity-stepper{grid-template-columns:32px 72px 32px 16px;width:170px}}
 @media(max-width:760px){#content #order-grid tbody td:first-child{text-align:center!important}}
+
+#content #order-grid tbody td{vertical-align:middle;text-align:center;line-height:1.5}
+#content #order-grid tbody td:first-child:not([colspan]){padding:16px;text-align:center!important}
+#content #order-grid tbody td:first-child::before{display:none!important}
+#order-grid .aligned-drug{display:inline-flex;align-items:center;gap:10px;text-align:left;max-width:100%}
+#order-grid .aligned-drug-text{display:block;min-width:0;white-space:normal;line-height:1.5}
+#order-grid .aligned-drug-icon{display:block;flex:0 0 40px;width:40px;height:44px;background:url('./web/assets/herbal-powder.png') center/contain no-repeat;image-rendering:pixelated}
+#order-grid tr[data-category="複方"] .aligned-drug-icon{background-image:url('./web/assets/potion-categories.png');background-size:200% 100%;background-position:right center}
+#content #order-grid .quantity-stepper .quantity-clear{display:flex;align-items:center;justify-content:center;justify-self:stretch;box-sizing:border-box;line-height:1;height:28px;min-height:28px;padding:0 4px;margin:0}
+@media(max-width:760px){#content #order-grid .quantity-stepper .quantity-clear{height:44px;min-height:44px}}
 </style>`;

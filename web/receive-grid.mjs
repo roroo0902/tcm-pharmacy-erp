@@ -72,7 +72,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   if($('#receipt-edit'))$('#receipt-edit').onclick=()=>{reuseId=pending.id;quantities.clear();prices.clear();for(const l of pending.lines){const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});quantities.set(key,String(l.quantity));prices.set(key,l.unitPriceCents===undefined?'':String(l.unitPriceCents/100));}$('#receipt-date').value=pending.date;$('#receipt-actor').value=pending.actor;$('#receipt-note').value=pending.note;draw();status('已載入待核對內容，修改後會沿用原交易編號。');};
  }
  function send(d){
-  if(directEnabled())return directReview(d,ask,async()=>{clearShortage('receive');localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));reuseId='';if(alive){quantities.clear();prices.clear();showPending();await load();}},status);
+  if(directEnabled())return directReview(d,ask,async()=>{clearShortage('receive');localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));reuseId='';if(alive){quantities.clear();prices.clear();$('#receipt-note').value='';showPending();await load();}},status);
   const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(d);form.append(input);document.body.append(form);form.submit();form.remove();status('已開啟 Google 核對頁，請以同一交易核對結果。');
  }
  const selected=()=>{$('#receipt-search').value='';draw();load();};

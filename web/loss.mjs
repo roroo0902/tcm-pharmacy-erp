@@ -1,3 +1,5 @@
+import {isProcessing,beginProcessing} from './processing-screen.mjs';
+import {lossCancellationSummary} from './loss-cancel.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
 import {lossCompletionMarkup,mountLossCompletion} from './loss-completion.mjs';
 import {lossLayout} from './loss-layout.mjs';
@@ -41,6 +43,18 @@ export function mountLoss({esc,fmt,ask,message}){
  function showPending(){if(disposed)return;pending=readResult();$('#loss-pending').innerHTML=operationResult(pending,'loss',localStorage.getItem(HIDDEN_RESULT));
  if($('#loss-hide'))$('#loss-hide').onclick=()=>{localStorage.setItem(HIDDEN_RESULT,pending.id);showPending();};
  if($('#loss-edit'))$('#loss-edit').onclick=async()=>{const record=pending;date=record.draft.date;$('#loss-date').value=date;await load();if(disposed||loadFailed)return;try{const selectedRows=record.draft.lines.map(line=>{const matches=rows().filter(r=>r.name===line.sheet&&r.code===line.code&&r.drug===line.name);if(matches.length!==1)throw Error('品項已變更，請重新核對');return {row:matches[0],line};});quantities.clear();for(const {row,line} of selectedRows)quantities.set(row.id,String(line.total));$('#loss-actor').value=record.draft.actor;reuseResultId=record.id;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}};
+ if($('#loss-cancel'))$('#loss-cancel').onclick=async()=>{
+  if(isProcessing()||loading)return;const record=readResult(),original=JSON.stringify(record);if(!record||record.verified)return;
+  let screen;try{screen=beginProcessing({reading:true});const data=await runDirect('readLossCatalog',{date:record.draft.date});const lines=lossCancellationSummary(record.draft,data);if(disposed||JSON.stringify(readResult())!==original)return;
+   screen.close();screen=null;
+   ask('<h3>取消本次待登錄數量</h3><p>僅清除這筆本機待登錄內容，不會將雲端耗損歸零，也不會加回庫存。</p><ul>'+lines.map(l=>'<li>'+esc(l.sheet)+' '+esc(l.code)+' '+esc(l.name)+'：預計累計 '+esc(l.total)+' 瓶；雲端目前已登錄 '+esc(l.posted)+' 瓶</li>').join('')+'</ul><p>若曾在其他分頁開啟這筆確認畫面，請一併關閉，勿再送出。</p>',()=>{
+    if(disposed||isProcessing())return;if(JSON.stringify(readResult())!==original){status('待登錄內容已變更，請重新核對後取消');return;}
+    localStorage.setItem('tcm-loss-last-cancelled-v1',JSON.stringify({...record,cancelledAt:new Date().toISOString(),cloudTotals:lines}));localStorage.removeItem(RESULT_KEY);localStorage.removeItem(HIDDEN_RESULT);
+    if(date===record.draft.date)for(const line of record.draft.lines)for(const row of rows())if(row.name===line.sheet&&row.code===line.code&&row.drug===line.name&&Number(quantities.get(row.id))===line.total)quantities.delete(row.id);
+    reuseResultId='';showPending();draw();status('已取消本次本機待登錄數量；雲端已入帳耗損及庫存保持不變。');
+   },'取消本次待登錄數量');
+  }catch(e){if(!disposed)status('尚未取消：'+e.message);}finally{screen?.close();}
+ };
  if($('#loss-resume'))$('#loss-resume').onclick=()=>sendLoss(pending);
  if($('#loss-check'))$('#loss-check').onclick=async()=>{const record=pending;try{const data=await runDirect('readLossCatalog',{date:record.draft.date});checkLossResult(record.draft,data);if(disposed)return;if(readResult()?.id===record.id)localStorage.setItem(RESULT_KEY,JSON.stringify({...record,verified:true}));reuseResultId='';showPending();status('工作表當日累計已核對一致；未送出的數量仍保留。');}catch(e){if(disposed)return;if(readResult()?.id===record.id)localStorage.setItem(RESULT_KEY,JSON.stringify({...record,verified:false}));showPending();status(e.message);}};
  }

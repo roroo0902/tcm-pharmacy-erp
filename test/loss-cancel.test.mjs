@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {lossCancellationSummary} from '../web/loss-cancel.mjs';
+import {operationResult} from '../web/operation-result.mjs';
+test('cancel is offered only for a pending loss',()=>{const p={draft:{kind:'tcm-loss-cumulative',lines:[]},verified:false};assert.match(operationResult(p,'loss'),/loss-cancel/);assert.doesNotMatch(operationResult({...p,verified:true},'loss'),/loss-cancel/);assert.doesNotMatch(operationResult(null,'loss'),/loss-cancel/);});
+const draft={date:'2026-11-09',lines:[{sheet:'科達單方',code:'A1004',name:'大黃',total:30}]};
+test('local cancellation reports actual cloud totals without changing them',()=>{for(const posted of [0,12,30,40]){const data={date:draft.date,loss:[{...draft.lines[0],posted}]},before=JSON.stringify(data);assert.equal(lossCancellationSummary(draft,data)[0].posted,posted);assert.equal(JSON.stringify(data),before);}});
+test('uncertain, missing, duplicate and wrong-date reads cannot clear a pending draft',()=>{const row={...draft.lines[0],posted:0};for(const data of [{date:'2026-11-08',loss:[row]},{date:draft.date,loss:[]},{date:draft.date,loss:[row,row]},{date:draft.date,loss:[{...row,error:'待核對'}]},{date:draft.date,loss:[{...row,posted:null}]}])assert.throws(()=>lossCancellationSummary(draft,data));});

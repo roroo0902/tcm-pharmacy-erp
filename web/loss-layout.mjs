@@ -38,4 +38,11 @@ export const lossLayout = `<style>
  #content #loss-table .quantity-stepper{margin:0 0 0 auto;flex:none}
  #content #loss-table .quantity-clear{display:flex;align-items:center;justify-content:center}
 }
+
+/* Keep loss jars on the drug-word axis and names in a fixed right-hand column. */
+#content #loss-table th:first-child .sort-heading{width:100%;text-align:center}
+#content #loss-table tbody td:first-child:not([colspan]){min-width:260px}
+#content #loss-table .aligned-drug{display:flex;align-items:center;gap:10px;width:100%;padding-left:calc(50% - 20px + var(--order-word-shift, 0px));box-sizing:border-box;text-align:left;max-width:100%}
+#content #loss-table .aligned-drug-text{min-width:0;white-space:normal;overflow-wrap:anywhere}
+@media(max-width:760px){#content #loss-table thead th:first-child{flex:0 0 100%;width:100%!important;box-sizing:border-box;padding:0!important}#content #loss-table tbody td:first-child:not([colspan]){min-width:0}}
 </style>`;

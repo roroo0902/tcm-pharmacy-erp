@@ -14,6 +14,7 @@ export function sortSheetRows(rows,key='code',direction='asc',referenceYear){
  case 'brand':return text(r.brand)?[r.brand,r.category||'']:null;
  case 'price':return Number.isFinite(r.unitPriceCents)?r.unitPriceCents:null;
  case 'bottles':return Number.isFinite(r.bottles)?r.bottles:null;
+ case 'posted':return Number.isFinite(r.posted)?r.posted:null;
  case 'stockout':return text(r.stockout);
  case 'shortage':{const m=String(r.shortage??'').trim().match(/^(\d+(?:\.\d+)?)\s*[%％]$/);return m&&Number(m[1])<=100?Number(m[1]):null;}
  case 'warning':return text(r.warning);default:return dateKey(r.updated,referenceYear);}};

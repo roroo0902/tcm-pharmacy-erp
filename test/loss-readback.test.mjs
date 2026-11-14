@@ -1,5 +1,13 @@
-import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {lossCalculation,createLossLoader} from '../web/loss-readback.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {lossCalculation,createLossLoader,readLossWithTimeout} from '../web/loss-readback.mjs';
 test('readback calculations retain typed total against new posted and stock',()=>{assert.deepEqual(lossCalculation('5',{posted:2,bottles:10}),{delta:'扣 3 瓶',after:'7 瓶',insufficient:false});assert.deepEqual(lossCalculation('1',{posted:2,bottles:10}),{delta:'加回 1 瓶',after:'11 瓶',insufficient:false});assert.equal(lossCalculation('5',{posted:3,bottles:9}).after,'7 瓶');assert.equal(lossCalculation('',{posted:2,bottles:10}).after,'—');assert.equal(lossCalculation('-1',{posted:2,bottles:10}).delta,'數量無效');assert.equal(lossCalculation('1',{posted:null,bottles:10}).delta,'無法核對');});
 
 test('rapid switches share one read and a later refresh gets fresh data',async()=>{let count=0,done;const load=createLossLoader(()=>{count++;return new Promise(resolve=>done=resolve);});const requests=Array.from({length:6},()=>load('2026-11-01'));await Promise.resolve();assert.equal(count,1);assert.ok(requests.every(p=>p===requests[0]));done('first');assert.deepEqual(await Promise.all(requests),Array(6).fill('first'));const next=load('2026-11-01');await Promise.resolve();assert.equal(count,2);done('fresh');assert.equal(await next,'fresh');});
 test('failed reads can be retried',async()=>{let n=0;const load=createLossLoader(()=>{if(!n++)throw Error('offline');return 7;});await assert.rejects(load('2026-11-01'),/offline/);assert.equal(await load('2026-11-01'),7);});
+
+test('stalled loss catalog reads time out and the next read can retry',async()=>{
+ let resolveSlow,calls=0;
+ const load=createLossLoader(()=>readLossWithTimeout(()=>calls++?Promise.resolve('fresh'):new Promise(resolve=>{resolveSlow=resolve;}),10));
+ await assert.rejects(load('2026-11-14'),/讀取逾時/);
+ assert.equal(await load('2026-11-14'),'fresh');
+ resolveSlow('stale');
+});

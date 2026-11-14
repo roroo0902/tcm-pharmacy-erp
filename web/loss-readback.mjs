@@ -13,3 +13,10 @@ export function lossCalculation(value,row){
 
 // Rapid supplier switches share one in-flight read of the same complete daily catalog.
 export function createLossLoader(read){const pending=new Map();return date=>{if(!pending.has(date)){const p=Promise.resolve().then(()=>read(date)).finally(()=>pending.delete(date));pending.set(date,p);}return pending.get(date);};}
+
+// Bound the wait so a stalled cloud read cannot leave the loading dialog open.
+export function readLossWithTimeout(read,timeoutMs=60000){
+ let timer;
+ const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('讀取逾時')),timeoutMs);});
+ return Promise.race([Promise.resolve().then(read),timeout]).finally(()=>clearTimeout(timer));
+}

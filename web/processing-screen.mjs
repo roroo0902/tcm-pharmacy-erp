@@ -22,19 +22,27 @@ const css=`
 #erp-processing .save-steps{gap:6px;margin:18px 0}#erp-processing .save-steps li{font-size:12px}#erp-processing .save-party{height:144px;margin-bottom:12px}#erp-processing .save-quill{width:160px;height:144px}#erp-processing p{font-size:14px}}
 @media(prefers-reduced-motion:reduce){#erp-processing *{animation:none!important}}
 `;
-export function beginProcessing({reading=false}={}){
+export function beginProcessing({reading=false,catalogMessage=''}={}){
  if(active)throw Error('上一筆仍在入帳，請稍候');
  // Non-DOM callers can exercise the transaction logic independently.
  if(!globalThis.document?.createElement)return {readback(){},close(){}};
  const doc=document,win=window,previous=doc.activeElement;
  if(!doc.getElementById('erp-processing-style')){const style=doc.createElement('style');style.id='erp-processing-style';style.textContent=css;doc.head.append(style);}
  const dialog=doc.createElement('dialog');dialog.id='erp-processing';dialog.dataset.stage='commit';dialog.setAttribute('aria-labelledby','save-heading');dialog.setAttribute('aria-describedby','save-warning');dialog.setAttribute('aria-busy','true');
- dialog.innerHTML=`<section class="save-frame"><div class="save-banner">藥庫存檔中</div><div class="save-party" aria-hidden="true"><img class="save-quill" src="./web/assets/magic-quill.svg" width="160" height="144" alt=""></div><h2 id="save-heading">正在入帳與讀回核對…</h2><p>系統正在儲存資料，並確認試算表中的數量。</p><div class="save-warning" id="save-warning">◆ 請勿關閉頁面、重新整理或重複送出</div><ol class="save-steps"><li class="done"><span class="step-symbol">✓</span>送出資料</li><li class="step-write"><span class="step-symbol">▤</span>寫入試算表</li><li class="step-read"><span class="step-symbol">◇</span>讀回核對</li></ol><div class="save-dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="save-detail" role="status" aria-live="polite">正在等待 Google 完成寫入與核對</p><p class="save-footer">核對完成後，將自動顯示結果</p></section>`;
+ dialog.innerHTML=`<section class="save-frame"><div class="save-banner">藥庫存檔中</div><div class="save-party" aria-hidden="true"><img class="save-quill" src="./web/assets/${catalogMessage?'catalog-magnifier.svg':'magic-quill.svg'}" width="160" height="144" alt=""></div><h2 id="save-heading">正在入帳與讀回核對…</h2><p>系統正在儲存資料，並確認試算表中的數量。</p><div class="save-warning" id="save-warning">◆ 請勿關閉頁面、重新整理或重複送出</div><ol class="save-steps"><li class="done"><span class="step-symbol">✓</span>送出資料</li><li class="step-write"><span class="step-symbol">▤</span>寫入試算表</li><li class="step-read"><span class="step-symbol">◇</span>讀回核對</li></ol><div class="save-dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="save-detail" role="status" aria-live="polite">正在等待 Google 完成寫入與核對</p><p class="save-footer">核對完成後，將自動顯示結果</p></section>`;
  if(reading){dialog.dataset.stage='reading';dialog.querySelector('.save-banner').textContent='雲端資料核對中';dialog.querySelector('#save-heading').textContent='正在讀取最新雲端資料…';dialog.querySelector('.save-frame > p').textContent='請稍候，完成後會自動顯示下一步。';dialog.querySelector('.save-steps').hidden=true;dialog.querySelector('.save-detail').textContent='正在取得最新資料，尚未入帳';}
+ if(catalogMessage){
+  dialog.querySelector('.save-banner').textContent='每日耗損資料讀取中';
+  dialog.querySelector('#save-heading').textContent=catalogMessage;
+  dialog.querySelector('.save-frame > p').textContent='讀取完成後，視窗會自動關閉。';
+  dialog.querySelector('#save-warning').textContent='已填數量會保留';
+  dialog.querySelector('.save-detail').textContent='正在讀取雲端資料';
+  dialog.querySelector('.save-footer').hidden=true;
+ }
  const scrollStyle=doc.body.style,oldOverflow=scrollStyle?.overflow;if(scrollStyle)scrollStyle.overflow='hidden';
  const beforeUnload=e=>{e.preventDefault();e.returnValue='';};dialog.addEventListener('cancel',e=>e.preventDefault());doc.body.append(dialog);
  try{dialog.showModal();}catch(e){dialog.remove();if(scrollStyle)scrollStyle.overflow=oldOverflow;throw e;}
- active=true;win.addEventListener('beforeunload',beforeUnload);
- const timer=setTimeout(()=>{dialog.querySelector('.save-detail').textContent=reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
+ active=true;if(!catalogMessage)win.addEventListener('beforeunload',beforeUnload);
+ const timer=setTimeout(()=>{dialog.querySelector('.save-detail').textContent=catalogMessage?'Google 回應較慢，請稍候。':reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
  let closed=false;return {readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent='正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);dialog.close();dialog.remove();if(scrollStyle)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus();}};
 }

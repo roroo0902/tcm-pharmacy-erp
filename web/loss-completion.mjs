@@ -1,4 +1,4 @@
-import {runDirect} from './direct-sync.mjs';
+import {runDirect} from './direct-sync.mjs?v=compact20261030';
 export const lossCompletionMarkup='<div class="loss-completion"><button type="button" class="secondary" id="loss-complete">完成所選日期登錄</button><span id="loss-completion-state" role="status">完成前請確認未填品項代表當日零耗損。</span></div>';
 export function mountLossCompletion(root,{context,ask,esc}){
  let disposed=false,ticket=0,busy=false;

@@ -1,4 +1,4 @@
-import {runDirect} from './direct-sync.mjs';
+import {runDirect} from './direct-sync.mjs?v=compact20261030';
 import {parseSheet} from './sheets-data.mjs';
 
 // Registration, receipt, order and daily loss screens use the server's enabled supplier registry.

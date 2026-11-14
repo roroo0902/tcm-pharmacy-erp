@@ -5,7 +5,7 @@ import {operationResult} from './operation-result.mjs';
 import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
-import {createSupplierLoader,supplierSelection} from './supplier-catalog.mjs';
+import {createSupplierLoader,supplierSelection} from './supplier-catalog.mjs?v=googlesync20261114';
 import {priceCents,money,pricingTotal} from './receipt-pricing.mjs?v=compact20261030';
 import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
 import {directEnabled,directReview,directLog} from './direct-sync.mjs?v=compact20261030';

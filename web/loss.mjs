@@ -48,7 +48,18 @@ export function mountLoss({esc,fmt,ask,message}){
  const checkPending=createLossResultCheck({readRecord:readResult,writeRecord:record=>localStorage.setItem(RESULT_KEY,JSON.stringify(record)),readCloud:draft=>runDirect('readLossCatalog',{date:draft.date}),begin:()=>beginProcessing({reading:true}),blocked:isProcessing,disposed:()=>disposed,report:showLossCheckResult,changed:()=>{reuseResultId='';showPending();}});
  function showPending(){if(disposed)return;pending=readResult();$('#loss-pending').innerHTML=operationResult(pending,'loss',localStorage.getItem(HIDDEN_RESULT));
  if($('#loss-hide'))$('#loss-hide').onclick=()=>{localStorage.setItem(HIDDEN_RESULT,pending.id);showPending();};
- if($('#loss-edit'))$('#loss-edit').onclick=async()=>{const record=pending;date=record.draft.date;$('#loss-date').value=date;await load();if(disposed||loadFailed)return;try{const selectedRows=record.draft.lines.map(line=>{const matches=rows().filter(r=>r.name===line.sheet&&r.code===line.code&&r.drug===line.name);if(matches.length!==1)throw Error('品項已變更，請重新核對');return {row:matches[0],line};});quantities.clear();for(const {row,line} of selectedRows)quantities.set(row.id,String(line.total));$('#loss-actor').value=record.draft.actor;reuseResultId=record.id;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}};
+ if($('#loss-edit'))$('#loss-edit').onclick=()=>{
+  if(isProcessing()||loading)return;
+  const record=readResult(),original=JSON.stringify(record);
+  if(!record||record.verified)return;
+  ask("<h3>修改尚未確認累計</h3><p>載入後，表單會帶回上次未確認入帳的日期、品項、經手人和耗損數量，並取代目前填寫的數量。</p><p>請填當天總共耗損幾瓶。系統會用「修改後的當日累計 − 目前已入帳耗損」重算本次差額。例如已入帳 3 瓶，改填 5 瓶，確認入帳後會扣 2 瓶。</p><p>修改後請先預覽差額，按「確認入帳」才會更新庫存。</p>",async()=>{
+   if(disposed||isProcessing()||loading)return;
+   if(JSON.stringify(readResult())!==original){status('待登錄內容已變更，請重新核對');return;}
+   date=record.draft.date;$('#loss-date').value=date;await load();if(disposed||loadFailed||date!==record.draft.date)return;
+   if(JSON.stringify(readResult())!==original){status('待登錄內容已變更，請重新核對');return;}
+   try{const selectedRows=record.draft.lines.map(line=>{const matches=rows().filter(r=>r.name===line.sheet&&r.code===line.code&&r.drug===line.name);if(matches.length!==1)throw Error('品項已變更，請重新核對');return {row:matches[0],line};});quantities.clear();for(const {row,line} of selectedRows)quantities.set(row.id,String(line.total));$('#loss-actor').value=record.draft.actor;reuseResultId=record.id;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}
+  },'載入並修改');
+ };
  if($('#loss-cancel'))$('#loss-cancel').onclick=async()=>{
   if(isProcessing()||loading)return;const record=readResult(),original=JSON.stringify(record);if(!record||record.verified)return;
   let screen;try{screen=beginProcessing({reading:true});const data=await runDirect('readLossCatalog',{date:record.draft.date});const lines=lossCancellationSummary(record.draft,data);if(disposed||JSON.stringify(readResult())!==original)return;

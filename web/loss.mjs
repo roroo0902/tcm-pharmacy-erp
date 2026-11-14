@@ -1,10 +1,11 @@
+import {createLossResultCheck,showLossCheckResult} from './loss-result-check.mjs';
 import {alignOrderWord} from './order-word-axis.mjs';
 import {isProcessing,beginProcessing} from './processing-screen.mjs';
 import {lossCancellationSummary} from './loss-cancel.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
 import {lossCompletionMarkup,mountLossCompletion} from './loss-completion.mjs';
 import {lossLayout} from './loss-layout.mjs';
-import {operationResult,checkLossResult} from './operation-result.mjs';
+import {operationResult} from './operation-result.mjs';
 import {verifiedLossCatalog,lossCalculation,createLossLoader} from './loss-readback.mjs';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {supplierSelection} from './supplier-catalog.mjs';
@@ -42,6 +43,7 @@ export function mountLoss({esc,fmt,ask,message}){
  const prior=readResult();if(prior&&!prior.verified&&reuseResultId!==prior.id)throw Error('上一筆耗損尚未確認，請先查詢同步結果或重新確認這筆操作。');
  const record={id:reuseResultId||'LOSS-'+crypto.randomUUID(),draft,verified:false};localStorage.setItem(RESULT_KEY,JSON.stringify(record));showPending();sendLoss(record);
  }catch(e){message(e.message,true);}};
+ const checkPending=createLossResultCheck({readRecord:readResult,writeRecord:record=>localStorage.setItem(RESULT_KEY,JSON.stringify(record)),readCloud:draft=>runDirect('readLossCatalog',{date:draft.date}),begin:()=>beginProcessing({reading:true}),blocked:isProcessing,disposed:()=>disposed,report:showLossCheckResult,changed:()=>{reuseResultId='';showPending();}});
  function showPending(){if(disposed)return;pending=readResult();$('#loss-pending').innerHTML=operationResult(pending,'loss',localStorage.getItem(HIDDEN_RESULT));
  if($('#loss-hide'))$('#loss-hide').onclick=()=>{localStorage.setItem(HIDDEN_RESULT,pending.id);showPending();};
  if($('#loss-edit'))$('#loss-edit').onclick=async()=>{const record=pending;date=record.draft.date;$('#loss-date').value=date;await load();if(disposed||loadFailed)return;try{const selectedRows=record.draft.lines.map(line=>{const matches=rows().filter(r=>r.name===line.sheet&&r.code===line.code&&r.drug===line.name);if(matches.length!==1)throw Error('品項已變更，請重新核對');return {row:matches[0],line};});quantities.clear();for(const {row,line} of selectedRows)quantities.set(row.id,String(line.total));$('#loss-actor').value=record.draft.actor;reuseResultId=record.id;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}};
@@ -58,7 +60,7 @@ export function mountLoss({esc,fmt,ask,message}){
   }catch(e){if(!disposed)status('尚未取消：'+e.message);}finally{screen?.close();}
  };
  if($('#loss-resume'))$('#loss-resume').onclick=()=>sendLoss(pending);
- if($('#loss-check'))$('#loss-check').onclick=async()=>{const record=pending;try{const data=await runDirect('readLossCatalog',{date:record.draft.date});checkLossResult(record.draft,data);if(disposed)return;if(readResult()?.id===record.id)localStorage.setItem(RESULT_KEY,JSON.stringify({...record,verified:true}));reuseResultId='';showPending();status('工作表當日累計已核對一致；未送出的數量仍保留。');}catch(e){if(disposed)return;if(readResult()?.id===record.id)localStorage.setItem(RESULT_KEY,JSON.stringify({...record,verified:false}));showPending();status(e.message);}};
+ if($('#loss-check'))$('#loss-check').onclick=checkPending;
  }
  function sendLoss(record){const draft=record.draft;
  if(directEnabled())return directReview(draft,ask,async()=>{if(readResult()?.id===record.id)localStorage.setItem(RESULT_KEY,JSON.stringify({...record,verified:true}));if(disposed)return;reuseResultId='';quantities.clear();cache.clear();showPending();await load();},text=>{if(!disposed)message(text);});

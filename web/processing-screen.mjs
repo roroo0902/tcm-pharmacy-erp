@@ -6,7 +6,7 @@ const css=`
 #erp-processing .save-frame{margin:10px;padding:30px 30px 24px;background:#fffbee;border:5px solid #203b55;outline:3px solid #d6b568;box-shadow:0 0 0 7px #203b55,inset 0 0 0 2px #e6d4a4;text-align:center}
 #erp-processing .save-banner{display:inline-block;margin:-14px auto 14px;padding:8px 32px;background:#203b55;border:2px solid #d6b568;box-shadow:3px 3px 0 #102339;color:#f4d996;font-size:22px;font-weight:700;letter-spacing:4px}
 #erp-processing .save-party{height:150px;display:flex;align-items:end;justify-content:center;gap:15px;margin:4px 0 18px}
-#erp-processing .save-quill{width:160px;height:144px;object-fit:contain;image-rendering:pixelated}
+#erp-processing .save-quill{width:160px;height:144px;object-fit:contain;image-rendering:crisp-edges;image-rendering:pixelated}
 #erp-processing h2{font-size:clamp(23px,3.2vw,34px);color:#172c48;letter-spacing:1px;margin:0 0 12px;border:0;padding:0;font-family:Georgia,"PMingLiU",serif}#erp-processing h2::before{display:none}
 #erp-processing p{font-size:15px;line-height:1.8;margin:10px 0;color:#40576c}
 #erp-processing .save-warning{margin:22px 0;padding:14px 16px;background:#fff0bb;border:2px solid #b28c42;box-shadow:3px 3px 0 #d8c58e;color:#5b3713;font-size:18px;font-weight:700;line-height:1.6}
@@ -19,7 +19,7 @@ const css=`
 #erp-processing .save-footer{font-size:14px;margin-bottom:0}#erp-processing .save-detail{font-size:13px;overflow-wrap:anywhere}
 @keyframes save-bob{50%{transform:translateY(-5px)}}@keyframes save-pulse{50%{opacity:.25}}
 @media(max-width:600px){#erp-processing .save-frame{padding:22px 16px 20px}#erp-processing .save-banner{font-size:19px;padding:7px 20px}#erp-processing .save-warning{font-size:16px;padding:12px 10px;margin:18px 0}#erp-processing .save-steps[hidden]{display:none}
-#erp-processing .save-steps{gap:6px;margin:18px 0}#erp-processing .save-steps li{font-size:12px}#erp-processing .save-party{height:128px;margin-bottom:12px}#erp-processing .save-quill{width:140px;height:126px}#erp-processing p{font-size:14px}}
+#erp-processing .save-steps{gap:6px;margin:18px 0}#erp-processing .save-steps li{font-size:12px}#erp-processing .save-party{height:144px;margin-bottom:12px}#erp-processing .save-quill{width:160px;height:144px}#erp-processing p{font-size:14px}}
 @media(prefers-reduced-motion:reduce){#erp-processing *{animation:none!important}}
 `;
 export function beginProcessing({reading=false}={}){

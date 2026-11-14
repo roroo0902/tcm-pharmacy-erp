@@ -22,7 +22,7 @@ export function checkLossResult(draft,data){
  for(const line of draft.lines){
   const matches=data.loss.filter(x=>x.sheet===line.sheet&&x.code===line.code&&x.name===line.name);
   if(matches.length!==1||matches[0].error||!Number.isInteger(matches[0].posted))throw Error(line.name+'：目前無法核對已入帳累計，請重新讀取工作表');
-  if(matches[0].posted!==line.total)throw Error(line.name+'：工作表累計 '+matches[0].posted+' 瓶，這筆填寫 '+line.total+' 瓶；尚未一致，請核對最新數字後再決定是否重試');
+  if(matches[0].posted!==line.total)throw Object.assign(Error(line.name+'：工作表累計 '+matches[0].posted+' 瓶，這筆填寫 '+line.total+' 瓶；尚未一致，請核對最新數字後再決定是否重試'),{code:'LOSS_NOT_SYNCED'});
  }
  return true;
 }

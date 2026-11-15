@@ -21,15 +21,15 @@ test('daily loss catalog shows the magnifier and restores the page when the read
  };
  globalThis.window={addEventListener:event=>events.add(event),removeEventListener:event=>events.delete(event)};
  const message='正在讀取共用廠商品項與當日累計…';
- for(const [receiptGuild,receiptCompact] of [[false,false],[true,false],[false,true]]){
- const screen=beginProcessing({reading:true,catalogMessage:message,receiptGuild,receiptCompact});
+ for(const [receiptGuild,receiptCompact,compact] of [[false,false,false],[true,false,false],[false,true,false],[false,false,true]]){
+ const screen=beginProcessing({reading:true,catalogMessage:message,receiptGuild,receiptCompact,compact});
  try{
   assert.equal(dialog.open,true);
-  assert.equal(dialog.dataset.compact,receiptCompact?'true':undefined);
+  assert.equal(dialog.dataset.compact,(receiptCompact||compact)?'true':undefined);
   assert.ok(dialog.innerHTML.includes(receiptGuild?'herbal-trade.png':'catalog-magnifier.svg'));
   assert.equal(fields.get('.save-banner').textContent,receiptGuild?'補給資料讀取中':'每日耗損資料讀取中');
-  assert.equal(fields.get('#save-warning').textContent,'已填數量會保留');
-  assert.equal(fields.get('#save-heading').textContent,message);
+  assert.equal(fields.get('#save-warning').textContent,compact?'已填數量會保留，不會扣除庫存。':'已填數量會保留');
+  assert.equal(fields.get('#save-heading').textContent,compact?'讀取中…':message);
   assert.equal(fields.get('.save-steps').hidden,true);
   assert.equal(events.has('beforeunload'),false);
  }finally{screen.close();}

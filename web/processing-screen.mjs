@@ -60,7 +60,7 @@ const css=`
 #erp-processing .save-steps{gap:6px;margin:18px 0}#erp-processing .save-steps li{font-size:12px}#erp-processing .save-party{height:144px;margin-bottom:12px}#erp-processing .save-quill{width:160px;height:144px}#erp-processing p{font-size:14px}}
 @media(prefers-reduced-motion:reduce){#erp-processing *{animation:none!important}}
 `;
-export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false}={}){
+export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false}={}){
  if(active)throw Error('上一筆仍在入帳，請稍候');
  // Non-DOM callers can exercise the transaction logic independently.
  if(!globalThis.document?.createElement)return {readback(){},close(){}};
@@ -72,12 +72,18 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
  if(catalogMessage){
   dialog.querySelector('.save-banner').textContent=receiptGuild?'補給資料讀取中':'每日耗損資料讀取中';
   if(receiptGuild)dialog.dataset.guild='true';
-  if(receiptCompact)dialog.dataset.compact='true';
+  if(receiptCompact||compact)dialog.dataset.compact='true';
   dialog.querySelector('#save-heading').textContent=catalogMessage;
   dialog.querySelector('.save-frame > p').textContent='讀取完成後，視窗會自動關閉。';
   dialog.querySelector('#save-warning').textContent='已填數量會保留';
   dialog.querySelector('.save-detail').textContent=(receiptGuild||receiptCompact)?'正在同步最新庫存與單價':'正在讀取雲端資料';
   dialog.querySelector('.save-footer').hidden=true;
+  if(compact){
+   dialog.querySelector('#save-heading').textContent='讀取中…';
+   dialog.querySelector('.save-frame > p').textContent=catalogMessage;
+   dialog.querySelector('#save-warning').textContent='已填數量會保留，不會扣除庫存。';
+   dialog.querySelector('.save-detail').textContent='核對庫存與當日累計後，視窗會自動關閉。';
+  }
  }
  const scrollStyle=doc.body.style,oldOverflow=scrollStyle?.overflow;if(scrollStyle)scrollStyle.overflow='hidden';
  const beforeUnload=e=>{e.preventDefault();e.returnValue='';};dialog.addEventListener('cancel',e=>e.preventDefault());doc.body.append(dialog);

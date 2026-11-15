@@ -83,7 +83,7 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
    dialog.querySelector('#save-heading').textContent='讀取中…';
    dialog.querySelector('.save-frame > p').textContent=catalogMessage;
    dialog.querySelector('#save-warning').textContent='已填數量會保留，不會扣除庫存。';
-   dialog.querySelector('.save-detail').textContent='核對庫存與當日累計後，視窗會自動關閉。';
+   dialog.querySelector('.save-detail').textContent='讀取完成後，視窗會自動關閉。';
   }
  }
  const scrollStyle=doc.body.style,oldOverflow=scrollStyle?.overflow;if(scrollStyle)scrollStyle.overflow='hidden';

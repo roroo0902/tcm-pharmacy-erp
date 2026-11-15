@@ -1,3 +1,4 @@
+import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
 import {supplyLayout} from './supply-layout.mjs';
 import {protectDraft} from './page-safety.mjs';
@@ -69,11 +70,14 @@ export function mountReceiptGrid({esc,fmt,ask}){
   c.querySelectorAll('[data-after]').forEach(el=>{const v=quantities.get(el.dataset.after),r=rows.find(x=>receiptKey(x)===el.dataset.after),n=Number(v);el.textContent=v==null||v===''?'—':!Number.isInteger(n)||n<1||n>1000000?'數量無效':!Number.isInteger(r?.bottles)||r.bottles<0?'待核對':fmt(r.bottles+n)+' 瓶';});
  }
  const refreshStatus=createRefreshStatus($('#receipt-refresh'));
- async function load(syncPrices=false){
+ let catalogScreen;
+ const closeCatalogScreen=()=>{catalogScreen?.close();catalogScreen=null;};
+ async function load(syncPrices=false,{showDialog=false}={}){
+  closeCatalogScreen();
   const run=++ticket;loading=true;refreshStatus.start();loadFailed=false;status('正在讀取 '+(brand+category||'共用廠商與品項')+'…');$('#receipt-submit').disabled=true;
-  try{const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){seedShortage('receive',rows,quantities,receiptKey);shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已保留數量；單價依原表 E 欄帶入，手動修改以欄位標示為準`);}
+  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:true,catalogMessage:"正在讀取共用廠商與品項…"});const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){seedShortage('receive',rows,quantities,receiptKey);shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已保留數量；單價依原表 E 欄帶入，手動修改以欄位標示為準`);}
   catch(e){if(alive&&run===ticket){loadFailed=true;status(e.message+'；已填數量仍保留，請重新讀取工作表重試');}}
-  finally{if(alive&&run===ticket){loading=false;refreshStatus.finish(!loadFailed);summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
+  finally{if(alive&&run===ticket){closeCatalogScreen();loading=false;refreshStatus.finish(!loadFailed);summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
  }
  function showPending(){
   try{pending=JSON.parse(localStorage.getItem(KEY)||'null');}catch{pending=null;}
@@ -88,12 +92,12 @@ export function mountReceiptGrid({esc,fmt,ask}){
   if(directEnabled())return directReview(d,ask,async(result)=>{clearShortage('receive');localStorage.setItem(KEY,JSON.stringify({...d,verified:true,receiptEvent:{draft:d,lines:result.lines||[],time:result.time}}));reuseId='';if(alive){quantities.clear();prices.clear();retainedNote='';showPending();await load();}},status);
   const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(d);form.append(input);document.body.append(form);form.submit();form.remove();status('已開啟 Google 核對頁，請以同一交易核對結果。');
  }
- const selected=()=>{$('#receipt-search').value='';draw();load();};
+ const selected=()=>{$('#receipt-search').value='';draw();load(false,{showDialog:true});};
  $('#receipt-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selected();}};
  $('#receipt-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selected();}};
- $('#receipt-search').oninput=draw;$('#receipt-refresh').onclick=()=>{if(!loading)load(true);};
+ $('#receipt-search').oninput=draw;$('#receipt-refresh').onclick=()=>{if(!loading)load(true,{showDialog:true});};
  $('#receipt-clear').onclick=()=>{quantities.clear();prices.clear();draw();status('已清除本次輸入，未修改工作表。');};
  c.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{direction=sort===b.dataset.sort&&direction==='asc'?'desc':'asc';sort=b.dataset.sort;draw();});
  $('#receipt-form').onsubmit=e=>{e.preventDefault();if(loading||loadFailed)return;try{const prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&reuseId!==prior.id)throw Error('上一筆尚未核對，請先查詢同步結果或按「修改尚未入帳內容」，避免重複入帳');const lines=receiptLines(rows,quantities,prices),priced=lines.some(l=>l.unitPriceCents!==undefined);const d=cloudDraft({kind:'tcm-cloud',version:priced?2:1,...(priced?{currency:'TWD'}:{}),id:reuseId||'ERP-'+crypto.randomUUID(),action:'進貨',date:$('#receipt-date').value,actor:$('#receipt-actor').value,note:retainedNote,lines,shortageLinks:shortageLinks('receive',lines)});localStorage.setItem(KEY,JSON.stringify(d));showPending();send(d);}catch(e){status(e.message);}};
- const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);sync();return protectDraft(()=>{alive=false;stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0);
+ const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);load(false,{showDialog:true});return protectDraft(()=>{alive=false;closeCatalogScreen();stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0);
 }

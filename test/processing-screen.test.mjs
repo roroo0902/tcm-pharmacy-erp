@@ -21,10 +21,13 @@ test('daily loss catalog shows the magnifier and restores the page when the read
  };
  globalThis.window={addEventListener:event=>events.add(event),removeEventListener:event=>events.delete(event)};
  const message='正在讀取共用廠商品項與當日累計…';
- const screen=beginProcessing({reading:true,catalogMessage:message});
+ for(const receiptGuild of [false,true]){
+ const screen=beginProcessing({reading:true,catalogMessage:message,receiptGuild});
  try{
   assert.equal(dialog.open,true);
-  assert.match(dialog.innerHTML,/catalog-magnifier\.svg/);
+  assert.ok(dialog.innerHTML.includes(receiptGuild?'herbal-guild.png':'catalog-magnifier.svg'));
+  assert.equal(fields.get('.save-banner').textContent,receiptGuild?'中藥貿易公會':'每日耗損資料讀取中');
+  assert.equal(fields.get('#save-warning').textContent,'已填數量會保留');
   assert.equal(fields.get('#save-heading').textContent,message);
   assert.equal(fields.get('.save-steps').hidden,true);
   assert.equal(events.has('beforeunload'),false);
@@ -32,4 +35,5 @@ test('daily loss catalog shows the magnifier and restores the page when the read
  assert.equal(isProcessing(),false);
  assert.equal(dialog.removed,true);
  assert.equal(document.body.style.overflow,'auto');
+ }
 });

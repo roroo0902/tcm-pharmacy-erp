@@ -1,0 +1,20 @@
+dialog.rpg-dialog{box-sizing:border-box;background:#132b46!important;color:#fff4d0!important;border:4px solid #e6bf68!important;border-radius:0!important;box-shadow:0 0 0 3px #08182b,0 0 0 6px #b38b41,10px 12px 0 #06142699!important;padding:24px!important;width:min(760px,calc(100vw - 40px));max-width:calc(100vw - 40px);max-height:calc(100dvh - 48px);overflow:auto;font-family:"Noto Serif TC","PMingLiU",serif;line-height:1.7}
+dialog.rpg-dialog::backdrop{background:#061426ce;backdrop-filter:blur(3px)}
+dialog.rpg-dialog h2,dialog.rpg-dialog h3{color:#ffe39a!important;letter-spacing:2px}
+dialog.rpg-dialog p,dialog.rpg-dialog label,dialog.rpg-dialog .muted{color:#f1e4be!important}
+dialog.rpg-dialog button{font:inherit;color:#ffe39a!important;background:#203e5e!important;border:2px solid #d8b66b!important;border-radius:0!important;padding:10px 20px;min-height:44px;box-shadow:3px 3px 0 #08182b!important}
+dialog.rpg-dialog button:hover{background:#365b7c!important}
+dialog.rpg-dialog button:focus-visible{outline:3px solid #fff2b7;outline-offset:4px}
+dialog.rpg-dialog button:disabled{opacity:.5}
+dialog.rpg-dialog .actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end}
+.rpg-dialog-mascot{height:64px;display:flex;justify-content:center;align-items:center;position:relative;margin-bottom:12px}
+.rpg-dialog-mascot img{object-fit:contain;filter:drop-shadow(0 0 10px #72d9ff)}
+.rpg-dialog-mascot:before,.rpg-dialog-mascot:after{content:'✦';color:#ffe39a;margin:0 24px;animation:rpg-spark 1.6s ease-in-out infinite alternate}
+dialog.rpg-dialog .save-frame{background:#132b46!important;border-color:#d8b66b!important;color:#fff4d0!important;outline:none!important;box-shadow:none!important;margin:0;padding:16px}
+dialog.rpg-dialog .save-warning{background:#253e59!important;color:#ffe39a!important;border-color:#d8b66b!important}
+dialog.rpg-dialog table{color:#fff4d0;background:#1b3652}
+dialog.rpg-dialog td,dialog.rpg-dialog th{background:#1b3652!important;color:#fff4d0!important;border-color:#57708b}
+dialog.rpg-dialog .save-steps li{color:#fff4d0}
+@keyframes rpg-spark{to{opacity:.35;transform:scale(.7)}}
+@media(prefers-reduced-motion:reduce){.rpg-dialog-mascot:before,.rpg-dialog-mascot:after{animation:none}}
+@media(max-width:600px){dialog.rpg-dialog{padding:16px!important}dialog.rpg-dialog .actions button{flex:1}}

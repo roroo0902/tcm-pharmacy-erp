@@ -25,4 +25,11 @@ export function supplierSelection(sources,brand,category){
 }
 
 // Share only in-flight reads; a later refresh always reads Google again.
-export function createSupplierLoader(read=loadSupplierCatalog){let pending;return ()=>{if(!pending)pending=Promise.resolve().then(read).finally(()=>{pending=undefined;});return pending;};}
+export function createSupplierLoader(read=loadSupplierCatalog,timeoutMs=60000){let pending;return ()=>{
+ if(!pending){
+  let timer;
+  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('讀取逾時，已填數量仍保留，請重新讀取')),timeoutMs);});
+  pending=Promise.race([Promise.resolve().then(read),timeout]).finally(()=>{clearTimeout(timer);pending=undefined;});
+ }
+ return pending;
+};}

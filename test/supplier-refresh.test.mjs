@@ -4,6 +4,16 @@ import {createSupplierLoader} from '../web/supplier-catalog.mjs';
 import {reconcileOrderInputs} from '../web/order-refresh.mjs';
 import {orderKey,orderPrice,orderLines} from '../web/order-grid-data.mjs';
 import {receiptLines} from '../web/receive-grid-data.mjs';
+
+test('stalled catalog read times out, permits retry and ignores late response',async()=>{
+ let calls=0,late;
+ const load=createSupplierLoader(()=>++calls===1?new Promise(resolve=>{late=resolve;}):{fresh:2},10);
+ const first=load();assert.equal(load(),first);
+ await assert.rejects(first,/讀取逾時/);
+ assert.deepEqual(await load(),{fresh:2});
+ late({fresh:1});await Promise.resolve();
+ assert.deepEqual(await load(),{fresh:2});assert.equal(calls,3);
+});
 test('six category refresh shares one pending read, retries failures, and later reads fresh',async()=>{
  let calls=0,resolve;const load=createSupplierLoader(()=>{calls++;return new Promise(r=>resolve=r);});
  const reads=Array.from({length:6},()=>load());await Promise.resolve();assert.equal(calls,1);resolve({fresh:1});assert.deepEqual(await Promise.all(reads),Array(6).fill({fresh:1}));

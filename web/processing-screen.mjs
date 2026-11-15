@@ -46,7 +46,7 @@ const css=`
 #erp-processing[data-guild=true] .save-frame{background:linear-gradient(135deg,#fffbee,#f8edd5);border-color:#172c48;box-shadow:0 0 0 7px #172c48,inset 0 0 0 2px #e4ba58}
 #erp-processing[data-guild=true] .save-quill{image-rendering:pixelated}
 #erp-processing[data-guild=true] .save-dots i{width:12px;height:12px;border:1px solid #a87520;background:#e1ae3c;box-shadow:inset 1px 1px #ffe4a1}
-#erp-processing[data-compact=true]{width:min(400px,calc(100vw - 32px));overflow:visible}
+#erp-processing[data-compact=true]{width:min(520px,calc(100vw - 32px));overflow:visible}
 #erp-processing[data-compact=true]::backdrop{background:#132b464d;backdrop-filter:none}
 #erp-processing[data-compact=true] .save-frame{--paper-edge:polygon(0 8px,6px 8px,6px 3px,13px 3px,13px 0,24% 0,24% 2px,29% 2px,29% 0,73% 0,73% 2px,78% 2px,78% 0,calc(100% - 12px) 0,calc(100% - 12px) 3px,calc(100% - 5px) 3px,calc(100% - 5px) 8px,100% 8px,100% 44%,calc(100% - 2px) 44%,calc(100% - 2px) 50%,100% 50%,100% calc(100% - 9px),calc(100% - 5px) calc(100% - 9px),calc(100% - 5px) calc(100% - 3px),calc(100% - 13px) calc(100% - 3px),calc(100% - 13px) 100%,74% 100%,74% calc(100% - 2px),69% calc(100% - 2px),69% 100%,28% 100%,28% calc(100% - 2px),22% calc(100% - 2px),22% 100%,12px 100%,12px calc(100% - 3px),5px calc(100% - 3px),5px calc(100% - 9px),0 calc(100% - 9px),0 60%,2px 60%,2px 54%,0 54%);position:relative;isolation:isolate;margin:6px;padding:26px 24px;background:none;border:0;outline:0;box-shadow:none;filter:drop-shadow(3px 4px 2px #49301e44)}
 #erp-processing[data-compact=true] .save-frame::before{content:"";position:absolute;inset:0;z-index:-2;pointer-events:none;background:#49301e;clip-path:var(--paper-edge)}
@@ -55,7 +55,14 @@ const css=`
 #erp-processing[data-compact=true] h2{font-size:20px;line-height:1.5;color:#49301e;overflow-wrap:anywhere}
 #erp-processing[data-compact=true] p{font-size:13px;margin:8px 0;color:#68472b}
 #erp-processing[data-compact=true] .save-warning{font-size:14px;padding:0;margin:10px 0;border:0;box-shadow:none;background:none;color:#68472b}
-#erp-processing[data-compact=true] .save-dots{margin:12px auto 6px}
+#erp-processing .save-companion{display:none}
+#erp-processing[data-compact=true] .save-frame{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:18px;text-align:left;align-items:center}
+#erp-processing[data-compact=true] .save-frame > *{grid-column:2;min-width:0}
+#erp-processing[data-compact=true] .save-frame > .save-companion{display:block;grid-column:1;grid-row:1 / span 6;width:96px;height:100px;object-fit:contain;align-self:center}
+#erp-processing[data-compact=true] h2{display:flex;align-items:center;gap:10px;margin:0 0 8px}
+#erp-processing[data-compact=true] h2::before{content:"";display:block;position:static;flex:none;width:28px;height:38px;background:url('./web/assets/potion-red.svg') center/contain no-repeat}
+#erp-processing[data-compact=true] .save-dots{margin:12px 0 6px;justify-content:flex-start}
+@media(max-width:420px){#erp-processing[data-compact=true] .save-frame{grid-template-columns:64px minmax(0,1fr);gap:0 12px;padding:24px 18px}#erp-processing[data-compact=true] .save-frame > .save-companion{width:64px;height:76px}#erp-processing[data-compact=true] h2{font-size:20px;gap:6px}#erp-processing[data-compact=true] h2::before{width:24px;height:32px}}
 @keyframes save-bob{50%{transform:translateY(-5px)}}@keyframes save-pulse{50%{opacity:.25}}
 @media(max-width:600px){#erp-processing .save-frame{padding:22px 16px 20px}#erp-processing .save-banner{font-size:19px;padding:7px 20px}#erp-processing .save-warning{font-size:16px;padding:12px 10px;margin:18px 0}#erp-processing .save-steps[hidden]{display:none}
 #erp-processing .save-steps{gap:6px;margin:18px 0}#erp-processing .save-steps li{font-size:12px}#erp-processing .save-party{height:144px;margin-bottom:12px}#erp-processing .save-quill{width:160px;height:144px}#erp-processing p{font-size:14px}}
@@ -68,7 +75,7 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
  const doc=document,win=window,previous=doc.activeElement;
  if(!doc.getElementById('erp-processing-style')){const style=doc.createElement('style');style.id='erp-processing-style';style.textContent=css;doc.head.append(style);}
  const dialog=doc.createElement('dialog');dialog.id='erp-processing';dialog.dataset.stage='commit';dialog.setAttribute('aria-labelledby','save-heading');dialog.setAttribute('aria-describedby','save-warning');dialog.setAttribute('aria-busy','true');
- dialog.innerHTML=`<section class="save-frame"><div class="save-banner">藥庫存檔中</div><div class="save-party" aria-hidden="true"><img class="save-quill" src="./web/assets/${receiptGuild?'herbal-trade.png':catalogMessage?'catalog-magnifier.svg':'magic-quill.svg'}" width="160" height="144" alt=""></div><h2 id="save-heading">正在入帳與讀回核對…</h2><p>系統正在儲存資料，並確認試算表中的數量。</p><div class="save-warning" id="save-warning">◆ 請勿關閉頁面、重新整理或重複送出</div><ol class="save-steps"><li class="done">${sendIcon}送出資料</li><li class="step-write">${writeIcon}寫入試算表</li><li class="step-read">${verifyIcon}讀回核對</li></ol><div class="save-dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="save-detail" role="status" aria-live="polite">正在等待 Google 完成寫入與核對</p><p class="save-footer">核對完成後，將自動顯示結果</p></section>`;
+ dialog.innerHTML=`<section class="save-frame"><img class="save-companion" src="./web/assets/slime-king.svg" width="96" height="100" alt="" aria-hidden="true"><div class="save-banner">藥庫存檔中</div><div class="save-party" aria-hidden="true"><img class="save-quill" src="./web/assets/${receiptGuild?'herbal-trade.png':catalogMessage?'catalog-magnifier.svg':'magic-quill.svg'}" width="160" height="144" alt=""></div><h2 id="save-heading">正在入帳與讀回核對…</h2><p>系統正在儲存資料，並確認試算表中的數量。</p><div class="save-warning" id="save-warning">◆ 請勿關閉頁面、重新整理或重複送出</div><ol class="save-steps"><li class="done">${sendIcon}送出資料</li><li class="step-write">${writeIcon}寫入試算表</li><li class="step-read">${verifyIcon}讀回核對</li></ol><div class="save-dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="save-detail" role="status" aria-live="polite">正在等待 Google 完成寫入與核對</p><p class="save-footer">核對完成後，將自動顯示結果</p></section>`;
  if(reading){dialog.dataset.stage='reading';dialog.querySelector('.save-banner').textContent='雲端資料核對中';dialog.querySelector('#save-heading').textContent='正在讀取最新雲端資料…';dialog.querySelector('.save-frame > p').textContent='請稍候，完成後會自動顯示下一步。';dialog.querySelector('.save-steps').hidden=true;dialog.querySelector('.save-detail').textContent='正在取得最新資料，尚未入帳';}
  if(catalogMessage){
   dialog.querySelector('.save-banner').textContent=receiptGuild?'補給資料讀取中':'每日耗損資料讀取中';
@@ -79,7 +86,7 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
   dialog.querySelector('#save-warning').textContent='已填數量會保留';
   dialog.querySelector('.save-detail').textContent=(receiptGuild||receiptCompact)?'正在同步最新庫存與單價':'正在讀取雲端資料';
   dialog.querySelector('.save-footer').hidden=true;
-  if(compact){
+  if(compact||receiptCompact){
    dialog.querySelector('#save-heading').textContent='讀取中…';
    dialog.querySelector('.save-frame > p').textContent=catalogMessage;
    dialog.querySelector('#save-warning').textContent='已填數量會保留，不會扣除庫存。';

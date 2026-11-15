@@ -28,8 +28,8 @@ test('daily loss catalog shows the magnifier and restores the page when the read
   assert.equal(dialog.dataset.compact,(receiptCompact||compact)?'true':undefined);
   assert.ok(dialog.innerHTML.includes(receiptGuild?'herbal-trade.png':'catalog-magnifier.svg'));
   assert.equal(fields.get('.save-banner').textContent,receiptGuild?'補給資料讀取中':'每日耗損資料讀取中');
-  assert.equal(fields.get('#save-warning').textContent,compact?'已填數量會保留，不會扣除庫存。':'已填數量會保留');
-  assert.equal(fields.get('#save-heading').textContent,compact?'讀取中…':message);
+  assert.equal(fields.get('#save-warning').textContent,(compact||receiptCompact)?'已填數量會保留，不會扣除庫存。':'已填數量會保留');
+  assert.equal(fields.get('#save-heading').textContent,(compact||receiptCompact)?'讀取中…':message);
   assert.equal(fields.get('.save-steps').hidden,true);
   assert.equal(events.has('beforeunload'),false);
  }finally{screen.close();}

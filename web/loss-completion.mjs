@@ -23,7 +23,7 @@ export function mountLossCompletion(root,{context,ask,esc}){
      if(!disposed)render(check);window.dispatchEvent(new Event('erp-synced'));
     }catch(e){if(!disposed)state.textContent=e.message;}
    },r.pendingCount?'確認正常品項完成':'確認完成登錄');
- }catch(e){if(!disposed)state.textContent=e.message;}finally{busy=false;if(!disposed)await refresh();}};
+ }catch(e){if(!disposed)state.textContent=e.message;}finally{busy=false;if(!disposed)button.disabled=false;}};
 
  return {refresh,dispose:()=>{disposed=true;ticket++;}};
 }

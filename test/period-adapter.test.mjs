@@ -251,3 +251,25 @@ test('generated period backend exactly matches the pure core and adapter sources
  test('planning projection uses ledger only and preserves source while enforcing range bounds',()=>{
  const h=harness(false),s=h.state(source.name);s.values[2][16]=999;vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8').replaceAll('\r\n','\n'),h.ctx);const r=h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:dates[2]});assert.deepEqual(Array.from(r.values[2].slice(13)),[3,5,2]);assert.equal(s.values[2][16],999);assert.equal(h.batches.length,0);assert.throws(()=>h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:'2026-11-04'}),/63/);
  });
+
+test('partial completion preserves eight unresolved rows and all stock/history, retries once, and invalidates on repair',()=>{
+ const h=harness(false), s=h.state(source.name);
+ for(let i=0;i<8;i++){const r=Array(17).fill('');r[3]='待核對'+i;r[6]=i;s.values.push(r);}
+ const inventory=copy(s.values),ledger=copy(h.state('每日耗損明細').values);
+ const day=h.day(dates[2]);assert.equal(day.pendingCount,8);assert.equal(day.eligibleCount,2);assert.equal(day.error,'');
+ assert.throws(()=>h.complete(dates[2]),/仍有 8 筆/);assert.equal(h.batches.length,0);
+ const input={...day,actor:'隔離測試員',confirmBlankZero:true,confirmPartial:true};
+ const result=h.ctx.periodComplete_(input);assert.equal(result.complete,false);assert.equal(result.partial,true);assert.equal(result.eligibleComplete,true);
+ assert.equal(h.day(dates[2]).status,'部分完成');assert.equal(h.day(dates[2]).pendingItems.length,8);
+ h.ctx.periodComplete_(input);assert.equal(h.batches.length,1);
+ const period=h.read({days:1,includeToday:true});assert.equal(period.rows[0].complete,true);assert.equal(period.rows[0].total,2);assert.equal(period.rows[2].complete,false);assert.equal(period.rows[2].total,null);assert.equal(period.completion[source.name][0].complete,false);
+ assert.deepEqual(s.values,inventory);assert.deepEqual(h.state('每日耗損明細').values,ledger);
+ s.values[4][1]='REPAIRED';assert.equal(h.day(dates[2]).eligibleComplete,false);assert.equal(h.day(dates[2]).pendingCount,7);
+ assert.throws(()=>h.ctx.periodComplete_(input),/資料已變更/);
+});
+test('partial completion cannot bypass valid-code ledger errors or complete zero eligible items',()=>{
+ const h=harness(false);h.state(source.name).values.push(['','','','待核對']);
+ h.state('每日耗損明細').values[3][7]='待核對';h.state('每日耗損明細').values[3][8]='歷史數量衝突';
+ assert.match(h.day(dates[2]).error,/歷史數量衝突/);assert.throws(()=>h.ctx.periodComplete_({...h.day(dates[2]),actor:'測試',confirmPartial:true,confirmBlankZero:true}),/待核對/);
+ h.state(source.name).values[2][1]='';h.state(source.name).values[3][1]='';assert.match(h.day(dates[2]).error,/沒有可完成/);assert.equal(h.batches.length,0);
+});

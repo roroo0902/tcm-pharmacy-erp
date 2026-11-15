@@ -7,10 +7,11 @@ function loss3Hash_(v){return Utilities.computeDigest(Utilities.DigestAlgorithm.
 function loss3Cell_(id,r,c,v){return {updateCells:{start:{sheetId:id,rowIndex:r,columnIndex:c},rows:[{values:[{userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v)}}]}],fields:'userEnteredValue'}};}
 function loss3Draft_(input){
  const d=typeof input==='string'?JSON.parse(input):input;
- if(!d||d.kind!=='tcm-loss-cumulative'||d.version!==3||!Array.isArray(d.lines)||!d.lines.length||d.lines.length>1000)throw Error('耗損清單格式不符或未填數量');
+ if(!d||d.kind!=='tcm-loss-cumulative'||d.version!==3||!Array.isArray(d.lines)||(!d.lines.length&&!d.completionSheets?.length)||d.lines.length>1000)throw Error('耗損清單格式不符或未填數量');
  d.date=loss3Date_(d.date);if(d.date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不能登錄未來日期');
  if(String(d.reason||'').length>500||String(d.actor||'').length>80)throw Error('經手人或原因過長');
  const names=loss3Names_();
+ if(d.completionSheets!==undefined){if(!Array.isArray(d.completionSheets)||!d.completionSheets.length||new Set(d.completionSheets).size!==d.completionSheets.length||d.completionSheets.some(n=>!names.includes(n))||d.confirmBlankZero!==true||!String(d.actor||'').trim()||d.lines.some(l=>!d.completionSheets.includes(l.sheet)))throw Error('請確認本次完成分類、經手人與未填正常品項為零耗損');}
  for(const l of d.lines){if(!names.includes(l.sheet)||typeof l.code!=='string'||!l.code.trim()||typeof l.name!=='string'||!l.name.trim())throw Error('品項資料不完整');LossCumulative.lossUnits(l.total);}
  return d;
 }
@@ -31,9 +32,10 @@ function loss3Read_(input){
   return {key,sheet:l.sheet,sheetId:sh.tab.getSheetId(),row:i,code:l.code.trim(),name:l.name.trim(),date:draft.date,before,total:l.total,stock:r[6],revision,reason:l.reason||draft.reason||''};
  });
  const plan=LossCumulative.planCumulative(rows,draft.reason);
- return {ss,log,ledger,draft,plan,token:loss3Hash_({draft,rows})};
+ const completion=draft.completionSheets?periodLossCompletion_(ss,ledger,draft,plan):null;
+ return {ss,log,ledger,draft,plan,completion,token:loss3Hash_({draft,rows,...(completion?{completion:completion.states.map(r=>[r.sheet,r.fingerprint])}:{})})};
 }
-function lossV3Preview(input){const s=loss3Read_(input);return {token:s.token,lines:s.plan,count:s.plan.filter(r=>r.delta!==0).length};}
+function lossV3Preview(input){const s=loss3Read_(input);return {token:s.token,lines:s.plan,count:s.plan.filter(r=>r.delta!==0).length,completion:s.completion?.states||[]};}
 function lossV3Commit(input,token){
  if(!token)throw Error('請先預覽');const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('另一筆耗損正在處理，請重新預覽');
  try{const s=loss3Read_(input);if(s.token!==token)throw Error('雲端資料已變動，請重新預覽後再確認');const changes=s.plan.filter(r=>r.delta!==0),requests=[],actor=loss3Actor_(),time=new Date().toISOString();
@@ -42,9 +44,12 @@ function lossV3Commit(input,token){
  requests.push({appendCells:{sheetId:id,rows:changes.map(r=>({values:[{userEnteredValue:{stringValue:loss3Hash_([r.key,r.revision+1])}},{userEnteredValue:{stringValue:JSON.stringify({...r,revision:r.revision+1,actor,operator:s.draft.actor||'',time})}},...[r.date,r.sheet,r.code,r.name,r.before,r.total,r.delta,r.stockAfter,r.reason,s.draft.actor||'',actor,time].map(v=>({userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v||'')}}))]})),fields:'userEnteredValue'}});
  requests.push(lossLedgerAppend_(s.ledger.sh,lossLedgerRows_(changes,s.draft.actor||actor,time)));
  if(typeof periodInvalidations_==='function')requests.push(...periodInvalidations_(s.ss,changes,s.draft.actor||actor,time));
- Sheets.Spreadsheets.batchUpdate({requests},LOSS3.inventory);}
+ }
+ // Completion and stock/ledger changes succeed or fail in the same Sheets batch.
+ if(s.completion)requests.push(...periodLossCompletionRequests_(s.completion,s.draft.actor,time));
+ if(requests.length)Sheets.Spreadsheets.batchUpdate({requests},LOSS3.inventory);
  let warning='';try{loss3RefreshPosted_(s.draft.date);}catch(e){warning='耗損表顯示尚未更新，請按「載入已入帳耗損」。';}
- return {count:changes.length,message:changes.length?'已完成 '+changes.length+' 項差額入帳。':'累計相同，沒有重複扣庫。',warning};
+ return {count:changes.length,message:(changes.length?'已完成 '+changes.length+' 項差額入帳。':'累計相同，沒有重複扣庫。')+(s.completion?'正常品項已一併完成登錄；待核對品項保留。':''),warning};
  }catch(e){throw Error(e.message+'；若連線中斷，請重新預覽核對，勿手動重扣。');}finally{lock.releaseLock();}
 }
 function loss3SourceDraft_(){const ss=SpreadsheetApp.openById(LOSS3.source),lines=[];let date;for(const name of loss3Names_()){const sh=ss.getSheetByName(name);if(!sh)continue;const v=sh.getDataRange().getValues();if(v[1][3]!=='當日累計耗損')throw Error(name+'：尚未完成V3欄位設定');for(let r=2;r<v.length;r++){if(v[r][3]==='')continue;const dt=loss3Date_(v[0][3]);if(loss3Date_(v[0][4])!==dt)throw Error(name+'：日期已切換，請先清除舊輸入並載入所選日期');if(date&&dt!==date)throw Error('本批各分頁日期必須一致');date=dt;lines.push({sheet:name,code:String(v[r][1]).trim(),name:String(v[r][2]).trim(),total:v[r][3],reason:String(v[r][6]||'')});}}return {kind:'tcm-loss-cumulative',version:3,date:date||Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'),lines};}

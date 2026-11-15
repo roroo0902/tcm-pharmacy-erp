@@ -19,6 +19,7 @@ export function operationResult(p,type,hiddenId=''){
 // Read-only reconciliation. Matching totals do not prove who posted an operation.
 export function checkLossResult(draft,data){
  if(data?.date!==draft.date||!Array.isArray(data.loss))throw Error('耗損日期核對失敗，請稍後重新查詢');
+ if(draft.completionSheets?.some(sheet=>data.completion?.filter(s=>s.sheet===sheet&&s.date===draft.date&&s.eligibleComplete&&!s.error).length!==1))throw Object.assign(Error('正常品項完成狀態尚未核對一致；請沿用原操作重新預覽，累計相同不會再次扣庫。'),{code:'LOSS_NOT_SYNCED'});
  for(const line of draft.lines){
   const matches=data.loss.filter(x=>x.sheet===line.sheet&&x.code===line.code&&x.name===line.name);
   if(matches.length!==1||matches[0].error||!Number.isInteger(matches[0].posted))throw Error(line.name+'：目前無法核對已入帳累計，請重新讀取工作表');

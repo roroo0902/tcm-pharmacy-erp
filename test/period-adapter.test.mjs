@@ -8,6 +8,31 @@ const dates = ['2026-11-01', '2026-11-02', '2026-11-03'];
 const source = {name: '驗收單方', brand: '驗收', category: '單方', gid: 101};
 const statusHeaders = ['日期', '廠商／類別', '登錄狀態', '經手人', '更新時間', '資料指紋'];
 const copy = value => structuredClone(value);
+const unifiedDraft=(lines=[])=>({kind:'tcm-loss-cumulative',version:3,date:dates[2],actor:'隔離測試員',reason:'QA unified',completionSheets:[source.name],confirmBlankZero:true,lines});
+test('unified completion commits stock, ledger and completion atomically; repeated preview never re-deducts',()=>{
+ const h=harness(false),d=unifiedDraft([{sheet:source.name,code:'QA1',name:'測試藥一',total:4}]);
+ const p=h.ctx.lossV3Preview(d);assert.equal(p.completion[0].blankZeroCount,1);
+ h.ctx.lossV3Commit(d,p.token);assert.equal(h.state(source.name).values[2][6],48);assert.equal(h.day(d.date).complete,true);assert.equal(h.batches.length,1);
+ assert.throws(()=>h.ctx.lossV3Commit(d,p.token),/資料已變動/);
+ const next=h.ctx.lossV3Preview(d);assert.equal(next.lines[0].delta,0);h.ctx.lossV3Commit(d,next.token);
+ assert.equal(h.state(source.name).values[2][6],48);assert.equal(h.batches.length,1);
+});
+test('unified empty input completes blanks, preserves existing totals and excludes missing identities',()=>{
+ const h=harness(false);h.state(source.name).values.push(['','','','待核對藥','','',8]);
+ const before=copy(h.state(source.name).values),d=unifiedDraft(),p=h.ctx.lossV3Preview(d);
+ assert.equal(p.completion[0].pendingCount,1);assert.equal(p.completion[0].blankZeroCount,1);assert.equal(p.completion[0].retainedCount,1);
+ h.ctx.lossV3Commit(d,p.token);assert.deepEqual(h.state(source.name).values,before);assert.equal(h.day(d.date).eligibleComplete,true);assert.equal(h.day(d.date).complete,false);
+ assert.equal(h.state('每日耗損明細').values.length,5);
+});
+test('completion fingerprint guards untouched-item changes between preview and commit',()=>{
+ const h=harness(false),d=unifiedDraft(),p=h.ctx.lossV3Preview(d);h.state(source.name).values[3][3]='改名';
+ assert.throws(()=>h.ctx.lossV3Commit(d,p.token),/資料已變動/);assert.equal(h.batches.length,0);
+});
+test('failed atomic batch changes neither stock nor completion; same preview can retry once',()=>{
+ const h=harness(false),d=unifiedDraft([{sheet:source.name,code:'QA1',name:'測試藥一',total:4}]),p=h.ctx.lossV3Preview(d);
+ h.setReject(true);assert.throws(()=>h.ctx.lossV3Commit(d,p.token),/atomic rejection/);assert.equal(h.state(source.name).values[2][6],50);assert.equal(h.day(d.date).complete,false);
+ h.setReject(false);h.ctx.lossV3Commit(d,p.token);assert.equal(h.state(source.name).values[2][6],48);assert.equal(h.day(d.date).complete,true);
+});
 function harness(legacy = true) {
   const headers = Array(17).fill(''), weekdays = Array(17).fill('');
   headers[1] = '編號'; headers[3] = '藥品名稱'; weekdays[6] = '未拆封';

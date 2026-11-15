@@ -26,7 +26,7 @@ export function createLossResultCheck({readRecord,writeRecord,readCloud,begin,bl
    }
    writeRecord({...record,verified});
    changed();
-   if(verified)outcome={state:'success',title:'耗損累計核對成功',detail:'雲端當日累計與這筆填寫內容一致。這代表目前累計相符，不代表這筆操作另行扣庫。未送出的數量仍保留。'};
+   if(verified)outcome={state:'success',title:'耗損累計核對成功',detail:'雲端當日累計與這筆填寫內容一致。'+(record.draft.completionSheets?'正常品項完成狀態也已讀回確認；待核對品項保留。':'')+'這代表目前累計相符，不代表這筆操作另行扣庫。未送出的數量仍保留。'};
   }catch(e){outcome={state:'error',title:'查詢失敗／尚無法核對',detail:e.message||'請稍後重新查詢。'};}
   finally{clearTimeout(timer);screen?.close();checking=false;}
   if(!disposed()&&outcome)report(outcome);

@@ -108,3 +108,22 @@ function periodComplete_(input){
 function periodDay_(input){const date=loss3Date_(input?.date);if(date>periodToday_())throw Error('不能讀取未來日期');const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他交易處理中');try{const ss=SpreadsheetApp.openById(LOSS3.inventory),source=erpOrderSources_().find(s=>s.name===input.sheet);if(!source)throw Error('廠商分類不存在');const snap=periodSnapshot_(ss,source,[date],lossLedgerRead_(ss)),{rows}=periodStatusRows_(ss),prior=rows.filter(r=>loss3Date_(r[0])===date&&r[1]===source.name).pop();return {date,sheet:source.name,...periodCompletionState_(snap,date,prior)};}finally{lock.releaseLock();}}
 // Called from the existing atomic loss batch. No-op retries do not invalidate completion.
 function periodInvalidations_(ss,changes,actor,time){const sh=ss.getSheetByName(PERIOD_STATUS);if(!sh)return [];periodStatusRows_(ss);const seen=new Set(),rows=[];for(const r of changes){const key=JSON.stringify([r.date,r.sheet]);if(seen.has(key))continue;seen.add(key);rows.push([r.date,r.sheet,'待重新確認',actor,time,'']);}return rows.length?[periodAppend_(sh,rows)]:[];}
+
+// Preview the full classification, including untouched items. Predict the fingerprint
+// from the exact ledger revisions in this batch, never from a later unreviewed read.
+function periodLossCompletion_(ss,ledger,draft,plan){
+ const date=draft.date,sources=erpOrderSources_(),status=periodStatusRows_(ss),projected={...ledger,latest:new Map(ledger.latest)};
+ for(const r of plan.filter(r=>r.delta!==0))projected.latest.set(r.key,{...r,revision:r.revision+1,error:''});
+ const states=draft.completionSheets.map(name=>{
+  const source=sources.find(s=>s.name===name);if(!source)throw Error('廠商分類不存在');
+  const snap=periodSnapshot_(ss,source,[date],ledger),prior=status.rows.filter(r=>loss3Date_(r[0])===date&&r[1]===name).pop(),state=periodCompletionState_(snap,date,prior);
+  if(state.error)throw Error(name+'：'+state.error);
+  const after=periodSnapshot_(ss,source,[date],projected),edited=new Set(plan.filter(r=>r.sheet===name).map(r=>r.code));
+  return {sheet:name,date,...state,afterFingerprint:after.fingerprints[date],blankZeroCount:snap.rows.filter(r=>!r.errors[date]&&!edited.has(r.code)&&r.values[date]===null).length,retainedCount:snap.rows.filter(r=>!r.errors[date]&&!edited.has(r.code)&&r.values[date]!==null).length};
+ });
+ return {sh:status.sh,states};
+}
+function periodLossCompletionRequests_(completion,actor,time){
+ const rows=completion.states.filter(s=>!s.eligibleComplete||s.fingerprint!==s.afterFingerprint).map(s=>[s.date,s.sheet,s.pendingCount?'部分完成':'已完成',actor,time,s.afterFingerprint]);
+ return rows.length?[periodAppend_(completion.sh,rows)]:[];
+}

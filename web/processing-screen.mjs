@@ -68,7 +68,7 @@ const css=`
 #erp-processing .save-steps{gap:6px;margin:18px 0}#erp-processing .save-steps li{font-size:12px}#erp-processing .save-party{height:144px;margin-bottom:12px}#erp-processing .save-quill{width:160px;height:144px}#erp-processing p{font-size:14px}}
 @media(prefers-reduced-motion:reduce){#erp-processing *{animation:none!important}}
 `;
-export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false}={}){
+export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false}={}){
  if(active)throw Error('上一筆仍在入帳，請稍候');
  // Non-DOM callers can exercise the transaction logic independently.
  if(!globalThis.document?.createElement)return {readback(){},close(){}};
@@ -89,7 +89,7 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
   if(compact||receiptCompact){
    dialog.querySelector('#save-heading').textContent='讀取中…';
    dialog.querySelector('.save-frame > p').textContent=catalogMessage;
-   dialog.querySelector('#save-warning').textContent='已填數量會保留，不會扣除庫存。';
+   dialog.querySelector('#save-warning').textContent=readOnly?'僅讀取資料，不會變更庫存。':'已填數量會保留，不會扣除庫存。';
    dialog.querySelector('.save-detail').textContent='讀取完成後，視窗會自動關閉。';
   }
  }

@@ -30,9 +30,7 @@
  }
  function update(){
   const button=root.querySelector('#period-apply');
-  const cloudButton=root.querySelector('#cloud-refresh');
-  const cloudLoading=cloudButton?.disabled&&root.querySelector('#cloud-status')?.textContent.trim()==='正在向 Google 讀取最新內容…';
-  const loading=cloudLoading||(button?.disabled&&button.textContent.trim()==='更新中…');
+  const loading=button?.disabled&&button.textContent.trim()==='更新中…';
   if(!loading){close();return;}
   if(dialog||document.querySelector('dialog[open]'))return;
   previous=document.activeElement;
@@ -42,7 +40,6 @@
   dialog.setAttribute('aria-busy','true');
   dialog.innerHTML='<div class="period-rpg-body"><img src="https://roroo0902.github.io/tcm-pharmacy-erp/web/assets/slime-king.svg" alt=""><div><h2 id="period-rpg-title">更新中…</h2><p id="period-rpg-description" role="status">正在讀取每日耗損</p><div class="period-rpg-dots" aria-hidden="true"><i></i><i></i><i></i></div></div></div>';
   dialog.addEventListener('cancel',event=>event.preventDefault());
-  if(cloudLoading){dialog.querySelector('#period-rpg-title').textContent='讀取中…';dialog.querySelector('#period-rpg-description').textContent='正在向 Google 讀取最新內容…';}
   document.body.append(dialog);dialog.showModal();
  }
  new MutationObserver(update).observe(root,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['disabled']});

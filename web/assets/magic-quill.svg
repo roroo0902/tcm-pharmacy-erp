@@ -7,7 +7,7 @@
     @keyframes twinkle { 50% { opacity: .25; } }
     @media (prefers-reduced-motion: reduce) { .sprite, .spark { animation: none; } }
   </style>
-  <svg x="-2" y="-8" width="88" height="88" viewBox="0 0 1254 1254">
+  <svg x="-1" y="-7" width="86" height="86" viewBox="0 0 1254 1254">
     <defs>
       <clipPath id="cyan">
         <rect x="777" y="368" width="124" height="126"/>

@@ -73,10 +73,10 @@ export function mountReceiptGrid({esc,fmt,ask}){
  const refreshStatus=createRefreshStatus($('#receipt-refresh'));
  let catalogScreen;
  const closeCatalogScreen=()=>{catalogScreen?.close();catalogScreen=null;};
- async function load(syncPrices=false,{showDialog=false,compact=false}={}){
+ async function load(syncPrices=false,{showDialog=false,compact=true}={}){
   closeCatalogScreen();
   const run=++ticket;loading=true;refreshStatus.start();loadFailed=false;status('正在讀取 '+(brand+category||'共用廠商與品項')+'…');$('#receipt-submit').disabled=true;
-  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:compact?`正在讀取${brand}／${category}…`:"正在讀取廠商與品項…"});const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){seedShortage('receive',rows,quantities,receiptKey);shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已保留數量；單價依原表 E 欄帶入，手動修改以欄位標示為準`);}
+  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:compact&&brand&&category?`正在讀取${brand}／${category}…`:"正在讀取廠商與品項…"});const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){seedShortage('receive',rows,quantities,receiptKey);shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已保留數量；單價依原表 E 欄帶入，手動修改以欄位標示為準`);}
   catch(e){if(alive&&run===ticket){loadFailed=true;status(e.message+'；已填數量仍保留，請重新讀取工作表重試');}}
   finally{if(alive&&run===ticket){closeCatalogScreen();loading=false;refreshStatus.finish(!loadFailed);summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
  }

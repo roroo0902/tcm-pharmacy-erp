@@ -117,3 +117,26 @@ test('ambiguous commit displays a visible pending result and never retries autom
  globalThis.fetch=async(u,init)=>{if(JSON.parse(init.body).parameters[0]==='commit'){writes++;throw Error('<network lost>');}return response({token:'p',lines:[]});};
  await m.directReview({kind:'tcm-cloud',lines:[]},(h,fn)=>{dialogs.push(h);confirm=fn;},async()=>success++,()=>{});await confirm();assert.equal(writes,1);assert.equal(success,0);assert.match(dialogs.at(-1),/結果尚待核對/);assert.match(dialogs.at(-1),/&lt;network lost&gt;/);assert.ok(!dialogs.at(-1).includes('同步完成'));
 });
+
+
+test('receipt quantity revision matches identity, preserves price and rejects invalid or duplicate rows',async t=>{
+ const m=await client(t),a={sheet:'科達單方',code:'A',name:'甲',quantity:2,unitPriceCents:12345},b={sheet:'天明單方',code:'A',name:'甲',quantity:3};
+ const d={kind:'tcm-cloud',action:'進貨',id:'same',lines:[a,b]};
+ const n=m.revisedReceipt(d,[b,a],['4','5']);assert.equal(n.lines[0].quantity,5);assert.equal(n.lines[1].quantity,4);assert.equal(n.lines[0].unitPriceCents,12345);assert.equal(d.lines[0].quantity,2);assert.equal(n.id,'same');
+ for(const v of ['',0,-1,1.5,1000001,'bad'])assert.throws(()=>m.revisedReceipt(d,[a,b],[v,3]),/整數/);
+ assert.throws(()=>m.revisedReceipt(d,[a,a],[2,3]),/品項/);
+});
+
+test('edited receipt cannot commit old preview and needs a second confirmation with fresh token',async t=>{
+ const m=await client(t);let confirm,inputs=[],previews=0,commits=0,updated;
+ const root={querySelectorAll:s=>s==='[data-review-qty]'?inputs:[],querySelector:()=>({textContent:'',outerHTML:''})};
+ globalThis.document.querySelector=s=>s==='#confirm-detail'?root:{textContent:''};
+ const d={kind:'tcm-cloud',version:2,action:'進貨',id:'same',lines:[{sheet:'科達單方',code:'A',name:'甲',quantity:2,unitPriceCents:10000}]};
+ globalThis.fetch=async(u,init)=>{const [op,payload,token]=JSON.parse(init.body).parameters;
+  if(op==='commit'){commits++;assert.equal(token,'preview-2');assert.equal(payload.lines[0].quantity,4);return response({message:'ok',lines:payload.lines});}
+  previews++;return response({token:'preview-'+previews,lines:payload.lines.map(l=>({...l,before:10,after:10+l.quantity,amountCents:l.quantity*l.unitPriceCents}))});};
+ const ask=(html,fn)=>{confirm=fn;inputs=[{value:String(previews===1?2:4),addEventListener(){}}];};
+ await m.directReview(d,ask,async()=>{},()=>{},{onDraftChange:n=>updated=n});
+ inputs[0].value='4';await confirm();assert.equal(previews,2);assert.equal(commits,0);assert.equal(updated.lines[0].quantity,4);
+ await confirm();assert.equal(commits,1);
+});

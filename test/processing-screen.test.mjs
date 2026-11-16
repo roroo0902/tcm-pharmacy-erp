@@ -38,3 +38,12 @@ test('daily loss catalog shows the magnifier and restores the page when the read
  assert.equal(document.body.style.overflow,'auto');
  }
 });
+
+test('pending notice shares parchment, stays non-busy and closes before returning to pending controls',t=>{
+ const oldDoc=globalThis.document,oldWin=globalThis.window,fields=new Map();let dialog,button,reviewed=false;
+ t.after(()=>{globalThis.document=oldDoc;globalThis.window=oldWin;});
+ globalThis.document={getElementById:()=>null,head:{append(){}},body:{style:{overflow:'auto'},append(n){dialog=n;}},createElement:()=>({dataset:{},style:{},attrs:{},setAttribute(k,v){this.attrs[k]=v;},addEventListener(){},showModal(){},close(){},remove(){this.removed=true;},focus(){},querySelector(s){if(!fields.has(s))fields.set(s,{append(n){button=n;}});return fields.get(s);}})};
+ globalThis.window={addEventListener(){},removeEventListener(){}};
+ const handle=beginProcessing({reading:true,compact:true,notice:true,catalogMessage:'請先查詢同步結果',onReview(){assert.equal(isProcessing(),false);reviewed=true;}});
+ try{assert.equal(dialog.dataset.compact,'true');assert.equal(dialog.attrs['aria-busy'],'false');assert.equal(fields.get('.save-dots').hidden,true);assert.equal(fields.get('#save-heading').textContent,'上一筆尚未核對');button.onclick();assert.ok(reviewed);assert.ok(dialog.removed);assert.equal(document.body.style.overflow,'auto');}finally{handle.close();}
+});

@@ -62,13 +62,14 @@ const css=`
 #erp-processing[data-compact=true] h2{display:flex;align-items:center;gap:10px;margin:0 0 8px}
 #erp-processing[data-compact=true] h2::before{content:"";display:block;position:static;flex:none;width:28px;height:38px;background:url('./web/assets/potion-red.svg') center/contain no-repeat}
 #erp-processing[data-compact=true] .save-dots{margin:12px 0 6px;justify-content:flex-start}
+#erp-processing[data-notice=true] [hidden]{display:none!important}
 @media(max-width:420px){#erp-processing[data-compact=true] .save-frame{grid-template-columns:64px minmax(0,1fr);gap:0 12px;padding:24px 18px}#erp-processing[data-compact=true] .save-frame > .save-companion{width:64px;height:76px}#erp-processing[data-compact=true] h2{font-size:20px;gap:6px}#erp-processing[data-compact=true] h2::before{width:24px;height:32px}}
 @keyframes save-bob{50%{transform:translateY(-5px)}}@keyframes save-pulse{50%{opacity:.25}}
 @media(max-width:600px){#erp-processing .save-frame{padding:22px 16px 20px}#erp-processing .save-banner{font-size:19px;padding:7px 20px}#erp-processing .save-warning{font-size:16px;padding:12px 10px;margin:18px 0}#erp-processing .save-steps[hidden]{display:none}
 #erp-processing .save-steps{gap:6px;margin:18px 0}#erp-processing .save-steps li{font-size:12px}#erp-processing .save-party{height:144px;margin-bottom:12px}#erp-processing .save-quill{width:160px;height:144px}#erp-processing p{font-size:14px}}
 @media(prefers-reduced-motion:reduce){#erp-processing *{animation:none!important}}
 `;
-export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false}={}){
+export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false,notice=false,onReview}={}){
  if(active)throw Error('上一筆仍在入帳，請稍候');
  // Non-DOM callers can exercise the transaction logic independently.
  if(!globalThis.document?.createElement)return {readback(){},close(){}};
@@ -93,10 +94,22 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
    dialog.querySelector('.save-detail').textContent='讀取完成後，視窗會自動關閉。';
   }
  }
+ if(notice){
+  dialog.dataset.notice='true';
+  dialog.setAttribute('aria-busy','false');
+  dialog.querySelector('#save-heading').textContent='上一筆尚未核對';
+  dialog.querySelector('#save-warning').textContent='本次輸入仍保留，尚未送出新的進貨。';
+  for(const selector of ['.save-dots','.save-detail','.save-footer','.save-steps'])dialog.querySelector(selector).hidden=true;
+ }
  const scrollStyle=doc.body.style,oldOverflow=scrollStyle?.overflow;if(scrollStyle)scrollStyle.overflow='hidden';
  const beforeUnload=e=>{e.preventDefault();e.returnValue='';};dialog.addEventListener('cancel',e=>e.preventDefault());doc.body.append(dialog);
  try{dialog.showModal();}catch(e){dialog.remove();if(scrollStyle)scrollStyle.overflow=oldOverflow;throw e;}
  active=true;if(!catalogMessage)win.addEventListener('beforeunload',beforeUnload);
- const timer=setTimeout(()=>{dialog.querySelector('.save-detail').textContent=catalogMessage?'Google 回應較慢，請稍候。':reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
- let closed=false;return {readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent='正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);dialog.close();dialog.remove();if(scrollStyle)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus();}};
+ const timer=notice?null:setTimeout(()=>{dialog.querySelector('.save-detail').textContent=catalogMessage?'Google 回應較慢，請稍候。':reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
+ let closed=false;const handle={readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent='正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);dialog.close();dialog.remove();if(scrollStyle)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus();}};
+ if(notice){
+  const button=doc.createElement('button');button.type='button';button.textContent='查看待核對操作';button.style.cssText='white-space:normal;max-width:100%;margin-top:12px';
+  button.onclick=()=>{handle.close();onReview?.();};dialog.querySelector('.save-frame').append(button);button.focus();
+ }
+ return handle;
 }

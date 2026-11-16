@@ -43,8 +43,14 @@ test('result dialog opens, renders untrusted details as text, and closes with fo
  const dialog=nodes[0];assert.equal(dialog.open,true);assert.equal(dialog.children[1].textContent,'<img src=x onerror=alert(1)>');assert.equal(dialog.children[1].innerHTML,undefined);
  dialog.children[3].onclick();assert.equal(dialog.removed,true);assert.equal(focused,true);
 });
-test('quill remains vector-only with integer scaling and no rotation',()=>{
+test('quill displays a transparent PNG with stepped motion and reduced-motion support',()=>{
  const svg=readFileSync(new URL('../web/assets/magic-quill.svg',import.meta.url),'utf8');
- assert.match(svg,/viewBox="0 0 80 72"/);assert.match(svg,/shape-rendering="crispEdges"/);assert.doesNotMatch(svg,/<image|data:image|rotate\(/);
+ const image=Buffer.from(svg.match(/data:image\/png;base64,([^"]+)/)?.[1]??'','base64');
+ assert.equal(image.subarray(1,4).toString(),'PNG');
+ assert.equal(image[25],6);
+ assert.match(svg,/viewBox="0 0 80 72"/);
+ assert.match(svg,/steps\(4, end\)/);
+ assert.match(svg,/prefers-reduced-motion: reduce/);
+ assert.doesNotMatch(svg,/rotate\(/);
  const screen=readFileSync(new URL('../web/processing-screen.mjs',import.meta.url),'utf8');assert.match(screen,/width:160px;height:144px/);assert.doesNotMatch(screen,/width:140px/);assert.match(screen,/image-rendering:pixelated/);
 });

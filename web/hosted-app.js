@@ -159,6 +159,7 @@
 #content #receipt-grid tbody td:first-child:not([colspan]){padding:16px;text-align:center}
 #content #receipt-grid tbody td:first-child::before{display:none}
 #receipt-grid .receipt-drug{display:inline-flex;align-items:center;gap:10px;text-align:left;max-width:100%}
+#receipt-grid tr[data-category="複方"] .receipt-drug{width:150px;overflow-wrap:anywhere}
 #receipt-grid .receipt-drug-text{display:block;min-width:0;white-space:normal;line-height:1.5}
 #receipt-grid .receipt-drug-icon{display:block;flex:0 0 40px;width:40px;height:44px;background:url('https://roroo0902.github.io/tcm-pharmacy-erp/web/assets/herbal-powder.png') center/contain no-repeat;image-rendering:pixelated}
 #receipt-grid tr[data-category="複方"] .receipt-drug-icon{background-image:url('https://roroo0902.github.io/tcm-pharmacy-erp/web/assets/potion-categories.png');background-size:200% 100%;background-position:right center}

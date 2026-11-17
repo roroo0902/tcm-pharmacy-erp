@@ -3,6 +3,7 @@ import {createRefreshStatus} from './refresh-status.mjs';
 import {supplyLayout} from './supply-layout.mjs';
 import {protectDraft} from './page-safety.mjs';
 import {operationResult} from './operation-result.mjs';
+import {recoverPendingReceipt} from './receipt-recovery.mjs';
 import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
@@ -95,16 +96,23 @@ export function mountReceiptGrid({esc,fmt,ask}){
   checkingPending=true;
   processButton.disabled=true;
   const report=recovering?pendingStatus:status;
-  report('正在查詢上一筆入帳結果…');
   try{
-   const saved=localStorage.getItem(KEY);
-   const current=JSON.parse(saved||'null');
-   if(recovering&&(current?.action!=='進貨'||current.verified)){
-    showPending();
-    report('上一筆狀態已更新。');
+   if(recovering){
+    processButton.textContent='處理上一筆進貨';
+    const outcome=await recoverPendingReceipt({
+     ask,status:report,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,
+     onResolved:async({alreadyPosted})=>{
+      showPending();
+      if(alreadyPosted)report('上一筆已入帳。目前填寫的進貨已保留。');
+      await load();
+     }
+    });
+    if(alive&&outcome==='retry')processButton.textContent='再查一次';
     return;
    }
-   const d=cloudDraft(current);
+   report('正在查詢上一筆入帳結果…');
+   const saved=localStorage.getItem(KEY);
+   const d=cloudDraft(JSON.parse(saved||'null'));
    const res=await directLog(['訂貨','取消訂貨'].includes(d.action)?'orders':'inventory');
    const [header,...records]=csvRows(await res.text());
    if(header&&(header[0]!=='交易編號'||header[1]!=='交易JSON'))throw Error('交易紀錄表頭無法核對');
@@ -115,12 +123,8 @@ export function mountReceiptGrid({esc,fmt,ask}){
     report('上一筆狀態已更新，請查看目前狀態。');
     return;
    }
-   processButton.textContent='處理上一筆進貨';
    if(!found){
-    if(recovering){
-     report('查無入帳紀錄，正在開啟上一筆進貨預覽…');
-     await send(d,{recovering:true});
-    }else report('查無這筆入帳紀錄，請回原操作頁核對。');
+    report('查無這筆入帳紀錄，請回原操作頁核對。');
     return;
    }
    const event=JSON.parse(found[1]),posted=event.draft;
@@ -128,7 +132,6 @@ export function mountReceiptGrid({esc,fmt,ask}){
    localStorage.setItem(KEY,JSON.stringify({...posted,verified:true,receiptEvent:event}));
    showPending();
    report(posted.action==='進貨'?'上一筆已入帳。目前填寫的進貨已保留。':'已確認先前操作結果，可以繼續進貨。');
-   if(recovering)await load();
   }catch(e){
    if(alive){
     report('暫時無法確認入帳狀態。'+e.message);
@@ -139,23 +142,20 @@ export function mountReceiptGrid({esc,fmt,ask}){
    processButton.disabled=false;
   }
  }
- function send(d,{recovering=false}={}){
+ function send(d){
   if(directEnabled()){
    const resultRecord=()=>JSON.parse(localStorage.getItem(KEY)||'null');
    return directReview(d,ask,async result=>{
     if(resultRecord()?.id===d.id)localStorage.setItem(KEY,JSON.stringify({...d,verified:true,receiptEvent:{draft:d,lines:result.lines||[],time:result.time}}));
-    if(!recovering){
-     clearShortage('receive');
-     quantities.clear();
-     prices.clear();
-    }
+    clearShortage('receive');
+    quantities.clear();
+    prices.clear();
     if(alive){showPending();await load();}
-   },recovering?pendingStatus:status,{requireUnposted:recovering,receiptRows:()=>rows,onDraftChange:next=>{
+   },status,{receiptRows:()=>rows,onDraftChange:next=>{
     for(const l of next.lines.filter(l=>l.create)){if(!rows.some(r=>r.name===l.sheet&&r.code===l.code)){const s=sources.find(s=>s.name===l.sheet);if(s)rows.push({...s,code:l.code,drug:l.name,bottles:0,pendingCreate:true,unitPriceCents:l.unitPriceCents});}}
     Object.assign(d,next);
     const current=resultRecord();
     if(current?.id===d.id&&!current.verified)localStorage.setItem(KEY,JSON.stringify(d));
-    if(recovering){if(alive)showPending();return;}
     for(const l of d.lines){
      const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});
      quantities.set(key,String(l.quantity));

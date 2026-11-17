@@ -32,3 +32,17 @@ test('receipt-created item appends identity, stock and audit in one atomic batch
  const req=h.batches[0].b.requests;assert.ok(req.some(r=>r.appendDimension));assert.ok(req.some(r=>r.addNamedRange));assert.ok(req.some(r=>r.appendCells));
  assert.equal(req.filter(r=>r.updateCells?.start.sheetId===1).map(r=>r.updateCells.start.columnIndex).sort().join(','),'1,3,5,6');
 });
+
+test('manual order commit persists blank-code audit once and cancellation only updates order ledger',()=>{
+ const h=harness(),ledger=[];
+ const log={getSheetId:()=>904291002,getLastRow:()=>ledger.length+1,getRange:(r,col,n=1,w=1)=>({getValue:()=> '交易編號',getValues:()=>r===2?ledger.map(v=>[v[1]]):[['交易編號']]})};
+ h.c.Utilities={formatDate:()=> '2026-11-18'};h.c.erpOrderSources_=()=>[];
+ h.c.SpreadsheetApp.openById=id=>({getId:()=>id,getSheetByName:name=>id!=='inventory'&&name==='藥庫_訂貨紀錄'?log:null});
+ h.c.Sheets.Spreadsheets.batchUpdate=(b,id)=>{h.batches.push({b,id});for(const r of b.requests)if(r.appendCells)ledger.push(r.appendCells.rows[0].values.map(v=>v.userEnteredValue.stringValue));};
+ const d={...draft,action:'訂貨',version:2,currency:'TWD',date:'2026-11-18',lines:[{sheet:'新廠商單方',code:'',name:'未建檔藥品',quantity:2,unitPriceCents:20000,manual:true}]};
+ const preview=h.c.erpPreview(d);assert.equal(preview.lines[0].after,'未建檔');h.c.erpCommit(d,preview.token);
+ assert.equal(ledger.length,1);assert.equal(JSON.parse(ledger[0][1]).draft.lines[0].code,'');assert.equal(h.batches.length,1);
+ assert.ok(h.batches.every(b=>b.id!=='inventory'));assert.ok(!h.batches[0].b.requests.some(r=>r.updateCells||r.addSheet||r.appendDimension));
+ h.c.erpCommit(d,preview.token);assert.equal(h.batches.length,1);
+ const cancel={...d,id:'ERP-cancel-manual-1234',action:'取消訂貨',reverses:d.id};const cp=h.c.erpPreview(cancel);h.c.erpCommit(cancel,cp.token);assert.equal(ledger.length,2);assert.ok(h.batches.every(b=>b.id!=='inventory'));assert.equal(h.batches[1].b.requests.filter(r=>r.updateCells).length,1);
+});

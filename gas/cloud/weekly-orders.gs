@@ -24,6 +24,7 @@ function erpWeeklyRead_(draft,ss,tabs,events,plan){
  if(plan.duplicate||!['訂貨','取消訂貨'].includes(draft.action))return {requests,changes};
  const loaded={};
  for(const line of draft.lines){
+  if(line.manual)continue; // Order-only items have no catalog row; never write inventory or weekly stock rows.
   if(draft.action==='取消訂貨'&&!events.some(e=>e.draft.id===draft.reverses&&(e.weekly||[]).some(w=>w.key===line.sheet+'|'+line.code)))continue;
   let t=loaded[line.sheet];
   if(!t){

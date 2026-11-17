@@ -8,7 +8,7 @@ export function confirmedPrintPlan(events,id){
  const groups=new Map();
  for(const l of d.lines){const m=l.sheet.match(/^(.+)(單方|複方)$/);if(!m||m[1].length>60||/[\[\]:*?\/\\]/.test(m[1]))throw Error('廠牌或類別無法辨識');const [_,brand,category]=m;if(!groups.has(brand))groups.set(brand,{單方:[],複方:[]});groups.get(brand)[category].push(l);}
  return [...groups].map(([brand,categories])=>{
-  const columns=[];for(const category of ['單方','複方']){const lines=categories[category];for(let i=0;i<lines.length;i+=22){const chunk=lines.slice(i,i+22);columns.push([brand+'訂購清單｜'+d.date+'｜'+d.actor+'｜單位：瓶',category+'・藥品名稱',...chunk.map(l=>l.name)],['',d.date.slice(5).replace('-','/')+'\n訂量',...chunk.map(l=>l.quantity)]);}}
+  const columns=[];for(const category of ['單方','複方']){const lines=categories[category];for(let i=0;i<lines.length;i+=22){const chunk=lines.slice(i,i+22);columns.push([brand+'訂購清單｜'+d.date+'｜'+d.actor+'｜單位：瓶',category+'・藥品名稱',...chunk.map(l=>(l.manual?'[手動新增] ':'')+l.name)],['',d.date.slice(5).replace('-','/')+'\n訂量',...chunk.map(l=>l.quantity)]);}}
   const values=Array.from({length:24},(_,r)=>columns.map((c,i)=>r===0&&i>0?'':c[r]??''));
   return {brand,title:brand+'訂單列印版',id:d.id,date:d.date,actor:d.actor,count:categories.單方.length+categories.複方.length,values};
  });

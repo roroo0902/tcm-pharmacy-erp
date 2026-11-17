@@ -1,0 +1,25 @@
+import {priceCents,money} from './receipt-pricing.mjs';
+export function newOrderLine(input,rows,lines){
+ const brand=String(input.brand||'').trim(),category=input.category,name=String(input.name||'').trim(),code=String(input.code||'').trim(),quantity=Number(input.quantity);
+ if(!brand||brand.length>50||/[\[\]:*?\/\\|\x00-\x1f]/.test(brand)||brand==='其他')throw Error('請填寫有效廠商名稱');
+ if(!['單方','複方'].includes(category)||!name||name.length>120||code.length>60||/[|\x00-\x1f]/.test(name+code))throw Error('請核對類別、藥品名稱及編號');
+ if(!Number.isInteger(quantity)||quantity<1||quantity>1000000)throw Error('訂貨量須為 1 至 1000000 的整數');
+ const unitPriceCents=priceCents(input.price);if(unitPriceCents===undefined)throw Error('請填單價；免費品項可填 0');
+ const sheet=brand+category,normal=s=>s.normalize('NFKC').replace(/\s/g,'');
+ const matches=rows.filter(r=>r.name===sheet&&((code&&r.code===code)||normal(r.drug)===normal(name)));
+ let line;
+ if(matches.length){const r=matches[0];if(matches.length!==1||!r.code||r.warning?.includes('編號')||normal(r.drug)!==normal(name)||(code&&r.code!==code))throw Error('既有品項編號或名稱不一致，請先核對');line={sheet,code:r.code,name:r.drug,quantity,unitPriceCents};}
+ else line={sheet,code,name,quantity,unitPriceCents,manual:true};
+ if(lines.some(l=>l.sheet===sheet&&((line.code&&l.code===line.code)||normal(l.name)===normal(line.name))))throw Error('品項已在本次清單，請修改原有數量，避免重複訂貨');
+ if(lines.length>=100)throw Error('每批最多 100 項');return line;
+}
+export const orderAddMarkup=`<style>.order-add{box-sizing:border-box;margin:24px 0;padding:18px;border:2px solid #b99b58;border-radius:8px;background:#faf3df;color:#172e46;min-width:0}.order-add legend{background:#faf3df;padding:6px 12px;font-weight:bold}.order-add-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.order-add label{display:block}.order-add input,.order-add select{box-sizing:border-box;width:100%;min-width:0;color:#172e46;background:#fffdf5;font-size:16px}.order-add .add-step{display:grid;grid-template-columns:36px minmax(0,1fr) 36px;gap:5px;align-items:center}.order-add .add-step button{min-width:0;padding:0;height:40px;min-height:40px}.order-add .add-step input{text-align:center}.order-add p{overflow-wrap:anywhere}.order-add button{max-width:100%;white-space:normal}@media(max-width:600px){.order-add-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.order-add-wide{grid-column:1/-1}.order-add{padding:12px}.order-add [data-add-submit]{width:100%}}</style><fieldset class="order-add"><legend>＋ 新增訂貨品項</legend><div class="order-add-fields"><label>廠商<select data-add-brand><option value="科達">科達</option><option value="天明">天明</option><option value="富田">富田</option><option value="">其他（自行填寫）</option></select><input data-add-other aria-label="其他廠商名稱" placeholder="請輸入廠商名稱" hidden></label><label>類別<select data-add-category><option>單方</option><option>複方</option></select></label><label class="order-add-wide">藥品名稱<input data-add-name maxlength="120" placeholder="請輸入藥品名稱"></label><label class="order-add-wide">藥品編號（選填）<input data-add-code maxlength="60" placeholder="可留空"></label><label>單價（元／瓶）<input data-add-price type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="請填單價"></label><label>訂貨量（瓶）<span class="add-step"><button type="button" data-add-minus aria-label="減少新增品項訂貨量">−</button><input data-add-qty aria-label="新增品項訂貨量" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="1"><button type="button" data-add-plus aria-label="增加新增品項訂貨量">＋</button></span></label></div><p data-add-total>本項小計：—</p><button type="button" data-add-submit>加入本次訂貨清單</button><p data-add-message role="status">加入後可繼續新增，最後統一確認訂貨。未建檔品項僅記錄於訂單，不異動庫存。</p></fieldset>`;
+export function bindOrderAdd(root,getRows,getLines,onAdd){
+ const $=s=>root.querySelector(s),brand=$('[data-add-brand]'),other=$('[data-add-other]'),qty=$('[data-add-qty]'),price=$('[data-add-price]'),message=$('[data-add-message]'),button=$('[data-add-submit]');
+ for(const b of new Set(getRows().map(r=>r.brand)))if(b&&![...brand.options].some(o=>o.value===b))brand.add(new Option(b,b));
+ brand.onchange=()=>{other.hidden=brand.value!=='';};
+ const total=()=>{try{const p=priceCents(price.value),q=Number(qty.value);$('[data-add-total]').textContent='本項小計：'+(p!==undefined&&Number.isInteger(q)&&q>0?money(p*q):'—');}catch{$('[data-add-total]').textContent='請核對單價';}};
+ qty.oninput=price.oninput=total;
+ $('[data-add-minus]').onclick=()=>{qty.value=String(Math.max(1,(Number(qty.value)||1)-1));total();};$('[data-add-plus]').onclick=()=>{qty.value=String(Math.min(1000000,(Number(qty.value)||0)+1));total();};
+ button.onclick=async()=>{try{const line=newOrderLine({brand:brand.value||other.value,category:$('[data-add-category]').value,name:$('[data-add-name]').value,code:$('[data-add-code]').value,price:price.value,quantity:qty.value},getRows(),getLines());button.disabled=true;await onAdd(line);$('[data-add-name]').value='';$('[data-add-code]').value='';qty.value='1';price.value='';total();message.textContent='已加入本次清單，尚未送出訂貨。';}catch(e){message.textContent=e.message;}finally{button.disabled=false;}};
+}

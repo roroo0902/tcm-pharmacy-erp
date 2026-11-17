@@ -1,6 +1,6 @@
 // PDF-only revisions. This module never creates inventory or order transactions.
 export function orderPdfSeed(plans){
- return {rows:plans.flatMap(p=>p.items.map(l=>({key:l.sheet+'|'+l.code,brand:p.brand,category:l.sheet.slice(p.brand.length),code:l.code,name:l.name,quantity:l.quantity,manual:false,...(l.parts?{parts:l.parts}:{} )}))),brands:[...new Set([...plans.map(p=>p.brand),'科達','天明','富田'])]};
+ return {rows:plans.flatMap(p=>p.items.map(l=>({key:l.sheet+'|'+(l.code||'name:'+l.name),brand:p.brand,category:l.sheet.slice(p.brand.length),code:l.code,name:l.name,quantity:l.quantity,manual:false,...(l.manual?{orderManual:true}:{}),...(l.parts?{parts:l.parts}:{} )}))),brands:[...new Set([...plans.map(p=>p.brand),'科達','天明','富田'])]};
 }
 export function reviseOrderPdf(plans,draft){
  const seed=orderPdfSeed(plans);if(!draft||!Array.isArray(draft.rows)||draft.rows.length>1000)throw Error('PDF 草稿格式不符或超過 1000 列');
@@ -19,7 +19,7 @@ export function reviseOrderPdf(plans,draft){
  }
  if(!rows.length)throw Error('至少保留一項藥品才能產生 PDF');
  return seed.brands.flatMap(brand=>{const items=rows.filter(r=>r.brand===brand);if(!items.length)return [];const columns=[];
-  for(const category of ['單方','複方']){const list=items.filter(r=>r.category===category);for(let i=0;i<list.length;i+=22){const chunk=list.slice(i,i+22);columns.push(['',category+'・藥品名稱',...chunk.map(r=>(r.manual?'[手動新增] ':'')+r.name)],['',plans[0].date.slice(5).replace('-','/')+'\n訂量',...chunk.map(r=>r.quantity)]);}}
+  for(const category of ['單方','複方']){const list=items.filter(r=>r.category===category);for(let i=0;i<list.length;i+=22){const chunk=list.slice(i,i+22);columns.push(['',category+'・藥品名稱',...chunk.map(r=>(r.manual||r.orderManual?'[手動新增] ':'')+r.name)],['',plans[0].date.slice(5).replace('-','/')+'\n訂量',...chunk.map(r=>r.quantity)]);}}
   const values=Array.from({length:24},(_,i)=>columns.map(c=>c[i]??''));return [{...plans[0],brand,title:brand+'訂單列印版',count:items.length,values,items,edited:true}];
  });
 }
@@ -28,7 +28,7 @@ export function reviseOrderPdf(plans,draft){
 export function mergeOrderPdfPlans(current,previous){
  const lines=new Map();
  for(const [index,plans] of [previous,current].entries())for(const p of plans)for(const l of p.items){
-  const key=l.sheet+'|'+l.code,old=lines.get(key);
+  const key=l.sheet+'|'+(l.code||'name:'+l.name),old=lines.get(key);
   if(old&&old.name!==l.name)throw Error(l.code+'：兩筆訂單藥名不一致，請先核對');
   const row=old||{...l,quantity:0,parts:{previous:0,current:0}};
   row.quantity+=l.quantity;row.parts[index?'current':'previous']+=l.quantity;

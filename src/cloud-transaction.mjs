@@ -8,16 +8,18 @@ export function cloudDraft(input) {
  if(typeof d.actor!=='string'||!d.actor.trim()||d.actor.length>80)throw Error('經手人必填，最多80字');
  if(typeof d.note!=='string'||d.note.length>500)throw Error('備註最多500字');
  if(!Array.isArray(d.lines)||!d.lines.length||d.lines.length>100)throw Error('每批1至100項');
- const seen=new Set();
+ const seen=new Set(),newNames=new Set();
  const lines=d.lines.map(l=>{
   const manual=l.manual===true;
   if(manual&&!['訂貨','取消訂貨'].includes(d.action))throw Error('手動訂貨品項不能直接異動庫存');
   if((!CLOUD_SHEETS.includes(l.sheet)&&!(typeof l.sheet==='string'&&/^[^|\r\n]{1,60}(?:單方|複方)$/.test(l.sheet)))||typeof l.code!=='string'||(!manual&&!l.code.trim())||l.code.length>60||typeof l.name!=='string'||!l.name.trim()||l.name.length>120||/[\x00-\x1f|]/.test(l.code+l.name))throw Error('藥品編號、名稱或分頁無效');
   if(!Number.isInteger(l.quantity)||l.quantity<0||l.quantity>1000000||(['進貨','訂貨'].includes(d.action)&&!l.quantity))throw Error('瓶數須為整數；進貨、訂貨須大於0');
   const key=JSON.stringify([l.sheet,l.code.trim()||'name:'+l.name.trim()]),nameKey=JSON.stringify([l.sheet,'name',l.name.normalize('NFKC').replace(/\s/g,'')]);if(seen.has(key)||seen.has(nameKey))throw Error('同批品項重複');seen.add(key);seen.add(nameKey);
+  if(Object.hasOwn(l,'create')&&(l.create!==true||!['進貨','沖銷'].includes(d.action)))throw Error('新品項標記無效');
+  if(l.create){const nk=l.sheet+'|'+l.name.trim();if(newNames.has(nk))throw Error('同批新品項名稱重複');newNames.add(nk);}
   const price=Object.hasOwn(l,'unitPriceCents');
   if(price&&(d.version!==2||!Number.isSafeInteger(l.unitPriceCents)||l.unitPriceCents<0||l.unitPriceCents>100000000))throw Error('單價須為0至1,000,000元，最多兩位小數');
-  return {sheet:l.sheet,code:l.code.trim(),name:l.name.trim(),quantity:l.quantity,...(manual?{manual:true}:{}),...(price?{unitPriceCents:l.unitPriceCents}:{})};
+  return {sheet:l.sheet,code:l.code.trim(),name:l.name.trim(),quantity:l.quantity,...(manual?{manual:true}:{}),...(l.create?{create:true}:{}),...(price?{unitPriceCents:l.unitPriceCents}:{})};
  });
  if(['沖銷','取消訂貨'].includes(d.action)&&(!/^ERP-[a-zA-Z0-9-]{8,80}$/.test(d.reverses||'')||!d.note.trim()))throw Error('沖銷須提供原交易與原因');
  const total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);if(!Number.isSafeInteger(total))throw Error('金額超出可精確計算範圍');
@@ -43,9 +45,9 @@ export function cloudPlan(d,rows,events=[]) {
    return {...l,before:'未建檔',after:'未建檔',...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity})};
   }
   const matches=rows.filter(r=>r.sheet===l.sheet&&r.code===l.code);
-  if(d.action==='建檔'){
+  if(d.action==='建檔'||(d.action==='進貨'&&l.create)){
    if(matches.length||rows.some(r=>r.sheet===l.sheet&&r.name===l.name))throw Error(l.code+' 編號或藥名已存在');
-   return {...l,before:0,after:l.quantity};
+   return {...l,before:0,after:l.quantity,...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity,priceBefore:'',priceAfter:l.unitPriceCents/100})};
   }
   if(matches.length!==1||matches[0].name!==l.name)throw Error(l.code+' 編號或藥名不符，請重新同步');
   const r=matches[0];if(!Number.isInteger(r.stock)||r.stock<0||r.formula)throw Error(l.code+' 庫存未填、含公式或非整數，請先核對');

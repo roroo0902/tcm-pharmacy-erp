@@ -24,3 +24,11 @@ test('GAS build is reproducible and confirmation JavaScript parses',()=>{const e
 test('unpriced receipt and reversal reject wrong identity or stock even when audit exists',()=>{for(const action of ['進貨','沖銷'])for(const bad of [null,'code','name','stock']){const h=harness();let n=0;h.c.erpRead_=()=>{const s=state(action);s.plan.duplicate=n++>0;const v=['','QA','','測試',180,'',5];if(bad==='code')v[1]='OTHER';if(bad==='name')v[3]='OTHER';if(bad==='stock')v[6]=999;s.tabs.科達單方.v=[];s.tabs.科達單方.v[173]=v;return s;};if(bad)assert.throws(()=>h.c.erpCommit(draft,'current'),/讀回不一致/);else assert.match(h.c.erpCommit(draft,'current').message,/讀回核對/);assert.equal(h.batches.length,1);assert.equal(h.releases(),1);}});
 
 test('duplicate registration repairs downstream tabs without inventory writes',()=>{const h=harness(),s=state('建檔');s.plan.duplicate=true;h.c.erpRead_=()=>s;let calls=0;h.c.erpFinishRegistration_=d=>{assert.equal(d.action,'建檔');calls++;return [{title:'科達單方'}];};const result=h.c.erpCommit(s.draft,'old');assert.equal(calls,1);assert.equal(h.batches.length,0);assert.equal(result.registration.length,1);});
+
+test('receipt-created item appends identity, stock and audit in one atomic batch',()=>{
+ const h=harness();let reads=0;
+ h.c.erpRead_=()=>{const s=state();s.draft.lines=[{...draft.lines[0],create:true}];s.plan.lines[0].create=true;s.plan.duplicate=reads++>0;s.tabs.科達單方.v=[];s.tabs.科達單方.v[173]=['','QA','','測試','','',5];return s;};
+ h.c.erpCommit(draft,'current');assert.equal(h.batches.length,1);
+ const req=h.batches[0].b.requests;assert.ok(req.some(r=>r.appendDimension));assert.ok(req.some(r=>r.addNamedRange));assert.ok(req.some(r=>r.appendCells));
+ assert.equal(req.filter(r=>r.updateCells?.start.sheetId===1).map(r=>r.updateCells.start.columnIndex).sort().join(','),'1,3,5,6');
+});

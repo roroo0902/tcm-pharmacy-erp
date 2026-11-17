@@ -1,7 +1,7 @@
 const pdfEscape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function orderPdfName_(p){return `${p.brand}_訂藥_${p.date}_${p.id.slice(-8)}.pdf`.replace(/[\\/:*?"<>|\r\n]/g,'_');}
+function orderPdfName_(p){return `${p.brand}_訂藥_${p.date}_${p.id.slice(-8)}${p.merged?"_合併更新版":""}.pdf`.replace(/[\\/:*?"<>|\r\n]/g,'_');}
 function orderPdfHtml_(p){
- const pages=[];for(let c=0;c<p.values[0].length;c+=6){const cols=Math.min(6,p.values[0].length-c);pages.push(`<section><h1>${pdfEscape(p.brand)}訂購清單</h1><p>訂貨日期：${pdfEscape(p.date)}　經手人：${pdfEscape(p.actor)}　單位：瓶</p><table><colgroup>${Array.from({length:cols},(_,i)=>`<col style="width:${i%2?25/(cols/2):75/(cols/2)}%">`).join('')}</colgroup><thead><tr>${p.values[1].slice(c,c+cols).map(x=>`<th>${pdfEscape(x).replaceAll('\n','<br>')}</th>`).join('')}</tr></thead><tbody>${p.values.slice(2).map(r=>`<tr>${r.slice(c,c+cols).map(x=>`<td>${pdfEscape(x)||'&nbsp;'}</td>`).join('')}</tr>`).join('')}</tbody></table><footer>本廠牌共 ${p.count} 項 · 訂單編號：${pdfEscape(p.id)}<br>${p.edited?"本 PDF 依草稿修訂；正式訂量與庫存未變更。":"僅為訂藥清單，尚未入庫。"}</footer></section>`);}
+ const pages=[];for(let c=0;c<p.values[0].length;c+=6){const cols=Math.min(6,p.values[0].length-c);pages.push(`<section><h1>${pdfEscape(p.brand)}訂購清單</h1><p>訂貨日期：${pdfEscape(p.date)}　經手人：${pdfEscape(p.actor)}　單位：瓶</p>${p.merged?`<p><strong>更新版，取代前版，請勿重複下單</strong><br>來源訂單：${p.sources.map(s=>pdfEscape(s.date+" "+s.id)).join("；")}</p>`:""}<table><colgroup>${Array.from({length:cols},(_,i)=>`<col style="width:${i%2?25/(cols/2):75/(cols/2)}%">`).join('')}</colgroup><thead><tr>${p.values[1].slice(c,c+cols).map(x=>`<th>${pdfEscape(x).replaceAll('\n','<br>')}</th>`).join('')}</tr></thead><tbody>${p.values.slice(2).map(r=>`<tr>${r.slice(c,c+cols).map(x=>`<td>${pdfEscape(x)||'&nbsp;'}</td>`).join('')}</tr>`).join('')}</tbody></table><footer>本廠牌共 ${p.count} 項 · 訂單編號：${pdfEscape(p.id)}<br>${p.edited?"本 PDF 依草稿修訂；正式訂量與庫存未變更。":"僅為訂藥清單，尚未入庫。"}</footer></section>`);}
  return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:'Noto Sans CJK TC','Microsoft JhengHei',sans-serif;color:#172c43;font-size:11px;margin:0}section{page-break-after:always}section:last-child{page-break-after:auto}h1{font-size:20px;text-align:center;margin:0 0 10px}p{text-align:center;margin:0 0 12px}table{border-collapse:collapse;width:100%;table-layout:fixed}thead{display:table-header-group}th,td{border:1px solid #777;text-align:center;vertical-align:middle;padding:5px 3px;overflow-wrap:anywhere;word-wrap:break-word}th{background:#f0f0ed}tr{page-break-inside:avoid}footer{font-size:9px;color:#555;margin-top:12px;overflow-wrap:anywhere}</style></head><body>${pages.join('')}</body></html>`;
 }
 function orderMailRoster_(values){
@@ -11,7 +11,7 @@ function orderMailRoster_(values){
 
 // PDF-only revisions. This module never creates inventory or order transactions.
 function orderPdfSeed_(plans){
- return {rows:plans.flatMap(p=>p.items.map(l=>({key:l.sheet+'|'+l.code,brand:p.brand,category:l.sheet.slice(p.brand.length),code:l.code,name:l.name,quantity:l.quantity,manual:false}))),brands:[...new Set([...plans.map(p=>p.brand),'科達','天明','富田'])]};
+ return {rows:plans.flatMap(p=>p.items.map(l=>({key:l.sheet+'|'+l.code,brand:p.brand,category:l.sheet.slice(p.brand.length),code:l.code,name:l.name,quantity:l.quantity,manual:false,...(l.parts?{parts:l.parts}:{} )}))),brands:[...new Set([...plans.map(p=>p.brand),'科達','天明','富田'])]};
 }
 function reviseOrderPdf_(plans,draft){
  const seed=orderPdfSeed_(plans);if(!draft||!Array.isArray(draft.rows)||draft.rows.length>1000)throw Error('PDF 草稿格式不符或超過 1000 列');
@@ -35,20 +35,58 @@ function reviseOrderPdf_(plans,draft){
  });
 }
 
-function orderDeliveryAuth_(){loss3Actor_();const email=Session.getActiveUser().getEmail().toLowerCase(),allowed=(PropertiesService.getScriptProperties().getProperty('ERP_ALLOWED_EMAILS')||'').split(',').map(s=>s.trim().toLowerCase());if(!email||!allowed.includes(email))throw Error('此帳號尚未獲准使用藥庫站內同步');}
-function orderDeliveryPlans_(id){
- const log=SpreadsheetApp.openById(ERP.orders).getSheetByName(ERP.orderLog);if(!log||log.getRange(1,1).getValue()!=='交易編號'||log.getLastRow()<2||log.getLastRow()>10000)throw Error('訂貨紀錄無法核對');
- const events=log.getRange(2,1,log.getLastRow()-1,2).getValues().filter(r=>r[0]||r[1]).map(r=>{const e=JSON.parse(r[1]);if(e?.draft?.id!==r[0])throw Error('訂貨紀錄編號不一致');return e;});return confirmedPrintPlan_(events,id).map(p=>({...p,items:events.find(e=>e.draft.id===id).draft.lines.filter(l=>l.sheet===p.brand+'單方'||l.sheet===p.brand+'複方')}));
+// Both inputs have already passed confirmedPrintPlan, including cancellation checks.
+function mergeOrderPdfPlans_(current,previous){
+ const lines=new Map();
+ for(const [index,plans] of [previous,current].entries())for(const p of plans)for(const l of p.items){
+  const key=l.sheet+'|'+l.code,old=lines.get(key);
+  if(old&&old.name!==l.name)throw Error(l.code+'：兩筆訂單藥名不一致，請先核對');
+  const row=old||{...l,quantity:0,parts:{previous:0,current:0}};
+  row.quantity+=l.quantity;row.parts[index?'current':'previous']+=l.quantity;
+  if(!Number.isSafeInteger(row.quantity)||row.quantity>1000000)throw Error(l.name+'：合計數量超過上限');
+  lines.set(key,row);
+ }
+ const groups=new Map();for(const l of lines.values()){const brand=l.sheet.replace(/(單方|複方)$/,'');if(!groups.has(brand))groups.set(brand,[]);groups.get(brand).push(l);}
+ const sources=[{id:previous[0].id,date:previous[0].date,actor:previous[0].actor},{id:current[0].id,date:current[0].date,actor:current[0].actor}];
+ const base=[...groups].map(([brand,items])=>({...current[0],brand,items,merged:true,sources}));
+ const rebuilt=reviseOrderPdf_(base,{rows:orderPdfSeed_(base).rows});
+ return rebuilt.map(p=>({...p,items:linesFor(p.brand),merged:true,sources}));
+ function linesFor(brand){return groups.get(brand);}
 }
-function erpOrderPdfEditSource(id){orderDeliveryAuth_();const plans=orderDeliveryPlans_(id);return {id,date:plans[0].date,actor:plans[0].actor,sourceHash:loss3Hash_(plans),...orderPdfSeed_(plans)};}
-function orderDeliveryRevised_(id,draft){const base=orderDeliveryPlans_(id);if(!draft)return base;if(draft.sourceHash!==loss3Hash_(base))throw Error('原訂單已變更，請重新載入並核對 PDF 草稿');return reviseOrderPdf_(base,draft);}
+
+function orderDeliveryAuth_(){loss3Actor_();const email=Session.getActiveUser().getEmail().toLowerCase(),allowed=(PropertiesService.getScriptProperties().getProperty('ERP_ALLOWED_EMAILS')||'').split(',').map(s=>s.trim().toLowerCase());if(!email||!allowed.includes(email))throw Error('此帳號尚未獲准使用藥庫站內同步');}
+function orderDeliveryEvents_(){
+ const log=SpreadsheetApp.openById(ERP.orders).getSheetByName(ERP.orderLog);if(!log||log.getRange(1,1).getValue()!=='交易編號'||log.getLastRow()<2||log.getLastRow()>10000)throw Error('訂貨紀錄無法核對');
+ return log.getRange(2,1,log.getLastRow()-1,2).getValues().filter(r=>r[0]||r[1]).map(r=>{const e=JSON.parse(r[1]);if(e?.draft?.id!==r[0])throw Error('訂貨紀錄編號不一致');return e;});
+}
+function orderDeliveryPlans_(id,events){events=events||orderDeliveryEvents_();return confirmedPrintPlan_(events,id).map(p=>({...p,items:events.find(e=>e.draft.id===id).draft.lines.filter(l=>l.sheet===p.brand+'單方'||l.sheet===p.brand+'複方')}));}
+function orderOutputBase_(id,mergeIds){
+ if(mergeIds===undefined)mergeIds=[];if(!Array.isArray(mergeIds)||mergeIds.length>1||mergeIds.some(x=>typeof x!=='string'||x===id))throw Error('請選擇一筆不同的先前訂單');
+ const events=orderDeliveryEvents_(),current=orderDeliveryPlans_(id,events);if(!mergeIds.length)return current;
+ const currentIndex=events.findIndex(e=>e.draft.id===id),previousIndex=events.findIndex(e=>e.draft.id===mergeIds[0]);
+ if(previousIndex<0||previousIndex>=currentIndex)throw Error('只能選擇本筆之前已確認的訂單');
+ return mergeOrderPdfPlans_(current,orderDeliveryPlans_(mergeIds[0],events));
+}
+function orderWasSent_(id,plans,roster,props){
+ if(props['order-mail-sent-'+id])return true;
+ const variants=[plans,reviseOrderPdf_(plans,{rows:orderPdfSeed_(plans).rows})];
+ for(const staff of roster)if(staff.valid)for(const p of variants)for(const test of [false,true]){const value=props[orderMailKey_({id,email:staff.email,hash:loss3Hash_(p),test})];if(value&&JSON.parse(value).state==='sent')return true;}
+ return false;
+}
+function erpOrderOutputOptions(id){
+ orderDeliveryAuth_();const events=orderDeliveryEvents_();orderDeliveryPlans_(id,events);const index=events.findIndex(e=>e.draft.id===id);
+ const roster=orderDeliveryRoster_(),props=PropertiesService.getScriptProperties().getProperties(),orders=[];for(let i=index-1;i>=0&&orders.length<30;i--){const d=events[i].draft;if(d.action!=='訂貨'||/測試|驗收|test/i.test(d.note||''))continue;try{const plans=orderDeliveryPlans_(d.id,events);orders.push({id:d.id,date:d.date,actor:d.actor,count:d.lines.length,brands:plans.map(p=>p.brand),sent:orderWasSent_(d.id,plans,roster,props)});}catch{}}
+ return {orders};
+}
+function erpOrderPdfEditSource(input){orderDeliveryAuth_();const id=typeof input==='string'?input:input.id,mergeIds=typeof input==='string'?[]:input.mergeIds||[],plans=orderOutputBase_(id,mergeIds);return {id,mergeIds,date:plans[0].date,actor:plans[0].actor,merged:!!plans[0].merged,sources:plans[0].sources||[],sourceHash:loss3Hash_(plans),...orderPdfSeed_(plans)};}
+function orderDeliveryRevised_(id,draft){const base=orderOutputBase_(id,draft?.mergeIds);if(!draft)return base;if(draft.sourceHash!==loss3Hash_(base))throw Error('原訂單已變更，請重新載入並核對 PDF 草稿');return reviseOrderPdf_(base,draft);}
 function orderDeliveryRoster_(){const sh=SpreadsheetApp.openById(ERP.inventory).getSheetByName('員工名冊');if(!sh||sh.getLastRow()>10000)throw Error('員工名冊無法讀取');return orderMailRoster_(sh.getRange(1,2,Math.max(1,sh.getLastRow()),2).getDisplayValues());}
 function erpOrderPdfStaff(){orderDeliveryAuth_();return {staff:orderDeliveryRoster_()};}
 function orderDeliveryFiles_(plans){let size=0;return plans.map(p=>{const blob=HtmlService.createHtmlOutput(orderPdfHtml_(p)).getAs('application/pdf').setName(orderPdfName_(p));const bytes=blob.getBytes();size+=bytes.length;if(size>8*1024*1024)throw Error('PDF 附件總大小超過 8 MB，請分批訂單處理');return {p,blob,bytes};});}
 function erpOrderPdfDownload(input){orderDeliveryAuth_();const id=typeof input==='string'?input:input?.id,plans=orderDeliveryRevised_(id,typeof input==='object'?input.draft:null);return {id,files:orderDeliveryFiles_(plans).map(({p,blob,bytes})=>({brand:p.brand,count:p.count,name:blob.getName(),mime:'application/pdf',base64:Utilities.base64Encode(bytes)}))};}
 function orderDeliverySnapshot_(id,row,test,draft=null){
  const plans=orderDeliveryRevised_(id,draft),staff=orderDeliveryRoster_().find(s=>s.row===Number(row));if(!staff||!staff.valid)throw Error('所選員工沒有有效的 C 欄 email，請先更新名冊');
- const files=plans.map(p=>({name:orderPdfName_(p),count:p.count,brand:p.brand}));return {id,draft,row:staff.row,name:staff.name,email:staff.email,test:!!test,hash:loss3Hash_(plans),files,subject:(test?'【功能測試・請勿重複下單】':'')+'訂藥 PDF｜'+plans[0].date+'｜'+plans.map(p=>p.brand).join('、'),plans};
+ const files=plans.map(p=>({name:orderPdfName_(p),count:p.count,brand:p.brand}));return {id,draft,row:staff.row,name:staff.name,email:staff.email,test:!!test,hash:loss3Hash_(plans),files,subject:(test?'【功能測試・請勿重複下單】':'')+(plans[0].merged?'【更新版・取代前版・請勿重複下單】':'')+'訂藥 PDF｜'+plans[0].date+'｜'+plans.map(p=>p.brand).join('、'),plans};
 }
 function orderMailKey_(s){return 'order-mail-v1-'+loss3Hash_({id:s.id,email:s.email.toLowerCase(),hash:s.hash,test:s.test});}
 function erpOrderPdfMailPreview(input){
@@ -66,8 +104,8 @@ function erpOrderPdfMailSend(token){
   if(old)throw Error('上次寄送結果待確認，請先查收信件；系統不會自動重寄');
   if(MailApp.getRemainingDailyQuota()<1)throw Error('今日寄信額度不足，尚未寄送');
   const files=orderDeliveryFiles_(s.plans);const time=new Date().toISOString();props.setProperty(key,JSON.stringify({state:'sending',time}));
-  try{MailApp.sendEmail({to:s.email,subject:s.subject,body:s.name+' 您好：\n\n附件為本次核對後的訂藥 PDF 草稿（如有修訂，正式訂量尚未變更），共 '+s.files.length+' 份。\n'+s.files.map(f=>f.brand+'：'+f.count+' 項').join('\n')+'\n訂單編號：'+s.id+'\n\n'+(s.test?'此為功能測試郵件，請勿依此重複下單。\n':'')+'產生與寄送 PDF 不會增加庫存或重新登錄訂貨。',attachments:files.map(f=>f.blob),name:'瑞恩藥庫'});}catch(e){props.setProperty(key,JSON.stringify({state:'uncertain',time}));throw Error('Google 寄送結果待確認，請先查收信件，不會自動重寄');}
-  props.setProperty(key,JSON.stringify({state:'sent',time}));return {state:'sent',duplicate:false,time,message:'已交付 Google 寄送給 '+s.name+'，請收件人確認收件匣或垃圾郵件。'};
+  try{MailApp.sendEmail({to:s.email,subject:s.subject,body:(s.plans[0].merged?'更新版，取代前版，請勿重複下單。來源訂單：'+s.plans[0].sources.map(x=>x.id).join('、')+'\n\n':'')+s.name+' 您好：\n\n附件為本次核對後的訂藥 PDF 草稿（如有修訂，正式訂量尚未變更），共 '+s.files.length+' 份。\n'+s.files.map(f=>f.brand+'：'+f.count+' 項').join('\n')+'\n訂單編號：'+s.id+'\n\n'+(s.test?'此為功能測試郵件，請勿依此重複下單。\n':'')+'產生與寄送 PDF 不會增加庫存或重新登錄訂貨。',attachments:files.map(f=>f.blob),name:'瑞恩藥庫'});}catch(e){props.setProperty(key,JSON.stringify({state:'uncertain',time}));throw Error('Google 寄送結果待確認，請先查收信件，不會自動重寄');}
+  props.setProperty(key,JSON.stringify({state:'sent',time}));for(const source of s.plans[0].sources||[{id:s.id}])props.setProperty('order-mail-sent-'+source.id,time);return {state:'sent',duplicate:false,time,message:'已交付 Google 寄送給 '+s.name+'，請收件人確認收件匣或垃圾郵件。'};
  }finally{lock.releaseLock();}
 }
 // Authorization check only. Never sends an email.

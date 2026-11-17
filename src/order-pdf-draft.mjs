@@ -1,6 +1,6 @@
 // PDF-only revisions. This module never creates inventory or order transactions.
 export function orderPdfSeed(plans){
- return {rows:plans.flatMap(p=>p.items.map(l=>({key:l.sheet+'|'+l.code,brand:p.brand,category:l.sheet.slice(p.brand.length),code:l.code,name:l.name,quantity:l.quantity,manual:false}))),brands:[...new Set([...plans.map(p=>p.brand),'科達','天明','富田'])]};
+ return {rows:plans.flatMap(p=>p.items.map(l=>({key:l.sheet+'|'+l.code,brand:p.brand,category:l.sheet.slice(p.brand.length),code:l.code,name:l.name,quantity:l.quantity,manual:false,...(l.parts?{parts:l.parts}:{} )}))),brands:[...new Set([...plans.map(p=>p.brand),'科達','天明','富田'])]};
 }
 export function reviseOrderPdf(plans,draft){
  const seed=orderPdfSeed(plans);if(!draft||!Array.isArray(draft.rows)||draft.rows.length>1000)throw Error('PDF 草稿格式不符或超過 1000 列');
@@ -22,4 +22,23 @@ export function reviseOrderPdf(plans,draft){
   for(const category of ['單方','複方']){const list=items.filter(r=>r.category===category);for(let i=0;i<list.length;i+=22){const chunk=list.slice(i,i+22);columns.push(['',category+'・藥品名稱',...chunk.map(r=>(r.manual?'[手動新增] ':'')+r.name)],['',plans[0].date.slice(5).replace('-','/')+'\n訂量',...chunk.map(r=>r.quantity)]);}}
   const values=Array.from({length:24},(_,i)=>columns.map(c=>c[i]??''));return [{...plans[0],brand,title:brand+'訂單列印版',count:items.length,values,items,edited:true}];
  });
+}
+
+// Both inputs have already passed confirmedPrintPlan, including cancellation checks.
+export function mergeOrderPdfPlans(current,previous){
+ const lines=new Map();
+ for(const [index,plans] of [previous,current].entries())for(const p of plans)for(const l of p.items){
+  const key=l.sheet+'|'+l.code,old=lines.get(key);
+  if(old&&old.name!==l.name)throw Error(l.code+'：兩筆訂單藥名不一致，請先核對');
+  const row=old||{...l,quantity:0,parts:{previous:0,current:0}};
+  row.quantity+=l.quantity;row.parts[index?'current':'previous']+=l.quantity;
+  if(!Number.isSafeInteger(row.quantity)||row.quantity>1000000)throw Error(l.name+'：合計數量超過上限');
+  lines.set(key,row);
+ }
+ const groups=new Map();for(const l of lines.values()){const brand=l.sheet.replace(/(單方|複方)$/,'');if(!groups.has(brand))groups.set(brand,[]);groups.get(brand).push(l);}
+ const sources=[{id:previous[0].id,date:previous[0].date,actor:previous[0].actor},{id:current[0].id,date:current[0].date,actor:current[0].actor}];
+ const base=[...groups].map(([brand,items])=>({...current[0],brand,items,merged:true,sources}));
+ const rebuilt=reviseOrderPdf(base,{rows:orderPdfSeed(base).rows});
+ return rebuilt.map(p=>({...p,items:linesFor(p.brand),merged:true,sources}));
+ function linesFor(brand){return groups.get(brand);}
 }

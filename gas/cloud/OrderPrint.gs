@@ -16,7 +16,8 @@ function confirmedPrintPlan_(events,id){
 
 // Only the stored confirmed transaction is accepted. No quantities supplied by the browser.
 const ORDER_PRINT_ID='1oAF12BHo29MwFSEmprRXITwXAJqPH2tbINCm0dgjib8';
-function erpPrintConfirmedOrder(id){
+function erpPrintConfirmedOrder(input){
+ const id=typeof input==='string'?input:input.id;
  loss3Actor_();
  const email=Session.getActiveUser().getEmail().toLowerCase(),allowed=(PropertiesService.getScriptProperties().getProperty('ERP_ALLOWED_EMAILS')||'').split(',').map(s=>s.trim().toLowerCase());
  if(!email||!allowed.includes(email))throw Error('此帳號尚未獲准使用藥庫站內同步');
@@ -25,10 +26,10 @@ function erpPrintConfirmedOrder(id){
   const log=SpreadsheetApp.openById(ERP.orders).getSheetByName(ERP.orderLog);
   if(!log||log.getRange(1,1).getValue()!=='交易編號'||log.getLastRow()<2||log.getLastRow()>10000)throw Error('訂貨紀錄無法核對');
   const events=log.getRange(2,1,log.getLastRow()-1,2).getValues().filter(r=>r[0]||r[1]).map(r=>{const e=JSON.parse(r[1]);if(e?.draft?.id!==r[0])throw Error('訂貨紀錄編號不一致');return e;});
-  const plans=confirmedPrintPlan_(events,id),ss=SpreadsheetApp.openById(ORDER_PRINT_ID),requests=[],used=new Set(ss.getSheets().map(s=>s.getSheetId())),stamp=Utilities.formatDate(new Date(),'Asia/Taipei','yyyyMMdd_HHmmss');
+  const plans=typeof input==='object'&&input.draft?orderDeliveryRevised_(id,input.draft):confirmedPrintPlan_(events,id);for(const p of plans)if(p.edited){p.values[0][0]=(p.merged?'更新版，取代前版，請勿重複下單｜':'')+p.brand+'訂購清單｜'+p.date+'｜'+p.actor+'｜來源：'+(p.sources||[{id:p.id}]).map(x=>x.id).join('、');}const ss=SpreadsheetApp.openById(ORDER_PRINT_ID),requests=[],used=new Set(ss.getSheets().map(s=>s.getSheetId())),stamp=Utilities.formatDate(new Date(),'Asia/Taipei','yyyyMMdd_HHmmss');
   const nextId=()=>{let n=100;while(used.has(n))n++;used.add(n);return n;};
   for(const p of plans){
-   let sh=ss.getSheetByName(p.title);p.sheetId=sh?sh.getSheetId():nextId();p.note=JSON.stringify({kind:'erp-confirmed-order-print-v1',id:p.id,count:p.count});
+   let sh=ss.getSheetByName(p.title);p.sheetId=sh?sh.getSheetId():nextId();p.note=JSON.stringify({kind:'erp-confirmed-order-print-v1',id:p.id,count:p.count,...(p.edited?{hash:loss3Hash_(p.values),sources:p.sources||[]}:{} )});
    if(sh&&sh.getRange(1,1).getNote()===p.note&&JSON.stringify(sh.getRange(1,1,24,p.values[0].length).getValues())===JSON.stringify(p.values)){p.unchanged=true;continue;}
    if(sh){const backupId=nextId();p.backup='備份_'+p.brand+'_'+stamp+'_'+backupId;requests.push({duplicateSheet:{sourceSheetId:p.sheetId,newSheetId:backupId,newSheetName:p.backup}},{updateSheetProperties:{properties:{sheetId:backupId,hidden:true},fields:'hidden'}});}
    else requests.push({addSheet:{properties:{sheetId:p.sheetId,title:p.title,gridProperties:{rowCount:30,columnCount:Math.max(2,p.values[0].length)}}}});
@@ -43,7 +44,7 @@ function erpPrintConfirmedOrder(id){
     {repeatCell:{range:{...output,endRowIndex:2},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:12},backgroundColor:{red:0.95,green:0.95,blue:0.95}}},fields:'userEnteredFormat.textFormat,userEnteredFormat.backgroundColor'}},
     {updateBorders:{range:{...output,startRowIndex:1},top:{style:'SOLID'},bottom:{style:'SOLID'},left:{style:'SOLID'},right:{style:'SOLID'},innerHorizontal:{style:'SOLID'},innerVertical:{style:'SOLID'}}},
     {updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'ROWS',startIndex:0,endIndex:24},properties:{pixelSize:32},fields:'pixelSize'}},
-    {updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'ROWS',startIndex:0,endIndex:1},properties:{pixelSize:p.values[0].length===2?80:40},fields:'pixelSize'}},
+    {updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'ROWS',startIndex:0,endIndex:1},properties:{pixelSize:p.merged?120:p.values[0].length===2?80:40},fields:'pixelSize'}},
     {updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'ROWS',startIndex:1,endIndex:2},properties:{pixelSize:44},fields:'pixelSize'}});
    for(let c=0;c<p.values[0].length;c++)requests.push({updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'COLUMNS',startIndex:c,endIndex:c+1},properties:{pixelSize:c%2?70:150},fields:'pixelSize'}});
   }

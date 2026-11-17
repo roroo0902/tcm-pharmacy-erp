@@ -27,6 +27,7 @@ function erpPrintConfirmedOrder(id){
     {repeatCell:{range:{...output,endRowIndex:2},cell:{userEnteredFormat:{textFormat:{bold:true,fontSize:12},backgroundColor:{red:0.95,green:0.95,blue:0.95}}},fields:'userEnteredFormat.textFormat,userEnteredFormat.backgroundColor'}},
     {updateBorders:{range:{...output,startRowIndex:1},top:{style:'SOLID'},bottom:{style:'SOLID'},left:{style:'SOLID'},right:{style:'SOLID'},innerHorizontal:{style:'SOLID'},innerVertical:{style:'SOLID'}}},
     {updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'ROWS',startIndex:0,endIndex:24},properties:{pixelSize:32},fields:'pixelSize'}},
+    {updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'ROWS',startIndex:0,endIndex:1},properties:{pixelSize:p.values[0].length===2?80:40},fields:'pixelSize'}},
     {updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'ROWS',startIndex:1,endIndex:2},properties:{pixelSize:44},fields:'pixelSize'}});
    for(let c=0;c<p.values[0].length;c++)requests.push({updateDimensionProperties:{range:{sheetId:p.sheetId,dimension:'COLUMNS',startIndex:c,endIndex:c+1},properties:{pixelSize:c%2?70:150},fields:'pixelSize'}});
   }

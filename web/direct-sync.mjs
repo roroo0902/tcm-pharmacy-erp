@@ -99,7 +99,7 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
   const reviewed=JSON.parse(JSON.stringify(draft));
   const preview=await runDirect('preview',reviewed);
   if(sequence!==reviewSequence)return;
-  if(options.requireUnposted&&preview.duplicate)throw Error('上一筆已入帳。請再查一次入帳結果。');
+  if(options.requireUnposted&&preview.duplicate)throw Error(reviewed.action==='訂貨'?'上一筆已同步。請再查一次同步結果。':'上一筆已入帳。請再查一次入帳結果。');
   if(reviewed.completionSheets)assertLossCompletion(reviewed,preview.completion,false);
   if(reviewed.version===2&&reviewed.kind==='tcm-cloud')for(const l of reviewed.lines){const p=preview.lines.find(p=>p.sheet===l.sheet&&p.code===l.code&&p.name===l.name);if(!p||p.quantity!==l.quantity||p.unitPriceCents!==l.unitPriceCents||(l.unitPriceCents!==undefined&&p.amountCents!==l.unitPriceCents*l.quantity))throw Error('單價預覽不一致，請重新載入最新版再核對，尚未入帳');}
   readingScreen.close();readingScreen=null;

@@ -3,7 +3,7 @@ import {createRefreshStatus} from './refresh-status.mjs';
 import {supplyLayout} from './supply-layout.mjs';
 import {protectDraft} from './page-safety.mjs';
 import {operationResult} from './operation-result.mjs';
-import {recoverPendingReceipt} from './receipt-recovery.mjs';
+import {recoverPendingTransaction} from './pending-recovery.mjs';
 import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
@@ -99,8 +99,8 @@ export function mountReceiptGrid({esc,fmt,ask}){
   try{
    if(recovering){
     processButton.textContent='處理上一筆進貨';
-    const outcome=await recoverPendingReceipt({
-     ask,status:report,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,
+    const outcome=await recoverPendingTransaction({
+     action:'進貨',ask,status:report,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,
      onResolved:async({alreadyPosted})=>{
       showPending();
       if(alreadyPosted)report('上一筆已入帳。目前填寫的進貨已保留。');

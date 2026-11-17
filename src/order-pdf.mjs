@@ -1,0 +1,10 @@
+const pdfEscape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+export function orderPdfName(p){return `${p.brand}_訂藥_${p.date}_${p.id.slice(-8)}.pdf`.replace(/[\\/:*?"<>|\r\n]/g,'_');}
+export function orderPdfHtml(p){
+ const pages=[];for(let c=0;c<p.values[0].length;c+=6){const cols=Math.min(6,p.values[0].length-c);pages.push(`<section><h1>${pdfEscape(p.brand)}訂購清單</h1><p>訂貨日期：${pdfEscape(p.date)}　經手人：${pdfEscape(p.actor)}　單位：瓶</p><table><colgroup>${Array.from({length:cols},(_,i)=>`<col style="width:${i%2?25/(cols/2):75/(cols/2)}%">`).join('')}</colgroup><thead><tr>${p.values[1].slice(c,c+cols).map(x=>`<th>${pdfEscape(x).replaceAll('\n','<br>')}</th>`).join('')}</tr></thead><tbody>${p.values.slice(2).map(r=>`<tr>${r.slice(c,c+cols).map(x=>`<td>${pdfEscape(x)||'&nbsp;'}</td>`).join('')}</tr>`).join('')}</tbody></table><footer>本廠牌共 ${p.count} 項 · 訂單編號：${pdfEscape(p.id)}<br>僅為訂藥清單，尚未入庫。</footer></section>`);}
+ return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><style>@page{size:A4 portrait;margin:12mm}body{font-family:'Noto Sans CJK TC','Microsoft JhengHei',sans-serif;color:#172c43;font-size:11px;margin:0}section{page-break-after:always}section:last-child{page-break-after:auto}h1{font-size:20px;text-align:center;margin:0 0 10px}p{text-align:center;margin:0 0 12px}table{border-collapse:collapse;width:100%;table-layout:fixed}thead{display:table-header-group}th,td{border:1px solid #777;text-align:center;vertical-align:middle;padding:5px 3px;overflow-wrap:anywhere;word-wrap:break-word}th{background:#f0f0ed}tr{page-break-inside:avoid}footer{font-size:9px;color:#555;margin-top:12px;overflow-wrap:anywhere}</style></head><body>${pages.join('')}</body></html>`;
+}
+export function orderMailRoster(values){
+ if(values[0]?.[0]!=='員工姓名'||String(values[0]?.[1]||'').trim().toLowerCase()!=='email')throw Error('員工名冊 B1/C1 必須是員工姓名/email');
+ return values.slice(1).map((r,i)=>({row:i+2,name:String(r[0]??'').trim(),email:String(r[1]??'').trim()})).filter(r=>r.name).map(r=>({...r,valid:/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(r.email)}));
+}

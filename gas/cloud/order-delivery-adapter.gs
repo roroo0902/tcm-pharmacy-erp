@@ -14,7 +14,7 @@ function orderDeliverySnapshot_(id,row,test){
 function orderMailKey_(s){return 'order-mail-v1-'+loss3Hash_({id:s.id,email:s.email.toLowerCase(),hash:s.hash,test:s.test});}
 function erpOrderPdfMailPreview(input){
  orderDeliveryAuth_();const s=orderDeliverySnapshot_(input?.id,input?.row,input?.test),token=Utilities.getUuid();CacheService.getUserCache().put('order-mail-preview-'+token,JSON.stringify(s),600);
- const old=PropertiesService.getScriptProperties().getProperty(orderMailKey_(s));const {plans,...publicPreview}=s;return {...publicPreview,token,state:old?JSON.parse(old).state:'ready'};
+ const old=PropertiesService.getScriptProperties().getProperty(orderMailKey_(s));const {plans,...publicPreview}=s;let mailEnabled=false;try{MailApp.getRemainingDailyQuota();mailEnabled=true;}catch{}return {...publicPreview,token,mailEnabled,state:old?JSON.parse(old).state:'ready'};
 }
 function erpOrderPdfMailSend(token){
  orderDeliveryAuth_();if(typeof token!=='string'||token.length>100)throw Error('寄送預覽已失效');

@@ -14,7 +14,7 @@ export function receiptLines(rows,quantities,prices=new Map()){
   if(!Number.isInteger(r.bottles)||r.bottles<0)throw Error(r.drug+'：目前庫存待核對');
   if(r.priceWarning&&!prices.has(key))throw Error(r.drug+'：'+r.priceWarning+'，請手動核對單價');
   let unitPriceCents;try{unitPriceCents=priceCents(receiptPrice(r,prices));}catch(e){throw Error(r.drug+'：'+e.message);}
-  lines.push({sheet:r.name,code:r.code,name:r.drug,quantity,...(unitPriceCents===undefined?{}:{unitPriceCents})});
+  lines.push({sheet:r.name,code:r.code,name:r.drug,quantity,...(r.pendingCreate?{create:true}:{}),...(unitPriceCents===undefined?{}:{unitPriceCents})});
  }
  return lines;
 }

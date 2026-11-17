@@ -151,6 +151,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
     }
     if(alive){showPending();await load();}
    },recovering?pendingStatus:status,{requireUnposted:recovering,receiptRows:()=>rows,onDraftChange:next=>{
+    for(const l of next.lines.filter(l=>l.create)){if(!rows.some(r=>r.name===l.sheet&&r.code===l.code)){const s=sources.find(s=>s.name===l.sheet);if(s)rows.push({...s,code:l.code,drug:l.name,bottles:0,pendingCreate:true,unitPriceCents:l.unitPriceCents});}}
     Object.assign(d,next);
     const current=resultRecord();
     if(current?.id===d.id&&!current.verified)localStorage.setItem(KEY,JSON.stringify(d));

@@ -11,3 +11,13 @@ test('reject blank fractional negative and duplicate lines',()=>{for(const q of 
 test('reject invalid dates, missing actor, unknown sheets and stock formulas',()=>{for(const date of ['2026-02-30','10/29'])assert.throws(()=>cloudDraft({...make(),date}));assert.throws(()=>cloudDraft({...make(),actor:''}));for(const stock of ['',null,-1,0.5])assert.throws(()=>cloudPlan(cloudDraft(make()),[{...row,stock}]));assert.throws(()=>cloudPlan(cloudDraft(make()),[{...row,formula:'=1'}]));});
 test('exact identity and duplicate cloud codes are rejected',()=>{assert.throws(()=>cloudPlan(cloudDraft(make()),[{...row,name:'other'}]));assert.throws(()=>cloudPlan(cloudDraft(make()),[row,row]));});
 test('reversal checks original, original lines, already reversed, and remaining stock',()=>{const d=cloudDraft(make()),p=cloudPlan(d,[row]),e={draft:d,lines:p.lines};const reverse=cloudDraft({...d,id:'ERP-reverse-12345',action:'沖銷',reverses:d.id});assert.equal(cloudPlan(reverse,[{...row,stock:15}],[e]).lines[0].after,10);assert.throws(()=>cloudPlan(reverse,[row],[]));assert.throws(()=>cloudPlan(reverse,[row],[e,{draft:{...reverse,id:'ERP-other-12345'}}]));assert.throws(()=>cloudPlan(reverse,[{...row,stock:0}],[e]));const bad=structuredClone(reverse);bad.lines[0].quantity=4;assert.throws(()=>cloudPlan(bad,[row],[e]));});
+
+test('mixed receipt creates new item only on explicit flag and preserves idempotency and reversal',()=>{
+ const d=cloudDraft({...make(),lines:[make().lines[0],{sheet:'科達單方',code:'NEW',name:'新品',quantity:2,create:true}]});
+ const plan=cloudPlan(d,[row]);assert.equal(plan.lines[1].before,0);assert.equal(plan.lines[1].after,2);
+ const event={draft:d,lines:plan.lines};assert.equal(cloudPlan(d,[],[event]).duplicate,true);
+ assert.throws(()=>cloudPlan(d,[row,{...row,code:'NEW',name:'新品'}]),/已存在/);
+ const reversal=cloudDraft({...d,id:'ERP-reverse-1234',action:'沖銷',reverses:d.id,note:'撤銷'});
+ assert.equal(cloudPlan(reversal,[{...row,stock:15},{...row,code:'NEW',name:'新品',stock:2}],[event]).lines[1].after,0);
+ assert.throws(()=>cloudDraft({...d,action:'訂貨'}),/標記/);
+});

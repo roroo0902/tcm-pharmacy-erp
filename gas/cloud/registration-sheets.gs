@@ -1,5 +1,6 @@
 // Called under erpCommit's ScriptLock. Each workbook is atomic; retries only fill gaps.
 function erpRegistrationSheets_(draft,dryRun){
+ if(draft.action==='進貨'){draft={...draft,action:'建檔',lines:draft.lines.filter(l=>l.create)};if(!draft.lines.length)return [];}
  if(draft.action!=='建檔')return [];
  const orderId=ERP.orders,printId='1oAF12BHo29MwFSEmprRXITwXAJqPH2tbINCm0dgjib8',outputs=[];
  const specs=[{id:orderId,kind:'order'},{id:printId,kind:'print'}];

@@ -2,7 +2,7 @@
 const ERP={inventory:LOSS3.inventory,orders:'1YcO7XRhN4T8wrL6wn-jD45lqif--rYQF4HCuBE-Nju8',log:'藥庫_同步紀錄',logId:904291001,orderLog:'藥庫_訂貨紀錄',orderLogId:904291002};
 function erpRead_(input){
  loss3Actor_();const draft=CloudTransaction.cloudDraft(input);
- if(['建檔','訂貨','取消訂貨'].includes(draft.action)){const allowed=erpOrderSources_().map(s=>s.name);if(draft.lines.some(l=>!allowed.includes(l.sheet)&&draft.action!=='建檔'))throw Error('廠商來源未啟用或欄位格式不符');if(draft.action==='建檔')for(const l of draft.lines)if(!allowed.includes(l.sheet)){const inv=SpreadsheetApp.openById(ERP.inventory);if(inv.getSheetByName(l.sheet))throw Error('廠商來源未啟用或欄位格式不符');erpNewSupplierName_(l.sheet);}}
+ if(['建檔','訂貨','取消訂貨'].includes(draft.action)||draft.lines.some(l=>l.create)){const allowed=erpOrderSources_().map(s=>s.name);if(draft.lines.some(l=>!allowed.includes(l.sheet)&&draft.action!=='建檔'))throw Error('廠商來源未啟用或欄位格式不符');if(draft.action==='建檔')for(const l of draft.lines)if(!allowed.includes(l.sheet)){const inv=SpreadsheetApp.openById(ERP.inventory);if(inv.getSheetByName(l.sheet))throw Error('廠商來源未啟用或欄位格式不符');erpNewSupplierName_(l.sheet);}}
  if(draft.date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不可登錄未來日期');
  const ss=SpreadsheetApp.openById(['訂貨','取消訂貨'].includes(draft.action)?ERP.orders:ERP.inventory),title=['訂貨','取消訂貨'].includes(draft.action)?ERP.orderLog:ERP.log,log=ss.getSheetByName(title);
  if(log&&log.getRange(1,1).getValue()!=='交易編號')throw Error('紀錄表頭異常');
@@ -45,7 +45,7 @@ function erpCommit(input,token){
   for(const l of s.plan.lines){
    if(['訂貨','取消訂貨'].includes(s.draft.action))continue;
    const t=s.tabs[l.sheet];
-   if(s.draft.action==='建檔'){
+   if(s.draft.action==='建檔'||(s.draft.action==='進貨'&&l.create)){
     // Append beyond every existing value/formula; never overwrite a formatted/spilled row.
     const row=nextRows[l.sheet]===undefined?t.sh.getMaxRows():nextRows[l.sheet];nextRows[l.sheet]=row+1;l.row=row;l.sheetId=t.sh.getSheetId();
     requests.push({appendDimension:{sheetId:l.sheetId,dimension:'ROWS',length:1}},loss3Cell_(l.sheetId,row,1,l.code),loss3Cell_(l.sheetId,row,3,l.name));

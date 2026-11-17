@@ -298,3 +298,10 @@ test('partial completion cannot bypass valid-code ledger errors or complete zero
  assert.match(h.day(dates[2]).error,/歷史數量衝突/);assert.throws(()=>h.ctx.periodComplete_({...h.day(dates[2]),actor:'測試',confirmPartial:true,confirmBlankZero:true}),/待核對/);
  h.state(source.name).values[2][1]='';h.state(source.name).values[3][1]='';assert.match(h.day(dates[2]).error,/沒有可完成/);assert.equal(h.batches.length,0);
 });
+
+test('fixed dates query only selected days and never change stocks or shared defaults',()=>{
+ const h=harness();const before=copy(h.state(source.name).values);const settings=copy(h.state('訂貨統計設定').values);
+ const result=h.read({start:dates[1],end:dates[1]});assert.equal(result.period.days,1);assert.equal(result.rows[0].total,5);assert.equal(result.period.range,true);
+ assert.deepEqual(h.state(source.name).values,before);assert.deepEqual(h.state('訂貨統計設定').values,settings);assert.equal(h.batches.length,0);
+ assert.throws(()=>h.ctx.periodSaveSettings_({start:dates[1],end:dates[1]}),/共用預設/);
+});

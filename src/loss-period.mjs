@@ -6,7 +6,16 @@ function periodDate(value) {
   return timestamp;
 }
 
-export function lossPeriod({days, includeToday} = {}, todayISO) {
+export function lossPeriod({days, includeToday, start, end} = {}, todayISO) {
+  if (start !== undefined || end !== undefined) {
+    const first = periodDate(start), last = periodDate(end), today = periodDate(todayISO);
+    if (last < first) throw Error('結束日期不可早於開始日期');
+    if (last > today) throw Error('結束日期不可晚於今天');
+    const count = (last - first) / 86400000 + 1;
+    if (count > 3660) throw Error('統計期間不可超過 3660 天');
+    const dates = Array.from({length:count}, (_,i)=>new Date(first+i*86400000).toISOString().slice(0,10));
+    return {days:count,includeToday:end===todayISO,start,end,dates,range:true,label:'自訂期間耗損量'};
+  }
   if (!['number', 'string'].includes(typeof days) || String(days).trim() === '') throw Error('請輸入統計天數');
   const count = Number(days);
   if (!Number.isInteger(count) || count < 1 || count > 3660) throw Error('統計天數須為 1 至 3660 的整數');

@@ -91,3 +91,10 @@ test('aggregation leaves source rows, values and completion dates unchanged', ()
   result.missingDates.push('2026-11-04');
   assert.equal(input.dates.length, 3);
 });
+
+test('fixed calendar range includes both dates and supports historical leap-day ranges',()=>{
+ const p=lossPeriod({start:'2024-02-28',end:'2024-03-01'},'2026-11-17');
+ assert.deepEqual(p.dates,['2024-02-28','2024-02-29','2024-03-01']);assert.equal(p.days,3);assert.equal(p.range,true);assert.equal(p.includeToday,false);
+ assert.equal(lossPeriod({start:'2026-11-17',end:'2026-11-17'},'2026-11-17').days,1);
+ for(const range of [{start:'',end:'2026-11-17'},{start:'2026-11-17',end:'2026-11-16'},{start:'2026-11-17',end:'2026-11-18'},{start:'2000-01-01',end:'2026-11-17'}])assert.throws(()=>lossPeriod(range,'2026-11-17'));
+});

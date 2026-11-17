@@ -7,7 +7,16 @@ function periodDate(value) {
   return timestamp;
 }
 
-function lossPeriod({days, includeToday} = {}, todayISO) {
+function lossPeriod({days, includeToday, start, end} = {}, todayISO) {
+  if (start !== undefined || end !== undefined) {
+    const first = periodDate(start), last = periodDate(end), today = periodDate(todayISO);
+    if (last < first) throw Error('結束日期不可早於開始日期');
+    if (last > today) throw Error('結束日期不可晚於今天');
+    const count = (last - first) / 86400000 + 1;
+    if (count > 3660) throw Error('統計期間不可超過 3660 天');
+    const dates = Array.from({length:count}, (_,i)=>new Date(first+i*86400000).toISOString().slice(0,10));
+    return {days:count,includeToday:end===todayISO,start,end,dates,range:true,label:'自訂期間耗損量'};
+  }
   if (!['number', 'string'].includes(typeof days) || String(days).trim() === '') throw Error('請輸入統計天數');
   const count = Number(days);
   if (!Number.isInteger(count) || count < 1 || count > 3660) throw Error('統計天數須為 1 至 3660 的整數');
@@ -90,7 +99,7 @@ function periodReadUnlocked_(input){
  const rows=[],completion={};for(const source of sources){const snap=periodSnapshot_(ss,source,period.dates,events),completed=[];completion[source.name]=period.dates.map(date=>{const state=periodCompletionState_(snap,date,latest.get(JSON.stringify([date,source.name])));if(state.eligibleComplete)completed.push(date);return {date,...state};});rows.push(...LossPeriod.summarizeLossPeriod({dates:period.dates,rows:snap.rows,completedDates:completed}).map(({sheet,code,name,total,complete,error})=>({sheet,code,name,total,complete,error})));}
  return {settings,period,rows,completion,readAt:new Date().toISOString()};
 }
-function periodSaveSettings_(input){const period=LossPeriod.lossPeriod(input,periodToday_()),lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他操作處理中');try{const ss=SpreadsheetApp.openById(LOSS3.inventory);periodSettings_(ss);const sh=ss.getSheetByName(PERIOD_SETTINGS);sh.getRange('B2:B3').setValues([[period.days],[period.includeToday]]);SpreadsheetApp.flush();const saved=periodSettings_(ss);if(saved.days!==period.days||saved.includeToday!==period.includeToday)throw Error('設定讀回不一致');return saved;}finally{lock.releaseLock();}}
+function periodSaveSettings_(input){if(input&&(input.start!==undefined||input.end!==undefined))throw Error("固定日期僅供本次查詢，共用預設請使用近幾天");const period=LossPeriod.lossPeriod(input,periodToday_()),lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他操作處理中');try{const ss=SpreadsheetApp.openById(LOSS3.inventory);periodSettings_(ss);const sh=ss.getSheetByName(PERIOD_SETTINGS);sh.getRange('B2:B3').setValues([[period.days],[period.includeToday]]);SpreadsheetApp.flush();const saved=periodSettings_(ss);if(saved.days!==period.days||saved.includeToday!==period.includeToday)throw Error('設定讀回不一致');return saved;}finally{lock.releaseLock();}}
 function periodAppend_(sh,values){return {appendCells:{sheetId:sh.getSheetId(),rows:values.map(row=>({values:row.map(v=>({userEnteredValue:{stringValue:String(v)}}))})),fields:'userEnteredValue'}};}
 function periodComplete_(input){
  const date=loss3Date_(input?.date),actor=String(input?.actor||'').trim();if(date>periodToday_()||!actor||actor.length>80||input?.confirmBlankZero!==true)throw Error('請確認日期、經手人與空白代表零耗損');

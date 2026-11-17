@@ -20,7 +20,7 @@
  <path fill="#effbff" d="M11 10h6v2h-4v4h-2z"/>
  <path fill="#b88135" d="M27 5h2v2h2v2h-2v2h-2V9h-2V7h2z"/>
 </svg>`,In=`
-#erp-processing{position:fixed;inset:0;margin:auto;width:min(760px,calc(100vw - 32px));max-width:760px;max-height:calc(100dvh - 32px);overflow:auto;padding:0;border:0;background:transparent;color:#203b55;box-shadow:none;z-index:2147483647}
+#erp-processing{position:fixed;inset:0;margin:auto;width:min(760px,calc(100vw - 32px));max-width:760px;max-height:calc(100dvh - 32px);overflow:auto;padding:0;border:0;border-radius:0;outline:none;background:transparent;color:#203b55;box-shadow:none;z-index:2147483647}
 #erp-processing::backdrop{background:#0a1c32df;backdrop-filter:blur(2px)}
 #erp-processing .save-frame{margin:10px;padding:30px 30px 24px;background:#fffbee;border:5px solid #203b55;outline:3px solid #d6b568;box-shadow:0 0 0 7px #203b55,inset 0 0 0 2px #e6d4a4;text-align:center}
 #erp-processing .save-banner{display:inline-block;margin:-14px auto 14px;padding:8px 32px;background:#203b55;border:2px solid #d6b568;box-shadow:3px 3px 0 #102339;color:#f4d996;font-size:22px;font-weight:700;letter-spacing:4px}

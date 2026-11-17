@@ -41,8 +41,8 @@ async function client(t){
  const saved={google:globalThis.google,fetch:globalThis.fetch,document:globalThis.document,window:globalThis.window};
  t.after(()=>{for(const [k,v] of Object.entries(saved))if(v===undefined)delete globalThis[k];else globalThis[k]=v;});
  globalThis.google={accounts:{oauth2:{hasGrantedAllScopes:()=>true,initTokenClient:o=>({requestAccessToken:()=>queueMicrotask(()=>o.callback({access_token:'test-only',expires_in:3600}))})}}};
- globalThis.document={querySelectorAll:()=>[]};globalThis.window={dispatchEvent:()=>{}};
- const source=fs.readFileSync('web/direct-sync.mjs','utf8').replace("'./loss-unified.mjs'",JSON.stringify(pathToFileURL(process.cwd()+'/web/loss-unified.mjs').href)).replace("'./processing-screen.mjs'",JSON.stringify(pathToFileURL(process.cwd()+'/web/processing-screen.mjs').href)).replace("import {DIRECT} from './direct-config.mjs';","const DIRECT={enabled:true,clientId:'test-client',deploymentId:'api-deployment',pollMs:15000};");
+ globalThis.document={querySelectorAll:()=>[],querySelector:()=>null};globalThis.window={dispatchEvent:()=>{}};
+ const source=fs.readFileSync('web/direct-sync.mjs','utf8').replace("'./order-print.mjs'",JSON.stringify(pathToFileURL(process.cwd()+'/web/order-print.mjs').href)).replace("'./loss-unified.mjs'",JSON.stringify(pathToFileURL(process.cwd()+'/web/loss-unified.mjs').href)).replace("'./processing-screen.mjs'",JSON.stringify(pathToFileURL(process.cwd()+'/web/processing-screen.mjs').href)).replace("import {DIRECT} from './direct-config.mjs';","const DIRECT={enabled:true,clientId:'test-client',deploymentId:'api-deployment',pollMs:15000};");
  const mod=await import('data:text/javascript;base64,'+Buffer.from(source+'\n//'+serial++).toString('base64'));
  return mod;
 }

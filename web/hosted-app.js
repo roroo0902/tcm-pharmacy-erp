@@ -193,7 +193,7 @@ dialog.order-followup-quest{border:3px solid #edce86;border-radius:5px;padding:2
    .receipt-choice::backdrop{background:#13243b9c}
    .receipt-choice .receipt-choice-header{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:16px;margin:0 0 20px;padding:0 0 16px;background:none;border:0;border-bottom:2px solid #cfab60}
    .receipt-choice .receipt-choice-header::after{content:'◇◆◇';position:absolute;bottom:-11px;left:50%;transform:translateX(-50%);padding:0 8px;background:#132746;color:#e4c276;font-size:15px;letter-spacing:3px}
-   .receipt-choice .receipt-choice-header img{width:86px;height:76px;object-fit:contain;image-rendering:pixelated}
+   .receipt-choice .receipt-choice-header img{width:146px;height:129px;object-fit:contain;image-rendering:pixelated}
    .receipt-choice h2,.receipt-choice .receipt-choice-option strong,.receipt-choice .receipt-choice-totals{font-family:Georgia,"PMingLiU","Noto Serif TC",serif}
    .receipt-choice h2{margin:0 0 5px;padding:0;border:0;color:inherit;font-size:clamp(24px,3.4vw,36px);letter-spacing:1px}
    .receipt-choice h2::before{display:none}

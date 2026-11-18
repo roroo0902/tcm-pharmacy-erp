@@ -1,4 +1,4 @@
-import {beginProcessing,isProcessing} from './processing-screen.mjs';
+import {beginProcessing,isProcessing,showReceiptReviewWarning} from './processing-screen.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
 import {supplyLayout} from './supply-layout.mjs';
 import {protectDraft} from './page-safety.mjs';
@@ -49,6 +49,9 @@ export function mountReceiptGrid({esc,fmt,ask}){
 #content #receipt-grid .quantity-stepper .quantity-clear{display:flex;align-items:center;justify-content:center;justify-self:stretch;box-sizing:border-box;line-height:1;height:28px;min-height:28px;padding:0 4px;margin:0}
 @media(max-width:760px){#content #receipt-grid .quantity-stepper .quantity-clear{height:44px;min-height:44px}}
 </style><section class="panel"><div class="panelhead"><div><h2>登錄本次進貨</h2><span class="muted">依工作表列出全部品項 · 留白不進貨 · 可跨廠牌整批入帳</span></div><a class="secondary" href="#items">＋ 新增品項</a></div><label>廠商</label><div class="order-tabs" id="receipt-brands" role="group" aria-label="進貨廠商"></div><label>類別</label><div class="order-tabs" id="receipt-categories" role="group" aria-label="進貨單方或複方"></div><form id="receipt-form"><div class="grid"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div><div class="panelhead receive-tools"><input id="receipt-search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" id="receipt-refresh" class="secondary">同步工作表庫存與單價</button></div><p id="receipt-state" role="status">正在讀取共用廠商與品項…</p><div class="tablewrap"><table id="receipt-grid"><thead><tr><th><button type="button" class="sort-heading" data-sort="code">藥品／編號 ↑</button></th><th>廠牌／類別</th><th class="num"><button type="button" class="sort-heading" data-sort="bottles">未拆封瓶數 ↕</button></th><th class="receipt-quantity"><button type="button" class="sort-heading" data-sort="quantity">進貨數量 ↕</button></th><th class="receipt-price-cell">單價（元／瓶）</th><th class="num">進貨小計（元）</th><th class="num">入庫後瓶數</th><th><button type="button" class="sort-heading" data-sort="updated">原表更新欄 ↕</button></th><th>缺藥標記／率</th><th>原表</th></tr></thead><tbody></tbody></table></div><div class="actions"><span id="receipt-summary" role="status"></span><button type="button" class="secondary" id="receipt-clear">清除本次輸入</button><span id="receipt-pending-status" role="status"></span><button type="button" id="receipt-process" hidden>處理上一筆進貨</button><button id="receipt-submit" disabled>確認並預覽整批進貨</button></div></form><div id="receipt-pending"></div><p class="muted">先在站內核對各品項原庫存、進貨量與入庫後瓶數，再按「確認入帳」。進貨只增加本次填入數量。按「同步工作表庫存與單價」會以最新 E 欄取代所有本次手動單價，保留已填數量。單價由原表 E 欄帶入；確認入帳後，有填單價的進貨品項會同步更新 E 欄。留白不清除原表價格，0 為零元。金額依輸入單價計算，未另計稅額、折扣或運費。</p></section>`;
+ const warnPreview=(message,onReview)=>{
+  if(alive&&!isProcessing())showReceiptReviewWarning(message,onReview);
+ };
  function draw(){
   if(!alive)return;
   const selection=supplierSelection(sources,brand,category);({brand,category,source}=selection);
@@ -71,7 +74,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   for(const [key,q] of quantities){const r=rows.find(x=>receiptKey(x)===key);if(!r||!Number.isInteger(Number(q))||Number(q)<1)continue;try{if(r.priceWarning&&!prices.has(key))throw Error();current.push({quantity:Number(q),unitPriceCents:priceCents(receiptPrice(r,prices))});}catch{priceInvalid=true;}}
   try{const cost=pricingTotal(current);$('#receipt-summary').textContent+=' · '+(priceInvalid?'請核對單價':(cost.missing?'已填單價小計 ':'進貨合計 ')+money(cost.cents)+(cost.missing?'（'+cost.missing+' 項未填單價）':''));}catch(e){$('#receipt-summary').textContent+=' · '+e.message;}
   c.querySelectorAll('[data-amount]').forEach(el=>{const key=el.dataset.amount,q=quantities.get(key),r=rows.find(x=>receiptKey(x)===key);el.textContent='—';if(!q||!r)return;try{const cents=priceCents(receiptPrice(r,prices));el.textContent=cents===undefined?'未提供':Number.isInteger(Number(q))&&Number(q)>0?money(cents*Number(q)):'數量無效';}catch{el.textContent='單價待核對';}});
-  $('#receipt-submit').disabled=loading||loadFailed||!count||invalid||priceInvalid;
+  $('#receipt-submit').disabled=loading||loadFailed||!count;
   c.querySelectorAll('[data-after]').forEach(el=>{const v=quantities.get(el.dataset.after),r=rows.find(x=>receiptKey(x)===el.dataset.after),n=Number(v);el.textContent=v==null||v===''?'—':!Number.isInteger(n)||n<1||n>1000000?'數量無效':!Number.isInteger(r?.bottles)||r.bottles<0?'待核對':fmt(r.bottles+n)+' 瓶';});
  }
  const refreshStatus=createRefreshStatus($('#receipt-refresh'));
@@ -186,7 +189,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
     if(!plan)clearCurrent();
     else if(plan.input)consumeCurrent(plan.input);
     if(alive){showPending();await load();}
-   },plan?pendingStatus:status,{requireUnposted:!!plan,receiptRows:()=>rows,beforeCommit:plan?reviewed=>{
+   },plan?pendingStatus:status,{requireUnposted:!!plan,onPreviewError:warnPreview,receiptRows:()=>rows,beforeCommit:plan?reviewed=>{
     if(plan.prior!==localStorage.getItem(KEY)||plan.separate!==localStorage.getItem(SEPARATE))throw Error('待核對進貨已變動，請回到進貨登錄重新確認。');
     submitted=JSON.stringify({...reviewed,...(plan.input?{receiptInput:plan.input}:{}),...(plan.merge?{receiptMerge:true}:{})});
     localStorage.setItem(key,submitted);
@@ -234,7 +237,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
    if(choice==='current')await send(d,{key:SEPARATE,prior,separate,input:d});
    if(choice==='merge'&&combined)await send(combined,{key:KEY,prior,separate,input:d,merge:true});
   }catch(e){
-   if(alive)pendingStatus(e.message+' 請按「確認並預覽整批進貨」重試。');
+   if(alive){pendingStatus(e.message);warnPreview(e.message);}
   }finally{
    checkingPending=false;
    if(alive){processButton.disabled=false;summary();}
@@ -246,6 +249,12 @@ export function mountReceiptGrid({esc,fmt,ask}){
  $('#receipt-search').oninput=draw;$('#receipt-refresh').onclick=()=>{if(!loading)load(true,{showDialog:true,compact:true});};
  $('#receipt-clear').onclick=()=>{quantities.clear();prices.clear();draw();status('已清除本次輸入，未修改工作表。');};
  c.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{direction=sort===b.dataset.sort&&direction==='asc'?'desc':'asc';sort=b.dataset.sort;draw();});
+ $('#receipt-form').addEventListener('invalid',e=>{
+  e.preventDefault();
+  const field=e.target;
+  const label=field.getAttribute('aria-label')||field.closest('label')?.firstChild?.textContent?.trim();
+  warnPreview(label?`${label}：${field.validationMessage}`:field.validationMessage,()=>field.focus());
+ },true);
  $('#receipt-form').onsubmit=async e=>{
   e.preventDefault();
   if(loading||loadFailed||checkingPending||isProcessing())return;
@@ -255,17 +264,17 @@ export function mountReceiptGrid({esc,fmt,ask}){
    if((separate&&!separate.verified)||(prior?.receiptMerge&&!prior.verified)){
     showPending();
     pendingStatus('請先核對已送出的進貨。本次填寫內容已保留。');
-    processButton.focus();
+    warnPreview('請先核對已送出的進貨。',()=>processButton.focus());
     return;
    }
    if(prior&&!prior.verified){
     showPending();
     if(prior.action==='進貨'){
      await reviewWithPrevious(currentDraft(),previousRecord,separateRecord);
-    }else beginProcessing({reading:true,compact:true,notice:true,catalogMessage:'請先查詢上一筆操作結果。',onReview:()=>{
+    }else warnPreview('請先查詢上一筆操作結果。',()=>{
      $('#receipt-pending')?.scrollIntoView({block:'center',behavior:'smooth'});
      $('#receipt-check')?.focus({preventScroll:true});
-    }});
+    });
     return;
    }
    const d=currentDraft();
@@ -273,7 +282,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
    localStorage.setItem(KEY,JSON.stringify(d));
    showPending();
    send(d);
-  }catch(e){status(e.message);}
+  }catch(e){status(e.message);warnPreview(e.message);}
  };
  const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);load(false,{showDialog:true});return protectDraft(()=>{alive=false;closeCatalogScreen();stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0);
 }

@@ -111,7 +111,7 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
   const priceChanges=reviewed.action==='進貨'?preview.lines.map(priceChange).join(''):'';
   ask(`${editable?'<style>#confirm .review-quantity{display:flex;align-items:center;justify-content:center;gap:6px;min-width:142px}#confirm .review-quantity button{min-width:32px;width:32px;height:36px;min-height:36px;padding:0;font-size:20px}#confirm .review-quantity input{width:66px;min-width:0;height:36px;min-height:36px;margin:0;padding:4px;text-align:center;font-size:16px;color:#172c48;background:#fff}#confirm .direct-review-table td{vertical-align:middle}#confirm .review-add-disclosure{margin-top:24px;border:1px solid #d6b568;border-radius:6px}#confirm .review-add-disclosure>summary{display:flex;align-items:center;gap:10px;min-height:48px;padding:12px 16px;cursor:pointer;list-style:none;color:#fff4d7}#confirm .review-add-disclosure>summary::-webkit-details-marker{display:none}#confirm .review-add-disclosure>summary::after{content:"⌄";margin-left:auto}#confirm .review-add-disclosure[open]>summary::after{content:"⌃"}#confirm .review-add-symbol::before{content:"＋"}#confirm .review-add-disclosure[open] .review-add-symbol::before{content:"−"}#confirm .review-add-disclosure>summary:focus-visible{outline:2px solid #e0c389;outline-offset:3px}#confirm .review-add{margin:0;border:0;border-top:1px solid #d6b568;padding:16px;min-width:0}#confirm .review-add label{display:block;margin-bottom:12px}#confirm .review-add input,#confirm .review-add select{box-sizing:border-box;width:100%;min-width:0}#confirm .review-add-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}#confirm .review-add button{white-space:normal;max-width:100%}#confirm .review-add p{overflow-wrap:anywhere}#confirm .review-add-unit{display:flex;align-items:center;gap:8px}#confirm .review-add-unit input{flex:1;width:0}#confirm .review-add-unit>span{flex:none}@media(max-width:600px){#confirm .review-quantity button{min-height:44px;height:44px}#confirm .review-quantity input{height:44px}}</style><form id="receipt-review-form"><p data-review-note role="status">可直接加減數量；修改後需要重新核對，尚未入帳。</p>':''}<p>${escape(reviewed.date)} · ${escape(reviewed.actor)}</p><p>${loss?'當日累計以差額入帳；原值欄為已登錄累計。':'請核對數量與庫存。訂貨不增加庫存。'}</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>藥品</th><th>${loss?'新累計':'數量'}</th><th>${loss?'原累計':'原庫存'}</th><th>入帳後庫存</th>${priceHead}</tr></thead><tbody>${lines}</tbody></table></div>${weeklyChanges?'<p>尚未儲存；確認後同步各廠商分頁：</p><ul>'+weeklyChanges+'</ul>':''}${priced?priceTotal(preview.lines,order):''}${priceChanges?'<p>確認入帳後同步更新原表價格：</p><ul>'+priceChanges+'</ul>':''}${reviewed.action==='沖銷'?'<p>上述金額為原進貨金額；本筆將沖銷原進貨，原表目前單價維持不變。</p>':''}${lossCompletionPreview(reviewed,preview.completion)}${loss?'<p>'+preview.lines.map(l=>escape(l.code)+'：本次差額 '+escape(l.delta)+' 瓶').join('；')+'</p>':''}${editable&&options.receiptRows?receiptAddMarkup:''}${editable?'</form>':''}${reviewed.action==='訂貨'&&options.orderRows?orderAddMarkup:''}`,
    async()=>{if(writing)return;
-    if(editable){let next;try{next=readEdited();}catch(e){status(e.message);return;}if(next.lines.some((l,i)=>l.quantity!==reviewed.lines[i].quantity)){options.onDraftChange(next);return directReview(next,ask,onSuccess,status,options);}}
+    if(editable){let next;try{next=readEdited();}catch(e){status(e.message);options.onPreviewError?.(e.message);return;}if(next.lines.some((l,i)=>l.quantity!==reviewed.lines[i].quantity)){options.onDraftChange(next);return directReview(next,ask,onSuccess,status,options);}}
     writing=true;const controls=[...document.querySelectorAll('#content input,#content select,#content button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);status('正在入帳與讀回核對，請勿重複送出…');let screen;try{screen=beginProcessing();
     options.beforeCommit?.(reviewed);
     const result=await runDirect('commit',reviewed,preview.token);
@@ -141,7 +141,12 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
     await directReview(next,ask,onSuccess,status,options);
    });
   }
- }catch(e){status(e.message);}finally{readingScreen?.close();}
+ }catch(e){
+  if(sequence!==reviewSequence)return;
+  readingScreen?.close();
+  status(e.message);
+  options.onPreviewError?.(e.message);
+ }finally{readingScreen?.close();}
 }
 export async function directSheet(source,signal){
  // Parallel consumers share one request, without keeping stale stock between refreshes.

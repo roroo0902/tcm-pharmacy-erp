@@ -53,9 +53,23 @@ test('price review rejects missing server prices and confirms exact cents with E
  globalThis.fetch=async()=>response({token:'p',lines:[{...line,unitPriceCents:undefined}]});
  await m.directReview(d,()=>asked=true,async()=>{},s=>status=s);assert.equal(asked,false);assert.match(status,/單價預覽不一致/);
  globalThis.fetch=async(u,init)=>{const [op,payload]=JSON.parse(init.body).parameters;if(op==='commit'){committed=payload;return response({message:'ok',lines:payload.lines});}return response({token:'p',lines:[{...line,amountCents:54075,priceBefore:180,priceAfter:180.25,before:5,after:8}]});};
- await m.directReview(d,(html,fn)=>{assert.match(html,/540.75/);if(!html.includes('同步完成')){assert.match(html,/廠商：科達 · 類型：單方 · 藥品：<strong>測試<\/strong>（QA）/);assert.match(html,/E 欄單價：180 → NT\$ 180\.25/);confirm=fn;}},async()=>{},()=>{});
+ await m.directReview(d,(html,fn)=>{assert.match(html,/540.75/);if(!html.includes('同步完成')){assert.match(html,/<li>科達單方 測試：180 → NT\$ 180\.25<\/li>/);confirm=fn;}},async()=>{},()=>{});
  d.lines[0].unitPriceCents=0;await confirm();assert.equal(committed.lines[0].unitPriceCents,18025);
 });
+test('receipt price summary hides equivalent prices but shows newly supplied zero',async t=>{
+ const m=await client(t);
+ const line={sheet:'科達複方',code:'QA',name:'防己黃耆湯',quantity:2,unitPriceCents:45000};
+ for(const [oldPrice,cents,expected] of [[450,45000,null],['NT$ 450.00',45000,null],['',0,'未提供 → NT$ 0']]){
+  const item={...line,unitPriceCents:cents};
+  globalThis.fetch=async()=>response({token:'p',lines:[{...item,amountCents:cents*2,priceBefore:oldPrice,priceAfter:cents/100,before:0,after:2}]});
+  let markup;
+  await m.directReview({kind:'tcm-cloud',version:2,action:'進貨',lines:[item]},html=>markup=html,async()=>{},()=>{});
+  assert.ok(markup);
+  if(expected)assert.ok(markup.includes('科達複方 防己黃耆湯：'+expected));
+  else assert.ok(!markup.includes('確認入帳後同步更新原表價格'));
+ }
+});
+
 test('client needs login, uses authenticated API deployment, and coalesces six sheet reads',async t=>{
  const m=await client(t);let calls=0;
  globalThis.fetch=async(url,init)=>{calls++;assert.ok(url.endsWith('/api-deployment:run'));assert.equal(init.headers.Authorization,'Bearer test-only');assert.equal(JSON.parse(init.body).devMode,false);return response({sheets:{A:[['x,y','"z"']]}});};

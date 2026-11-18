@@ -28,6 +28,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  let shortageSeeded=false;const readCatalog=createSupplierLoader();
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
  c.innerHTML=`${supplyLayout}<style>
+#receipt-process[hidden]{display:none}
 #receipt-grid .receipt-price-control{display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
 #receipt-grid .receipt-price-unit{flex:none;line-height:34px}
 #receipt-grid .receipt-price{box-sizing:border-box;display:block;width:72px;min-width:72px;flex:0 0 72px;height:34px;min-height:34px;padding:4px 6px;margin:0;font-size:14px;line-height:22px;text-align:center;appearance:textfield;-moz-appearance:textfield}

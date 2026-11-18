@@ -34,3 +34,13 @@ for (const el of document.querySelectorAll('.local, .footer-title')) {
  for (const node of el.childNodes) if (node.nodeType === 3) node.textContent = node.textContent.replaceAll('本草藥庫', '瑞恩藥庫');
 }
 
+const guardian = document.querySelector('.guild-companion img');
+if (guardian) {
+ const observer = new IntersectionObserver(([entry]) => {
+  if (entry.intersectionRatio < .75) return;
+  observer.disconnect();
+  guardian.src = './web/assets/slime-guardian.svg';
+ }, {threshold: .75});
+ observer.observe(guardian);
+}
+

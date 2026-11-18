@@ -1,5 +1,5 @@
 import {runDirect} from './direct-sync.mjs?v=compact20261030';
-export const lossCompletionMarkup='<div class="loss-completion"><span id="loss-completion-state" role="status">預覽確認後，正常品項會隨入帳一起完成登錄。</span></div>';
+export const lossCompletionMarkup='<div class="loss-completion"><span id="loss-completion-state" role="status">正在核對本分類的耗損登錄狀態。</span></div>';
 export function mountLossCompletion(root,{context,esc}){
  let disposed=false,ticket=0;
  const state=root.querySelector('#loss-completion-state');

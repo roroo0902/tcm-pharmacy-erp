@@ -29,6 +29,40 @@ export function cloudDraft(input) {
  for(const a of shortageLinks){const l=lines.find(l=>l.sheet===a.sheet&&l.code===a.code);if(!a.code||!['訂貨','進貨'].includes(d.action)||!/^SH-[0-9a-f-]{36}$/i.test(a.shortageId)||!l||!Number.isInteger(a.quantity)||a.quantity<1||a.quantity>l.quantity||linked.has(a.sheet+'|'+a.code))throw Error('缺藥關聯無效');linked.add(a.sheet+'|'+a.code);}
  return {kind:d.kind,version:d.version,...(d.version===2?{currency:'TWD'}:{}),...(shortageLinks.length?{shortageLinks:shortageLinks.map(a=>({shortageId:a.shortageId,sheet:a.sheet,code:a.code,quantity:a.quantity}))}:{}),id:d.id,action:d.action,date:d.date,actor:d.actor.trim(),note:d.note.trim(),lines,...(['沖銷','取消訂貨'].includes(d.action)?{reverses:d.reverses}:{})};
 }
+function receiptReversalFields(line,row,events,original){
+ const sameItem=item=>item.sheet===line.sheet&&item.code===line.code&&item.name===line.name;
+ const reversed=new Set(events.filter(e=>e.draft.action==='沖銷').map(e=>e.draft.reverses));
+ const index=events.indexOf(original);
+ const writes=(event,after)=>{
+  if(event.draft.action!=='進貨')return undefined;
+  const item=event.lines?.find(sameItem);
+  if(item?.[after]!==undefined)return item;
+  if(item&&after==='updateDateAfter')return {updateDateAfter:{stringValue:event.draft.date}};
+ };
+ const newer=after=>events.slice(index+1).some(e=>!reversed.has(e.draft.id)&&writes(e,after));
+ const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+ function restore(before,after,current){
+  const first=writes(original,after);
+  if(first?.[before]===undefined||!equal(first[after],current)||newer(after))return undefined;
+  let previous=first[before];
+  // Skip earlier reversed writes when their value is still in this receipt's snapshot.
+  for(let i=index-1;i>=0;i--){
+   const prior=writes(events[i],after);
+   if(!prior)continue;
+   if(!reversed.has(events[i].draft.id)||prior[before]===undefined||!equal(prior[after],previous))break;
+   previous=prior[before];
+  }
+  return previous;
+ }
+ const price=restore('priceBefore','priceAfter',row.price??'');
+ const newerDate=row.lastLossAt>original.time||events.slice(index+1).some(e=>
+  (e.draft.action==='建檔'||(e.draft.action==='沖銷'&&!e.lines?.some(item=>item.receiptDateResult)))&&e.lines?.some(sameItem));
+ const date=newerDate?undefined:restore('updateDateBefore','updateDateAfter',row.updateDate);
+ return {
+  ...(!row.priceFormula&&price!==undefined?{priceBefore:row.price??'',priceAfter:price}:{}),
+  ...(date===undefined?{receiptDateResult:'preserved'}:{receiptDateResult:'restored',updateDateBefore:row.updateDate,updateDateAfter:date})
+ };
+}
 export function cloudPlan(d,rows,events=[]) {
  const old=events.find(e=>e.draft.id===d.id);
  if(old){if(JSON.stringify(old.draft)!==JSON.stringify(d))throw Error('同交易編號內容不同，停止寫入');return {duplicate:true,lines:old.lines};}
@@ -48,7 +82,7 @@ export function cloudPlan(d,rows,events=[]) {
   const matches=rows.filter(r=>r.sheet===l.sheet&&(l.code?r.code===l.code:r.name===l.name));
   if(d.action==='建檔'||(d.action==='進貨'&&l.create)){
    if(matches.length||rows.some(r=>r.sheet===l.sheet&&r.name===l.name))throw Error(l.code+' 編號或藥名已存在');
-   return {...l,before:0,after:l.quantity,...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity,priceBefore:'',priceAfter:l.unitPriceCents/100})};
+   return {...l,before:0,after:l.quantity,...(d.action==='進貨'?{updateDateBefore:{},updateDateAfter:{stringValue:d.date}}:{}),...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity,priceBefore:'',priceAfter:l.unitPriceCents/100})};
   }
   if(matches.length!==1||matches[0].code!==l.code||matches[0].name!==l.name)throw Error(l.code+' 編號或藥名不符，請重新同步');
   const r=matches[0];if(!Number.isInteger(r.stock)||r.stock<0||r.formula)throw Error(l.code+' 庫存未填、含公式或非整數，請先核對');
@@ -56,7 +90,9 @@ export function cloudPlan(d,rows,events=[]) {
   const priceUpdate=d.action==='進貨'&&l.unitPriceCents!==undefined;
   if(priceUpdate&&r.priceFormula)throw Error(l.code+' E欄含公式，請先核對價格設定，尚未入帳');
   const after=r.stock+delta;if(after<0||after>1000000)throw Error('入帳後庫存超出範圍');
-  return {...l,...(Object.hasOwn(l,'unitPriceCents')?{amountCents:l.unitPriceCents*l.quantity}:{}),...(priceUpdate?{priceBefore:r.price??'',priceAfter:l.unitPriceCents/100}:{}),row:r.row,sheetId:r.sheetId,before:r.stock,after};
+  return {...l,...(Object.hasOwn(l,'unitPriceCents')?{amountCents:l.unitPriceCents*l.quantity}:{}),...(priceUpdate?{priceBefore:r.price??'',priceAfter:l.unitPriceCents/100}:{}),
+   ...(d.action==='進貨'&&r.updateDate?{updateDateBefore:r.updateDate,updateDateAfter:{stringValue:d.date}}:{}),
+   ...(d.action==='沖銷'?receiptReversalFields(l,r,events,original):{}),row:r.row,sheetId:r.sheetId,before:r.stock,after};
  });
  return {duplicate:false,lines};
 }

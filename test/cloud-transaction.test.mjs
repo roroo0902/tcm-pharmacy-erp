@@ -21,3 +21,26 @@ test('mixed receipt creates new item only on explicit flag and preserves idempot
  assert.equal(cloudPlan(reversal,[{...row,stock:15},{...row,code:'NEW',name:'新品',stock:2}],[event]).lines[1].after,0);
  assert.throws(()=>cloudDraft({...d,action:'訂貨'}),/標記/);
 });
+test('priced receipt reversal restores original cell values and preserves later writes',()=>{
+ const receipt=cloudDraft({...make(),version:2,currency:'TWD',lines:make().lines.map(l=>({...l,unitPriceCents:20100}))});
+ const originalRow={...row,price:200,updateDate:{formulaValue:'=TODAY()-1'}};
+ const first={draft:receipt,lines:cloudPlan(receipt,[originalRow]).lines,time:'2026-10-29T00:00:00.000Z'};
+ const current={...originalRow,stock:15,price:201,updateDate:{stringValue:receipt.date}};
+ const reverse=cloudDraft({...receipt,id:'ERP-rtest-12345',action:'沖銷',reverses:receipt.id,note:'驗收沖銷'});
+ const restored=cloudPlan(reverse,[current],[first]).lines[0];
+ assert.equal(restored.after,10);
+ assert.equal(restored.priceAfter,200);
+ assert.deepEqual(restored.updateDateAfter,{formulaValue:'=TODAY()-1'});
+ const newerLoss=cloudPlan(reverse,[{...current,lastLossAt:'2026-10-29T01:00:00.000Z'}],[first]).lines[0];
+ assert.equal(newerLoss.priceAfter,200);
+ assert.equal(newerLoss.updateDateAfter,undefined);
+ const later=cloudDraft({...receipt,id:'ERP-newer-12345'});
+ const second={draft:later,lines:cloudPlan(later,[current]).lines};
+ const olderReversal=cloudPlan(reverse,[{...current,stock:20}],[first,second]).lines[0];
+ assert.equal(olderReversal.priceAfter,undefined);
+ assert.equal(olderReversal.updateDateAfter,undefined);
+ const reverseSecond=cloudDraft({...later,id:'ERP-rtest-67890',action:'沖銷',reverses:later.id,note:'驗收沖銷'});
+ const cascade=cloudPlan(reverseSecond,[current],[first,second,{draft:reverse,lines:[olderReversal]}]).lines[0];
+ assert.equal(cascade.priceAfter,200);
+ assert.deepEqual(cascade.updateDateAfter,originalRow.updateDate);
+});

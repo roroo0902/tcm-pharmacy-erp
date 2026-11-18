@@ -34,22 +34,43 @@ function orderDeliverySnapshot_(id,row,test,draft=null){
 }
 function orderMailKey_(s){return 'order-mail-v1-'+loss3Hash_({id:s.id,email:s.email.toLowerCase(),hash:s.hash,test:s.test});}
 function erpOrderPdfMailPreview(input){
- orderDeliveryAuth_();const s=orderDeliverySnapshot_(input?.id,input?.row,input?.test,input?.draft||null),token=Utilities.getUuid();CacheService.getUserCache().put('order-mail-preview-'+token,JSON.stringify(s),600);
- const old=PropertiesService.getScriptProperties().getProperty(orderMailKey_(s));const {plans,...publicPreview}=s;let mailEnabled=false;try{MailApp.getRemainingDailyQuota();mailEnabled=true;}catch{}return {...publicPreview,token,mailEnabled,state:old?JSON.parse(old).state:'ready'};
+ orderDeliveryAuth_();
+ const s=orderDeliverySnapshot_(input?.id,input?.row,input?.test,input?.draft||null),token=Utilities.getUuid();
+ CacheService.getUserCache().put('order-mail-preview-v2-'+token,JSON.stringify(s),600);
+ const props=PropertiesService.getScriptProperties(),old=props.getProperty(orderMailKey_(s));
+ const sources=s.plans[0].sources||[{id:s.id}];
+ const previousState=sources.some(source=>['sending','uncertain'].includes(props.getProperty('order-mail-state-'+source.id)))
+  ?'uncertain':old?JSON.parse(old).state:null;
+ const {plans,...publicPreview}=s;
+ let mailEnabled=false;try{MailApp.getRemainingDailyQuota();mailEnabled=true;}catch{}
+ return {...publicPreview,token,mailEnabled,state:'ready',previousState};
 }
 function erpOrderPdfMailSend(token){
  orderDeliveryAuth_();if(typeof token!=='string'||token.length>100)throw Error('寄送預覽已失效');
- const raw=CacheService.getUserCache().get('order-mail-preview-'+token);if(!raw)throw Error('寄送預覽已過期，請重新核對收件人');const preview=JSON.parse(raw);
  const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他作業處理中，尚未寄送');
  try{
-  const s=orderDeliverySnapshot_(preview.id,preview.row,preview.test,preview.draft);if(JSON.stringify(s)!==raw)throw Error('訂單或員工 email 已變動，請重新預覽，尚未寄送');
-  const props=PropertiesService.getScriptProperties(),key=orderMailKey_(s),oldRaw=props.getProperty(key),old=oldRaw?JSON.parse(oldRaw):null;
-  if(old?.state==='sent')return {state:'sent',duplicate:true,time:old.time,message:'此訂單已交付 Google 寄送給此員工，未重複寄送。'};
-  if(old)throw Error('上次寄送結果待確認，請先查收信件；系統不會自動重寄');
+  const cache=CacheService.getUserCache(),attemptKey='order-mail-preview-v2-'+token;
+  const raw=cache.get(attemptKey);if(!raw)throw Error('寄送預覽已過期，請重新核對收件人');
+  const preview=JSON.parse(raw);
+  if(preview.state==='sent')return {state:'sent',duplicate:true,time:preview.time,message:'此確認已交付 Google 寄送。'};
+  if(preview.state)throw Error('這次寄送結果待確認，請先查收信件；如需重寄，請重新預覽並確認。');
+  const s=orderDeliverySnapshot_(preview.id,preview.row,preview.test,preview.draft);
+  if(JSON.stringify(s)!==raw)throw Error('訂單或員工 email 已變動，請重新預覽，尚未寄送');
   if(MailApp.getRemainingDailyQuota()<1)throw Error('今日寄信額度不足，尚未寄送');
-  const files=orderDeliveryFiles_(s.plans);const time=new Date().toISOString();props.setProperty(key,JSON.stringify({state:'sending',time}));
-  try{MailApp.sendEmail({to:s.email,subject:s.subject,body:(s.plans[0].merged?'更新版，取代前版，請勿重複下單。來源訂單：'+s.plans[0].sources.map(x=>x.id).join('、')+'\n\n':'')+s.name+' 您好：\n\n附件為本次核對後的訂藥 PDF 草稿（如有修訂，正式訂量尚未變更），共 '+s.files.length+' 份。\n'+s.files.map(f=>f.brand+'：'+f.count+' 項').join('\n')+'\n訂單編號：'+s.id+'\n\n'+(s.test?'此為功能測試郵件，請勿依此重複下單。\n':'')+'產生與寄送 PDF 不會增加庫存或重新登錄訂貨。',attachments:files.map(f=>f.blob),name:'瑞恩藥庫'});}catch(e){props.setProperty(key,JSON.stringify({state:'uncertain',time}));throw Error('Google 寄送結果待確認，請先查收信件，不會自動重寄');}
-  props.setProperty(key,JSON.stringify({state:'sent',time}));for(const source of s.plans[0].sources||[{id:s.id}])props.setProperty('order-mail-sent-'+source.id,time);return {state:'sent',duplicate:false,time,message:'已交付 Google 寄送給 '+s.name+'，請收件人確認收件匣或垃圾郵件。'};
+  const files=orderDeliveryFiles_(s.plans),time=new Date().toISOString();
+  const props=PropertiesService.getScriptProperties(),key=orderMailKey_(s),sources=s.plans[0].sources||[{id:s.id}];
+  // Replace the preview under the lock. An evicted entry cannot authorize another send.
+  cache.put(attemptKey,JSON.stringify({state:'sending',time}),600);
+  props.setProperty(key,JSON.stringify({state:'sending',time}));
+  for(const source of sources)props.setProperty('order-mail-state-'+source.id,'sending');
+  try{MailApp.sendEmail({to:s.email,subject:s.subject,body:(s.plans[0].merged?'更新版，取代前版，請勿重複下單。來源訂單：'+s.plans[0].sources.map(x=>x.id).join('、')+'\n\n':'')+s.name+' 您好：\n\n附件為本次核對後的訂藥 PDF 草稿（如有修訂，正式訂量尚未變更），共 '+s.files.length+' 份。\n'+s.files.map(f=>f.brand+'：'+f.count+' 項').join('\n')+'\n訂單編號：'+s.id+'\n\n'+(s.test?'此為功能測試郵件，請勿依此重複下單。\n':'')+'產生與寄送 PDF 不會增加庫存或重新登錄訂貨。',attachments:files.map(f=>f.blob),name:'瑞恩藥庫'});}catch(e){cache.put(attemptKey,JSON.stringify({state:'uncertain',time}),600);props.setProperty(key,JSON.stringify({state:'uncertain',time}));for(const source of sources)props.setProperty('order-mail-state-'+source.id,'uncertain');throw Error('Google 寄送結果待確認，請先查收信件；如需重寄，請重新預覽並確認。');}
+  cache.put(attemptKey,JSON.stringify({state:'sent',time}),600);
+  props.setProperty(key,JSON.stringify({state:'sent',time}));
+  for(const source of sources){
+   props.setProperty('order-mail-state-'+source.id,'sent');
+   props.setProperty('order-mail-sent-'+source.id,time);
+  }
+  return {state:'sent',duplicate:false,time,message:'已交付 Google 寄送給 '+s.name+'，請收件人確認收件匣或垃圾郵件。'};
  }finally{lock.releaseLock();}
 }
 // Authorization check only. Never sends an email.
@@ -57,3 +78,19 @@ function erpOrderPdfMailPermissionCheck(){orderDeliveryAuth_();return MailApp.ge
 
 
 function erpOrderPdfDraftPreview(input){orderDeliveryAuth_();const plans=orderDeliveryRevised_(input?.id,input?.draft);return {groups:plans.map(p=>({brand:p.brand,items:p.items}))};}
+
+// Read-only gate for the most recent confirmed order retained by the client.
+function erpOrderFollowupStatus(id){
+ orderDeliveryAuth_();const events=orderDeliveryEvents_(),plans=orderDeliveryPlans_(id,events),d=events.find(e=>e.draft.id===id).draft;
+ const props=PropertiesService.getScriptProperties().getProperties(),roster=orderDeliveryRoster_();
+ let state=props['order-mail-state-'+id]||'unsent';
+ if(orderWasSent_(id,plans,roster,props))state='sent';
+ else if(state==='unsent'){
+  const variants=[plans,reviseOrderPdf_(plans,{rows:orderPdfSeed_(plans).rows})];
+  for(const staff of roster)if(staff.valid)for(const p of variants)for(const test of [false,true]){
+   const raw=props[orderMailKey_({id,email:staff.email,hash:loss3Hash_(p),test})];
+   if(raw&&JSON.parse(raw).state!=='sent')state='uncertain';
+  }
+ }
+ return {id,date:d.date,actor:d.actor,count:d.lines.length,brands:plans.map(p=>p.brand),state,lines:d.lines};
+}

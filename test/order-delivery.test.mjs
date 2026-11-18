@@ -28,7 +28,36 @@ test('followup rejects missing and cancelled orders and tracks revised draft fai
  assert.throws(()=>h.c.erpOrderFollowupStatus('ERP-missing'));h.events.push({draft:{id:'ERP-cancel',action:'取消訂貨',reverses:id}});assert.throws(()=>h.c.erpOrderFollowupStatus(id));
 });
 
-test('uncertain source cannot bypass duplicate guard with revised PDF contents',()=>{
- const h=server(),p=h.c.erpOrderPdfMailPreview({id,row:2});h.setFail();assert.throws(()=>h.c.erpOrderPdfMailSend(p.token));
- const d=editable(h);d.rows[0].quantity=12;const q=h.c.erpOrderPdfMailPreview({id,row:2,draft:d});assert.throws(()=>h.c.erpOrderPdfMailSend(q.token),/待確認/);assert.equal(h.sent.length,1);
+test('legacy uncertain source allows fresh confirmation of the same PDF and recipient',()=>{
+ const h=mergedFixture(),before=JSON.stringify(h.events);
+ h.props.set('order-mail-state-'+h.previous.id,'uncertain');
+ const input={id,row:2,draft:h.source};
+ const first=h.c.erpOrderPdfMailPreview(input);
+ assert.equal(first.previousState,'uncertain');
+ assert.equal(first.state,'ready');
+ assert.equal(h.sent.length,0);
+ assert.equal(h.c.erpOrderPdfMailSend(first.token).duplicate,false);
+ const second=h.c.erpOrderPdfMailPreview(input);
+ assert.equal(second.previousState,'sent');
+ assert.equal(second.state,'ready');
+ assert.notEqual(second.token,first.token);
+ assert.equal(h.c.erpOrderPdfMailSend(second.token).duplicate,false);
+ assert.equal(h.c.erpOrderPdfMailSend(first.token).duplicate,true);
+ assert.equal(h.c.erpOrderPdfMailSend(second.token).duplicate,true);
+ assert.equal(h.sent.length,2);
+ assert.deepEqual(h.sent.map(message=>message.to),['a@example.com','a@example.com']);
+ assert.deepEqual(h.sent[0].attachments.map(file=>file.getBytes()),h.sent[1].attachments.map(file=>file.getBytes()));
+ assert.equal(JSON.stringify(h.events),before);
+});
+test('a fresh confirmation can retry an uncertain attempt, while its original token stays blocked',()=>{
+ const h=server(),input={id,row:2};
+ const first=h.c.erpOrderPdfMailPreview(input);
+ h.setFail();assert.throws(()=>h.c.erpOrderPdfMailSend(first.token),/待確認/);
+ const second=h.c.erpOrderPdfMailPreview(input);
+ assert.equal(second.previousState,'uncertain');
+ assert.equal(second.state,'ready');
+ assert.throws(()=>h.c.erpOrderPdfMailSend(first.token),/待確認/);
+ assert.equal(h.sent.length,1);
+ assert.throws(()=>h.c.erpOrderPdfMailSend(second.token),/待確認/);
+ assert.equal(h.sent.length,2);
 });

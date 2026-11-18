@@ -113,6 +113,7 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
    async()=>{if(writing)return;
     if(editable){let next;try{next=readEdited();}catch(e){status(e.message);return;}if(next.lines.some((l,i)=>l.quantity!==reviewed.lines[i].quantity)){options.onDraftChange(next);return directReview(next,ask,onSuccess,status,options);}}
     writing=true;const controls=[...document.querySelectorAll('#content input,#content select,#content button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);status('正在入帳與讀回核對，請勿重複送出…');let screen;try{screen=beginProcessing();
+    options.beforeCommit?.(reviewed);
     const result=await runDirect('commit',reviewed,preview.token);
     if(loss){
      screen.readback();

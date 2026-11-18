@@ -3,7 +3,8 @@ import {createRefreshStatus} from './refresh-status.mjs';
 import {supplyLayout} from './supply-layout.mjs';
 import {protectDraft} from './page-safety.mjs';
 import {operationResult} from './operation-result.mjs';
-import {recoverPendingTransaction} from './pending-recovery.mjs';
+import {lookupPostedTransaction,recoverPendingTransaction} from './pending-recovery.mjs';
+import {chooseReceiptMode} from './receipt-choice.mjs';
 import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
@@ -13,10 +14,13 @@ import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
 import {directEnabled,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
 import {csvRows,sheetUrl} from './sheets-data.mjs?v=compact20261030';
 import {cloudDraft} from '../src/cloud-transaction.mjs?v=compact20261030';
+import {mergeReceipts} from '../src/receipt-merge.mjs';
 import {receiptKey,receiptLines,sortReceiptRows,receiptPrice} from './receive-grid-data.mjs?v=compact20261030';
 import {today} from './store.mjs';
 import {LOSS_ENDPOINT} from './loss-cloud.mjs';
-const KEY='tcm-cloud-pending-v1',HIDDEN_RESULT='tcm-receipt-hidden-result-v1';
+const KEY='tcm-cloud-pending-v1',SEPARATE='tcm-receipt-separate-v1',HIDDEN_RESULT='tcm-receipt-hidden-result-v1';
+const savedTransaction=key=>JSON.parse(localStorage.getItem(key)||'null');
+const sameDraft=(a,b)=>JSON.stringify(cloudDraft(a))===JSON.stringify(cloudDraft(b));
 
 export function mountReceiptGrid({esc,fmt,ask}){
  const c=document.querySelector('#content'),$=s=>c.querySelector(s),abort=new AbortController(),quantities=new Map(),prices=new Map();
@@ -82,10 +86,22 @@ export function mountReceiptGrid({esc,fmt,ask}){
  }
  const processButton=$('#receipt-process');
  const pendingStatus=text=>{if(alive)$('#receipt-pending-status').textContent=text;};
+ let pendingKey=KEY;
  function showPending(){
-  try{pending=JSON.parse(localStorage.getItem(KEY)||'null');}catch{pending=null;}
+  pendingKey=KEY;
+  let primary;
+  try{
+   primary=savedTransaction(KEY);
+   const separate=savedTransaction(SEPARATE);
+   if(separate&&!separate.verified){pendingKey=SEPARATE;pending=separate;}
+   else pending=primary;
+  }catch{pending=null;}
   processButton.hidden=!(pending?.action==='進貨'&&!pending.verified);
+  processButton.textContent=pendingKey===SEPARATE?'處理本次待核對進貨':'處理上一筆進貨';
   $('#receipt-pending').innerHTML=operationResult(pending,'receipt',localStorage.getItem(HIDDEN_RESULT));
+  if(pendingKey===SEPARATE&&primary?.action==='進貨'&&!primary.verified){
+   $('#receipt-pending').insertAdjacentHTML('afterbegin','<p>本次進貨待核對。上一筆進貨也已保留，核對完本次即可繼續處理。</p>');
+  }
   if(!pending)return;
   if($('#receipt-hide'))$('#receipt-hide').onclick=()=>{localStorage.setItem(HIDDEN_RESULT,pending.id);showPending();};
   if($('#receipt-check'))$('#receipt-check').onclick=()=>checkPending();
@@ -98,12 +114,15 @@ export function mountReceiptGrid({esc,fmt,ask}){
   const report=recovering?pendingStatus:status;
   try{
    if(recovering){
-    processButton.textContent='處理上一筆進貨';
+    processButton.textContent=pendingKey===SEPARATE?'處理本次待核對進貨':'處理上一筆進貨';
+    const storageKey=pendingKey;
     const outcome=await recoverPendingTransaction({
-     action:'進貨',ask,status:report,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,
-     onResolved:async({alreadyPosted})=>{
+     action:'進貨',ask,status:report,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,storageKey,
+     onResolved:async({alreadyPosted,posted,pending:original})=>{
+      if(original.receiptInput&&(!alreadyPosted||sameDraft(posted,original)))consumeCurrent(original.receiptInput);
+      if(storageKey===SEPARATE&&savedTransaction(SEPARATE)?.verified&&savedTransaction(SEPARATE)?.id===posted.id)localStorage.removeItem(SEPARATE);
       showPending();
-      if(alreadyPosted)report('上一筆已入帳。目前填寫的進貨已保留。');
+      if(alreadyPosted)report('已查到這筆進貨的入帳紀錄。');
       await load();
      }
     });
@@ -142,19 +161,41 @@ export function mountReceiptGrid({esc,fmt,ask}){
    processButton.disabled=false;
   }
  }
- function send(d){
+ function currentDraft(id='ERP-'+crypto.randomUUID()){
+  const lines=receiptLines(rows,quantities,prices),priced=lines.some(l=>l.unitPriceCents!==undefined);
+  return cloudDraft({kind:'tcm-cloud',version:priced?2:1,...(priced?{currency:'TWD'}:{}),id,action:'進貨',date:$('#receipt-date').value,actor:$('#receipt-actor').value,note:'',lines,shortageLinks:shortageLinks('receive',lines)});
+ }
+ function clearCurrent(){
+  clearShortage('receive');
+  quantities.clear();
+  prices.clear();
+ }
+ function consumeCurrent(original){
+  try{if(sameDraft(currentDraft(original.id),original))clearCurrent();}catch{}
+ }
+ function send(d,plan){
   if(directEnabled()){
-   const resultRecord=()=>JSON.parse(localStorage.getItem(KEY)||'null');
+   const key=plan?.key||KEY;
+   let submitted;
    return directReview(d,ask,async result=>{
-    if(resultRecord()?.id===d.id)localStorage.setItem(KEY,JSON.stringify({...d,verified:true,receiptEvent:{draft:d,lines:result.lines||[],time:result.time}}));
-    clearShortage('receive');
-    quantities.clear();
-    prices.clear();
+    const receiptEvent={draft:d,lines:result.lines||[],time:result.time};
+    if(plan?localStorage.getItem(key)===submitted:savedTransaction(key)?.id===d.id){
+     if(key===SEPARATE)localStorage.removeItem(key);
+     else localStorage.setItem(key,JSON.stringify({...d,verified:true,receiptEvent}));
+    }
+    if(!plan)clearCurrent();
+    else if(plan.input)consumeCurrent(plan.input);
     if(alive){showPending();await load();}
-   },status,{receiptRows:()=>rows,onDraftChange:next=>{
+   },plan?pendingStatus:status,{requireUnposted:!!plan,receiptRows:()=>rows,beforeCommit:plan?reviewed=>{
+    if(plan.prior!==localStorage.getItem(KEY)||plan.separate!==localStorage.getItem(SEPARATE))throw Error('待核對進貨已變動，請回到進貨登錄重新確認。');
+    submitted=JSON.stringify({...reviewed,...(plan.input?{receiptInput:plan.input}:{}),...(plan.merge?{receiptMerge:true}:{})});
+    localStorage.setItem(key,submitted);
+    showPending();
+   }:undefined,onDraftChange:next=>{
+    if(plan){Object.assign(d,next);return;}
     for(const l of next.lines.filter(l=>l.create)){if(!rows.some(r=>r.name===l.sheet&&r.code===l.code)){const s=sources.find(s=>s.name===l.sheet);if(s)rows.push({...s,code:l.code,drug:l.name,bottles:0,pendingCreate:true,unitPriceCents:l.unitPriceCents});}}
     Object.assign(d,next);
-    const current=resultRecord();
+    const current=savedTransaction(KEY);
     if(current?.id===d.id&&!current.verified)localStorage.setItem(KEY,JSON.stringify(d));
     for(const l of d.lines){
      const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});
@@ -166,30 +207,68 @@ export function mountReceiptGrid({esc,fmt,ask}){
   }
   const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(d);form.append(input);document.body.append(form);form.submit();form.remove();status('已開啟 Google 核對頁，請以同一交易核對結果。');
  }
+ async function reviewWithPrevious(d,prior,separate){
+  checkingPending=true;
+  processButton.disabled=true;
+  $('#receipt-submit').disabled=true;
+  pendingStatus('正在查詢上一筆入帳結果…');
+  try{
+   const previous=cloudDraft(JSON.parse(prior));
+   const event=await lookupPostedTransaction(previous);
+   if(!alive)return;
+   if(prior!==localStorage.getItem(KEY)||separate!==localStorage.getItem(SEPARATE))throw Error('待核對進貨已變動，請重新確認。');
+   if(event){
+    localStorage.setItem(KEY,JSON.stringify({...event.draft,verified:true,receiptEvent:event}));
+    showPending();
+    pendingStatus('上一筆已入帳，接著預覽本次進貨。');
+    await send(d,{key:KEY,prior:localStorage.getItem(KEY),separate,input:d});
+    return;
+   }
+   let combined,mergeError='';
+   try{combined=mergeReceipts(previous,d);}catch(e){mergeError=e.message;}
+   pendingStatus('');
+   const choice=await chooseReceiptMode(previous,d,mergeError,abort.signal);
+   if(!alive||!choice)return;
+   if(prior!==localStorage.getItem(KEY)||separate!==localStorage.getItem(SEPARATE))throw Error('待核對進貨已變動，請重新確認。');
+   if(choice==='previous')await send(previous,{key:KEY,prior,separate});
+   if(choice==='current')await send(d,{key:SEPARATE,prior,separate,input:d});
+   if(choice==='merge'&&combined)await send(combined,{key:KEY,prior,separate,input:d,merge:true});
+  }catch(e){
+   if(alive)pendingStatus(e.message+' 請按「確認並預覽整批進貨」重試。');
+  }finally{
+   checkingPending=false;
+   if(alive){processButton.disabled=false;summary();}
+  }
+ }
  const selected=()=>{$('#receipt-search').value='';draw();load(false,{showDialog:true,compact:true});};
  $('#receipt-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selected();}};
  $('#receipt-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selected();}};
  $('#receipt-search').oninput=draw;$('#receipt-refresh').onclick=()=>{if(!loading)load(true,{showDialog:true,compact:true});};
  $('#receipt-clear').onclick=()=>{quantities.clear();prices.clear();draw();status('已清除本次輸入，未修改工作表。');};
  c.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{direction=sort===b.dataset.sort&&direction==='asc'?'desc':'asc';sort=b.dataset.sort;draw();});
- $('#receipt-form').onsubmit=e=>{
+ $('#receipt-form').onsubmit=async e=>{
   e.preventDefault();
   if(loading||loadFailed||checkingPending||isProcessing())return;
   try{
-   const prior=JSON.parse(localStorage.getItem(KEY)||'null');
+   const previousRecord=localStorage.getItem(KEY),separateRecord=localStorage.getItem(SEPARATE);
+   const prior=JSON.parse(previousRecord||'null'),separate=JSON.parse(separateRecord||'null');
+   if((separate&&!separate.verified)||(prior?.receiptMerge&&!prior.verified)){
+    showPending();
+    pendingStatus('請先核對已送出的進貨。本次填寫內容已保留。');
+    processButton.focus();
+    return;
+   }
    if(prior&&!prior.verified){
     showPending();
     if(prior.action==='進貨'){
-     pendingStatus('請先處理上一筆進貨。目前填寫的內容已保留。');
-     processButton.focus();
+     await reviewWithPrevious(currentDraft(),previousRecord,separateRecord);
     }else beginProcessing({reading:true,compact:true,notice:true,catalogMessage:'請先查詢上一筆操作結果。',onReview:()=>{
      $('#receipt-pending')?.scrollIntoView({block:'center',behavior:'smooth'});
      $('#receipt-check')?.focus({preventScroll:true});
     }});
     return;
    }
-   const lines=receiptLines(rows,quantities,prices),priced=lines.some(l=>l.unitPriceCents!==undefined);
-   const d=cloudDraft({kind:'tcm-cloud',version:priced?2:1,...(priced?{currency:'TWD'}:{}),id:'ERP-'+crypto.randomUUID(),action:'進貨',date:$('#receipt-date').value,actor:$('#receipt-actor').value,note:'',lines,shortageLinks:shortageLinks('receive',lines)});
+   const d=currentDraft();
    pendingStatus('');
    localStorage.setItem(KEY,JSON.stringify(d));
    showPending();

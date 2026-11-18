@@ -70,6 +70,23 @@ test('receipt price summary hides equivalent prices but shows newly supplied zer
  }
 });
 
+test('order review describes same, updated and blank weekly quantities',async t=>{
+ const m=await client(t);
+ const item={sheet:'科達單方',code:'A1042',name:'牡蠣',quantity:2};
+ const cases=[
+  [2,2,'原為 2 瓶，確認後仍為 2 瓶。'],
+  [1,2,'原為 1 瓶，確認後為 2 瓶。'],
+  ['',2,'原為空白，確認後為 2 瓶。'],
+  [2,'','原為 2 瓶，確認後為空白。']
+ ];
+ for(const [orderBefore,orderAfter,description] of cases){
+  globalThis.fetch=async()=>response({token:'p',lines:[{...item,orderBefore,orderAfter,before:0,after:0}]});
+  let markup;
+  const action=orderAfter===''?'取消訂貨':'訂貨';
+  await m.directReview({kind:'tcm-cloud',version:2,action,lines:[item]},html=>markup=html,async()=>{},()=>{});
+  assert.ok(markup?.includes('<strong>科達單方｜牡蠣</strong><br>本周訂貨量：'+description));
+ }
+});
 test('client needs login, uses authenticated API deployment, and coalesces six sheet reads',async t=>{
  const m=await client(t);let calls=0;
  globalThis.fetch=async(url,init)=>{calls++;assert.ok(url.endsWith('/api-deployment:run'));assert.equal(init.headers.Authorization,'Bearer test-only');assert.equal(JSON.parse(init.body).devMode,false);return response({sheets:{A:[['x,y','"z"']]}});};

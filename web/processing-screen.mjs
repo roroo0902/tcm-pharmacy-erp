@@ -56,6 +56,7 @@ const css=`
 #erp-processing[data-compact=true] p{font-size:13px;margin:8px 0;color:#68472b}
 #erp-processing[data-compact=true] .save-warning{font-size:14px;padding:0;margin:10px 0;border:0;box-shadow:none;background:none;color:#68472b}
 #erp-processing .save-companion{display:none}
+#erp-processing .save-companion img{display:block;width:100%;height:100%;object-fit:contain}
 #erp-processing[data-compact=true] .save-frame{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:18px;text-align:left;align-items:center}
 #erp-processing[data-compact=true] .save-frame > *{grid-column:2;min-width:0}
 #erp-processing[data-compact=true] .save-frame > .save-companion{display:block;grid-column:1;grid-row:1 / span 6;width:96px;height:100px;object-fit:contain;align-self:center}
@@ -87,7 +88,10 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
  const doc=document,win=window,previous=doc.activeElement;
  if(!doc.getElementById('erp-processing-style')){const style=doc.createElement('style');style.id='erp-processing-style';style.textContent=css;doc.head.append(style);}
  const dialog=doc.createElement('dialog');dialog.id='erp-processing';dialog.dataset.stage='commit';dialog.setAttribute('aria-labelledby','save-heading');dialog.setAttribute('aria-describedby','save-warning');dialog.setAttribute('aria-busy','true');
- dialog.innerHTML=`<section class="save-frame"><img class="save-companion" src="./web/assets/slime-king.svg" width="96" height="100" alt="" aria-hidden="true"><div class="save-banner">藥庫存檔中</div><div class="save-party" aria-hidden="true"><img class="save-quill" src="./web/assets/${receiptGuild?'herbal-trade.png':catalogMessage?'catalog-magnifier.svg':'magic-quill.svg'}" width="160" height="144" alt=""></div><h2 id="save-heading">正在入帳與讀回核對…</h2><p>系統正在儲存資料，並確認試算表中的數量。</p><div class="save-warning" id="save-warning">◆ 請勿關閉頁面、重新整理或重複送出</div><ol class="save-steps"><li class="done">${sendIcon}送出資料</li><li class="step-write">${writeIcon}寫入試算表</li><li class="step-read">${verifyIcon}讀回核對</li></ol><div class="save-dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="save-detail" role="status" aria-live="polite">正在等待 Google 完成寫入與核對</p><p class="save-footer">核對完成後，將自動顯示結果</p></section>`;
+ const companion=reading&&!notice&&(compact||receiptCompact)
+  ? '<picture class="save-companion" aria-hidden="true"><source media="(prefers-reduced-motion: no-preference)" srcset="./web/assets/slime-loading.gif"><img src="./web/assets/slime-king.svg" width="96" height="100" alt=""></picture>'
+  : '<img class="save-companion" src="./web/assets/slime-king.svg" width="96" height="100" alt="" aria-hidden="true">';
+ dialog.innerHTML=`<section class="save-frame">${companion}<div class="save-banner">藥庫存檔中</div><div class="save-party" aria-hidden="true"><img class="save-quill" src="./web/assets/${receiptGuild?'herbal-trade.png':catalogMessage?'catalog-magnifier.svg':'magic-quill.svg'}" width="160" height="144" alt=""></div><h2 id="save-heading">正在入帳與讀回核對…</h2><p>系統正在儲存資料，並確認試算表中的數量。</p><div class="save-warning" id="save-warning">◆ 請勿關閉頁面、重新整理或重複送出</div><ol class="save-steps"><li class="done">${sendIcon}送出資料</li><li class="step-write">${writeIcon}寫入試算表</li><li class="step-read">${verifyIcon}讀回核對</li></ol><div class="save-dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="save-detail" role="status" aria-live="polite">正在等待 Google 完成寫入與核對</p><p class="save-footer">核對完成後，將自動顯示結果</p></section>`;
  if(reading){dialog.dataset.stage='reading';dialog.querySelector('.save-banner').textContent='雲端資料核對中';dialog.querySelector('#save-heading').textContent='正在讀取最新雲端資料…';dialog.querySelector('.save-frame > p').textContent='請稍候，完成後會自動顯示下一步。';dialog.querySelector('.save-steps').hidden=true;dialog.querySelector('.save-detail').textContent='正在取得最新資料，尚未入帳';}
  if(catalogMessage){
   dialog.querySelector('.save-banner').textContent=receiptGuild?'補給資料讀取中':'每日耗損資料讀取中';

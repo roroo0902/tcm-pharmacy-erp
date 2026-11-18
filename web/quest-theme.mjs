@@ -39,7 +39,7 @@ if (guardian) {
  const observer = new IntersectionObserver(([entry]) => {
   if (entry.intersectionRatio < .75) return;
   observer.disconnect();
-  guardian.src = './web/assets/slime-guardian.svg';
+  guardian.src = './web/assets/slime-guardian.svg?v=hop5s';
  }, {threshold: .75});
  observer.observe(guardian);
 }

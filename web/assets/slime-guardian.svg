@@ -2,26 +2,27 @@
  <defs><radialGradient id="body" cx=".33" cy=".28" r=".8"><stop stop-color="#8cf4ff"/><stop offset=".4" stop-color="#29c6f4"/><stop offset=".8" stop-color="#1689d8"/><stop offset="1" stop-color="#1960a4"/></radialGradient><linearGradient id="gold" x2="0" y2="1"><stop stop-color="#fff6b4"/><stop offset=".5" stop-color="#f6d568"/><stop offset="1" stop-color="#d38c32"/></linearGradient></defs>
  <style>
   @media (prefers-reduced-motion: no-preference) {
-   .slime { transform-origin: 110px 169px; animation: hop 1.55s ease-in-out 2; }
-   .crown { transform-origin: 110px 67px; animation: crown-hop 1.55s ease-in-out 2; }
-   .shadow { transform-origin: 110px 175px; animation: shadow-hop 1.55s ease-in-out 2; }
+   .slime { transform-origin: 110px 169px; animation: hop 5s ease-in-out infinite; }
+   .crown { transform-origin: 110px 67px; animation: crown-hop 5s ease-in-out infinite; }
+   .shadow { transform-origin: 110px 175px; animation: shadow-hop 5s ease-in-out infinite; }
+   /* The hop takes about one second. Rest until the next five-second cycle. */
    @keyframes hop {
-    0%, 63%, 100% { transform: none; }
-    10% { transform: scale(1.08,.91); }
-    26% { transform: translateY(-18px) scale(.97,1.03); }
-    41% { transform: scale(1.10,.89); }
-    50% { transform: translateY(-4px) scale(.99,1.02); }
+    0%, 19.53%, 100% { transform: none; }
+    3.1% { transform: scale(1.08,.91); }
+    8.06% { transform: translateY(-18px) scale(.97,1.03); }
+    12.71% { transform: scale(1.10,.89); }
+    15.5% { transform: translateY(-4px) scale(.99,1.02); }
    }
    @keyframes crown-hop {
-    0%, 63%, 100% { transform: none; }
-    10% { transform: translateY(10px) rotate(-2deg); }
-    29% { transform: translateY(-25px) rotate(5deg); }
-    41% { transform: translateY(-14px) rotate(3deg); }
-    51% { transform: translateY(1px) rotate(-2deg); }
+    0%, 19.53%, 100% { transform: none; }
+    3.1% { transform: translateY(10px) rotate(-2deg); }
+    8.99% { transform: translateY(-25px) rotate(5deg); }
+    12.71% { transform: translateY(-14px) rotate(3deg); }
+    15.81% { transform: translateY(1px) rotate(-2deg); }
    }
    @keyframes shadow-hop {
-    0%, 10%, 41%, 63%, 100% { transform: none; opacity: .22; }
-    26% { transform: scale(.83,.84); opacity: .13; }
+    0%, 3.1%, 12.71%, 19.53%, 100% { transform: none; opacity: .22; }
+    8.06% { transform: scale(.83,.84); opacity: .13; }
    }
   }
  </style>

@@ -49,7 +49,7 @@ export function mountOrderGrid({esc,fmt,ask}){
  #content #order-grid tbody td.order-brand-category{display:block!important;text-align:center!important}
  #content #order-grid tbody td.order-brand-category::before{display:block;text-align:center;margin:0 0 4px}
 }
-</style><section class="panel"><h2>訂貨規劃</h2><a class="secondary" role="button" href="#orderPlanning">批次訂貨、建議量與舊草稿 →</a><p class="muted">依耗損計算建議量、編輯批次訂單及查看舊草稿。</p></section><section class="panel"><h2>登錄本次訂貨</h2><p>留白不訂貨，可跨廠商填寫後整批確認。確認量取代目前本周訂量；訂貨不增加庫存。</p><span class="order-selector-label">廠商</span><div id="order-brands" class="order-tabs" role="group" aria-label="廠商"></div><span class="order-selector-label">類別</span><div id="order-categories" class="order-tabs" role="group" aria-label="單方或複方"></div><form id="order-grid-form"><div class="grid"><label>訂貨日期<input id="og-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="og-actor" data-staff required disabled><option>正在讀取員工名冊…</option></select></label></div><div class="panelhead receive-tools"><input id="og-search" aria-label="搜尋訂貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" class="secondary" id="og-refresh">同步工作表庫存與單價</button><button type="button" class="secondary" id="og-export" disabled>匯出目前篩選結果</button></div><p id="og-export-status" role="status"></p>${periodControls}<div class="actions"><button type="button" id="og-fill-loss">將期間耗損量帶入訂量</button></div><p id="og-fill-note" role="status">更新耗損統計後，按「將期間耗損量帶入訂量」，將目前廠商／類別各品項的有效耗損總量填入訂貨草稿。零耗損與待核對品項保留原輸入，搜尋條件不影響帶入範圍。</p><label class="check-label"><input type="checkbox" id="og-only">只顯示本次已填品項（目前廠商／類別）</label><p id="order-grid-state" role="status">正在讀取廠商與品項…</p><p class="muted">點表頭切換升降冪；空白固定置底。只有月日的更新欄以訂貨日期年份排序。按「同步工作表庫存與單價」會以工作表最新單價取代所有本次手動單價，保留已填數量。單價帶入庫存表，可調整本次訂貨價格；不覆寫庫存表單價。</p><div class="tablewrap"><table id="order-grid"><thead><tr>${columns.map(([key,label])=>`<th>${key==='brandCategory'?'廠牌／類別':`<button type="button" class="sort-heading" data-og-sort="${key}">${label} ↕</button>${key==='code'?'<br><button type="button" class="sort-heading" data-og-sort="drug">藥名 ↕</button>':''}`}</th>`).join('')}<th>缺藥／缺藥率</th><th>原表</th></tr></thead><tbody></tbody></table></div>${orderAddMarkup}<div id="og-manual-list"></div><div class="actions"><strong id="og-summary" role="status"></strong><button type="button" class="secondary" id="og-clear">清除本次輸入</button><button id="og-submit" disabled>確認並預覽整批訂貨</button></div></form><div id="og-pending"></div><div id="og-recovery-status" role="status"></div><p class="muted">訂單單價與金額保存於 Google 訂貨紀錄；本周訂量同步至各廠商分頁。取消訂貨會還原上一筆有效確認量或原值。每批最多 100 項。</p></section>`;
+</style><section class="panel"><h2>訂貨規劃</h2><a class="secondary" role="button" href="#orderPlanning">批次訂貨、建議量與舊草稿 →</a><p class="muted">依耗損計算建議量、編輯批次訂單及查看舊草稿。</p></section><section class="panel"><h2>登錄本次訂貨</h2><p>留白不訂貨，可跨廠商填寫後整批確認。確認量取代目前本周訂量；訂貨不增加庫存。</p><span class="order-selector-label">廠商</span><div id="order-brands" class="order-tabs" role="group" aria-label="廠商"></div><span class="order-selector-label">類別</span><div id="order-categories" class="order-tabs" role="group" aria-label="單方或複方"></div><form id="order-grid-form"><div class="grid"><label>訂貨日期<input id="og-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="og-actor" data-staff required disabled><option>正在讀取員工名冊…</option></select></label></div><div class="panelhead receive-tools"><input id="og-search" aria-label="搜尋訂貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" class="secondary" id="og-refresh">同步工作表庫存與單價</button><button type="button" class="secondary" id="og-export" disabled>匯出目前篩選結果</button></div><p id="og-export-status" role="status"></p>${periodControls}<div class="actions"><button type="button" id="og-fill-loss">將期間耗損量帶入訂量</button></div><p id="og-fill-note" role="status">更新耗損統計後，按「將期間耗損量帶入訂量」，將目前廠商／類別各品項的有效耗損總量填入訂貨草稿。零耗損與待核對品項保留原輸入，搜尋條件不影響帶入範圍。</p><label class="check-label"><input type="checkbox" id="og-only">只顯示本次已填品項（目前廠商／類別）</label><p id="order-grid-state" role="status">正在讀取廠商與品項…</p><p class="muted">點表頭切換升降冪；空白固定置底。只有月日的更新欄以訂貨日期年份排序。按「同步工作表庫存與單價」會以工作表最新單價取代所有本次手動單價，保留已填數量。單價帶入庫存表，可調整本次訂貨價格；不覆寫庫存表單價。</p><div class="tablewrap"><table id="order-grid"><thead><tr>${columns.map(([key,label])=>`<th>${key==='brandCategory'?'廠牌／類別':`<button type="button" class="sort-heading" data-og-sort="${key}">${label} ↕</button>${key==='code'?'<br><button type="button" class="sort-heading" data-og-sort="drug">藥名 ↕</button>':''}`}</th>`).join('')}<th>缺藥／缺藥率</th><th>原表</th></tr></thead><tbody></tbody></table></div>${orderAddMarkup}<div id="og-manual-list"></div><div class="actions"><span id="og-recovery-status" role="status"></span><strong id="og-summary" role="status"></strong><button type="button" class="secondary" id="og-clear">清除本次輸入</button><button id="og-submit" disabled>確認並預覽整批訂貨</button></div></form><div id="og-pending"></div><p class="muted">訂單單價與金額保存於 Google 訂貨紀錄；本周訂量同步至各廠商分頁。取消訂貨會還原上一筆有效確認量或原值。每批最多 100 項。</p></section>`;
  function allLines(){return [...orderLines(rows,quantities,prices),...manualLines];}
  function addLine(line){if(busy||loadFailed)throw Error('請等待品項讀取完成');if(line.manual)manualLines.push(line);else{const k=orderKey({name:line.sheet,code:line.code,drug:line.name});quantities.set(k,String(line.quantity));prices.set(k,String(line.unitPriceCents/100));}draw();}
  function manualList(){const box=$('#og-manual-list');box.innerHTML=manualLines.length?'<h3>手動新增訂貨品項（未建檔）</h3>'+manualLines.map((l,i)=>`<div class="order-add"><strong>${esc(l.sheet+' '+l.name)}</strong><p>編號：${esc(l.code||'未填（選填）')} · 單價：${money(l.unitPriceCents)}</p><label>訂貨量（瓶）<input type="number" min="1" max="1000000" step="1" data-manual-qty="${i}" value="${l.quantity}"></label><button type="button" data-manual-remove="${i}">移除此品項</button></div>`).join(''):'';box.querySelectorAll('[data-manual-qty]').forEach(e=>e.oninput=()=>{manualLines[Number(e.dataset.manualQty)].quantity=Number(e.value);summary();});box.querySelectorAll('[data-manual-remove]').forEach(e=>e.onclick=()=>{manualLines.splice(Number(e.dataset.manualRemove),1);draw();});}
@@ -100,7 +100,7 @@ export function mountOrderGrid({esc,fmt,ask}){
     isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,returnLabel:'返回訂貨',completionLabel:continueOrder?'繼續預覽本次訂貨':undefined,onContinue:continueOrder?resume:undefined,
     onResolved:async({alreadyPosted})=>{
      showPending();
-     if(alreadyPosted&&selection){autoResume=true;return;}
+     if(alreadyPosted&&continueOrder){autoResume=true;return;}
      if(alreadyPosted){
       recoveryStatus(completed+'。');
       ask('<h3>'+completed+'</h3><p>已填的訂貨數量和單價已保留。上一筆不會重複入帳。</p>',continueOrder?resume:()=>{},continueOrder?'繼續預覽本次訂貨':'返回訂貨',continueOrder?'返回訂貨':null);
@@ -171,26 +171,47 @@ export function mountOrderGrid({esc,fmt,ask}){
   }finally{busy=false;summary();}
   if(alive)$('#order-grid-form').requestSubmit();
  }
- function send(d,outputMergeIds=null,reviewIntro){return directReview(d,ask,async()=>{clearShortage('order');localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));quantities.clear();prices.clear();manualLines=[];if(alive){showPending();await load();}},status,{autoMail:()=>alive,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':undefined,orderRows:()=>rows,onOrderAdd:line=>{addLine(line);},onOrderDraft:next=>{d=cloudDraft(next);localStorage.setItem(KEY,JSON.stringify(d));}});}
+ function send(d,outputMergeIds=null,reviewIntro){const saved=localStorage.getItem(KEY);return directReview(d,(...args)=>{recoveryStatus('');return ask(...args);},async()=>{clearShortage('order');localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));quantities.clear();prices.clear();manualLines=[];if(alive){showPending();await load();}},recoveryStatus,{autoMail:()=>alive,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':undefined,orderRows:()=>rows,onOrderAdd:line=>{addLine(line);},onOrderDraft:next=>{d=cloudDraft(next);},beforeCommit:()=>{
+  if(saved!==localStorage.getItem(KEY))throw Error('訂單狀態已變更，請重新預覽。');
+  localStorage.setItem(KEY,JSON.stringify(d));showPending();
+ }});}
  $('#order-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selectSource();}};$('#order-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selectSource();}};$('#og-search').oninput=draw;$('#og-only').onchange=draw;$('#og-date').onchange=draw;$('#og-refresh').onclick=()=>{if(busy)return;load(true);periodUI.refresh();};$('#og-clear').onclick=()=>{quantities.clear();prices.clear();manualLines=[];draw();};c.querySelectorAll('[data-og-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.ogSort;direction=sort===key&&direction==='asc'?'desc':'asc';sort=key;draw();});
- $('#order-grid-form').onsubmit=async e=>{e.preventDefault();if(busy||loadFailed||recoveringPrevious||isProcessing())return;try{const prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&['進貨','訂貨'].includes(prior.action)){
-  showPending();
-  if(prior.mergeOriginal){await reviewPendingMerge(prior,localStorage.getItem(KEY));return;}
-  recoveryStatus('正在核對上一筆'+prior.action+'，完成後接續本次訂貨。已填內容保留。');
-  let selection=null;
-  if(prior.action==='訂貨'){
-   const saved=localStorage.getItem(KEY);
-   busy=true;summary();
-   try{
-    const mode=await chooseOrderFollowup({...prior,pending:true,count:prior.lines.length},{date:$('#og-date').value,actor:$('#og-actor').value,lines:allLines()});
-    if(!alive||!mode)return;
-    if(saved!==localStorage.getItem(KEY))throw Error('上一筆狀態已更新，請重新預覽。');
-    selection={id:prior.id,mode};
-   }finally{busy=false;summary();}
+ $('#order-grid-form').addEventListener('invalid',e=>{
+  const field=e.target;
+  recoveryStatus((field.getAttribute('aria-label')||field.closest('label')?.firstChild?.textContent||'訂貨欄位')+'：'+field.validationMessage);
+ },true);
+ $('#order-grid-form').onsubmit=async e=>{e.preventDefault();if(busy||loadFailed||recoveringPrevious||isProcessing()){recoveryStatus(loadFailed?'品項讀取失敗，請重新同步工作表。':'正在處理其他操作，請稍後再預覽。');return;}recoveryStatus('');try{let prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&['進貨','訂貨'].includes(prior.action)){
+  const saved=localStorage.getItem(KEY);
+  recoveryStatus('正在核對上一筆'+prior.action+'…');
+  busy=true;summary();
+  let posted;
+  try{posted=await lookupPostedTransaction(cloudDraft(prior));}finally{busy=false;summary();}
+  if(!alive)return;
+  if(saved!==localStorage.getItem(KEY))throw Error('上一筆狀態已更新，請重新預覽。');
+  recoveryStatus('');
+  if(posted&&!prior.mergeOriginal){
+   prior={...prior,...posted.draft,verified:true,...(prior.action==='進貨'?{receiptEvent:posted}:{})};
+   localStorage.setItem(KEY,JSON.stringify(prior));
+   showPending();
+  }else{
+   showPending();
+   if(prior.mergeOriginal){await reviewPendingMerge(prior,localStorage.getItem(KEY));return;}
+
+   let selection=null;
+   if(prior.action==='訂貨'){
+    const saved=localStorage.getItem(KEY);
+    busy=true;summary();
+    try{
+     const mode=await chooseOrderFollowup({...prior,pending:true,count:prior.lines.length},{date:$('#og-date').value,actor:$('#og-actor').value,lines:allLines()});
+     if(!alive||!mode)return;
+     if(saved!==localStorage.getItem(KEY))throw Error('上一筆狀態已更新，請重新預覽。');
+     selection={id:prior.id,mode};
+    }finally{busy=false;summary();}
+   }
+   if(selection?.mode==='merge'){await reviewPendingMerge(prior,localStorage.getItem(KEY));return;}
+   await recoverPrevious(prior.action,true,selection);
+   return;
   }
-  if(selection?.mode==='merge'){await reviewPendingMerge(prior,localStorage.getItem(KEY));return;}
-  await recoverPrevious(prior.action,true,selection);
-  return;
  }
  if(prior&&!prior.verified){
  busy=true;summary();const checking=beginProcessing({reading:true,compact:true,catalogMessage:'正在確認上一筆結果，已填訂量會保留…'});
@@ -206,18 +227,19 @@ export function mountOrderGrid({esc,fmt,ask}){
   if(previous.state==='sending'||previous.state==='uncertain')throw Error('上一筆寄送結果待確認，請先查收信件並核對，系統不會自動重寄。本筆輸入已保留。');
   if(selected&&previous.state==='sent'&&selected.mode!=='current')throw Error('上一筆已寄送，請重新核對本次訂貨。');
   if(previous.state==='unsent'){
-   busy=true;summary();let choice;try{choice=selected?.mode??await chooseOrderFollowup(previous,{date:$('#og-date').value,actor:$('#og-actor').value,lines:allLines()});}finally{busy=false;summary();}
-   if(!alive||!choice)return;
-   busy=true;summary();let latest;try{latest=await orderRpc('erpOrderFollowupStatus',prior.id);}finally{busy=false;summary();}
-   if(!alive)return;
-   if(latest.state!=='unsent')throw Error('上一筆寄送狀態已變更，請重新核對；本筆輸入仍保留。');
-   if(choice==='previous'){openExistingOrderMail(prior.id);return;}
+   const choice=selected?.mode??'current';
+   if(choice!=='current'){
+    busy=true;summary();let latest;try{latest=await orderRpc('erpOrderFollowupStatus',prior.id);}finally{busy=false;summary();}
+    if(!alive)return;
+    if(latest.state!=='unsent')throw Error('上一筆寄送狀態已變更，請重新核對；本筆輸入仍保留。');
+    if(choice==='previous'){openExistingOrderMail(prior.id);return;}
+   }
    outputMergeIds=choice==='merge'?[prior.id]:[];
    if(choice==='merge'){
-    reviewIntro=current=>'<h3>確認本筆訂貨並預覽合併內容</h3><p>上一筆已同步。這一步同步本筆，接著開啟合併 PDF 編輯。</p><div class="tablewrap">'+orderMergeTable(latest.lines,current.lines)+'</div><h3>本步同步的品項（本筆）</h3>';
+    reviewIntro=current=>'<h3>確認本筆訂貨並預覽合併內容</h3><p>上一筆已同步。這一步同步本筆，接著開啟合併 PDF 編輯。</p><div class="tablewrap">'+orderMergeTable(previous.lines,current.lines)+'</div><h3>本步同步的品項（本筆）</h3>';
    }
   }
  }
- const d=currentDraft('ERP-'+crypto.randomUUID());localStorage.setItem(KEY,JSON.stringify(d));showPending();send(d,outputMergeIds,reviewIntro);}catch(e){status(e.message.replaceAll('進貨','訂貨'));}};
+ const d=currentDraft('ERP-'+crypto.randomUUID());await send(d,outputMergeIds,reviewIntro);}catch(e){recoveryStatus(e.message);}};
  const stopWordAxis=alignOrderWord($('#order-grid'));periodUI=mountPeriodControls(c,{ask,onData:data=>{periodData=data;draw();}});const syncPeriod=()=>periodUI.refresh();window.addEventListener('erp-synced',syncPeriod);const stopCatalogWatch=watchSupplierCatalog(()=>{load();periodUI.refresh();});showPending();load();return protectDraft(()=>{alive=false;loadingScreen?.close();loadingScreen=null;stopWordAxis();periodUI.dispose();window.removeEventListener('erp-synced',syncPeriod);stopCatalogWatch();},()=>quantities.size>0||prices.size>0||manualLines.length>0);
 }

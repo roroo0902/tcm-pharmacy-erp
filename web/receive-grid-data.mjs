@@ -9,7 +9,8 @@ export function receiptLines(rows,quantities,prices=new Map()){
   const matches=rows.filter(r=>receiptKey(r)===key),quantity=Number(value);
   if(matches.length!==1)throw Error('已填品項資料已變更，請重新核對或清除數量');
   const r=matches[0];
-  if(!r.code||r.warning?.includes('編號'))throw Error(r.drug+'：請先核對編號');
+  if(!r.code&&rows.some(other=>other!==r&&other.name===r.name&&other.drug===r.drug))throw Error(r.drug+'：同分頁有同名藥品，請先核對編號');
+  if(r.code&&r.warning?.includes('編號'))throw Error(r.drug+'：請先核對編號');
   if(!Number.isInteger(quantity)||quantity<1||quantity>1000000)throw Error(r.drug+'：進貨數量須為正整數');
   if(!Number.isInteger(r.bottles)||r.bottles<0)throw Error(r.drug+'：目前庫存待核對');
   if(r.priceWarning&&!prices.has(key))throw Error(r.drug+'：'+r.priceWarning+'，請手動核對單價');

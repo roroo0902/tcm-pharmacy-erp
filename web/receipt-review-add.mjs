@@ -6,7 +6,7 @@ export function appendReceiptItem(draft,rows,key,quantity,price){
  if(draft.kind!=='tcm-cloud'||draft.action!=='進貨')throw Error('僅支援進貨新增品項');
  const [line]=receiptLines(rows,new Map([[key,String(quantity)]]),new Map([[key,price]]));
  if(!line)throw Error('請選擇品項並填入數量');
- if(draft.lines.some(l=>l.sheet===line.sheet&&l.code===line.code))throw Error('此品項已在清單，請直接修改原有數量');
+ if(draft.lines.some(l=>l.sheet===line.sheet&&l.code===line.code&&(line.code||l.name===line.name)))throw Error('此品項已在清單，請直接修改原有數量');
  const lines=[...draft.lines,line],priced=lines.some(l=>l.unitPriceCents!==undefined);
  return cloudDraft({...draft,lines,version:priced?2:1,...(priced?{currency:'TWD'}:{})});
 }

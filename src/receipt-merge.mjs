@@ -5,7 +5,7 @@ export function mergeReceipts(previous,current){
  if(previous.actor!==current.actor)throw Error('兩筆經手人不同，請分開入帳。');
  const lines=new Map();
  for(const line of [...previous.lines,...current.lines]){
-  const key=JSON.stringify([line.sheet,line.code]);
+  const key=JSON.stringify([line.sheet,line.code,line.code?null:line.name]);
   const prior=lines.get(key);
   if(!prior){lines.set(key,{...line});continue;}
   if(prior.name!==line.name||prior.create!==line.create)throw Error(line.code+' 的品項資料不同，請分開入帳。');

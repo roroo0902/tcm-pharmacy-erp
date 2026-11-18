@@ -15,7 +15,7 @@ function cloudDraft(input) {
   const manual=l.manual===true;
   if(manual&&(d.version!==2||/[\[\]:*?\/\\]/.test(l.sheet)))throw Error('手動訂貨廠商或交易版本無效');
   if(manual&&!['訂貨','取消訂貨'].includes(d.action))throw Error('手動訂貨品項不能直接異動庫存');
-  if((!CLOUD_SHEETS.includes(l.sheet)&&!(typeof l.sheet==='string'&&/^[^|\r\n]{1,60}(?:單方|複方)$/.test(l.sheet)))||typeof l.code!=='string'||(!manual&&!l.code.trim())||l.code.length>60||typeof l.name!=='string'||!l.name.trim()||l.name.length>120||/[\x00-\x1f|]/.test(l.code+l.name))throw Error('藥品編號、名稱或分頁無效');
+  if((!CLOUD_SHEETS.includes(l.sheet)&&!(typeof l.sheet==='string'&&/^[^|\r\n]{1,60}(?:單方|複方)$/.test(l.sheet)))||typeof l.code!=='string'||(!manual&&!l.code.trim()&&(l.create||!['進貨','沖銷'].includes(d.action)))||l.code.length>60||typeof l.name!=='string'||!l.name.trim()||l.name.length>120||/[\x00-\x1f|]/.test(l.code+l.name))throw Error('藥品編號、名稱或分頁無效');
   if(!Number.isInteger(l.quantity)||l.quantity<0||l.quantity>1000000||(['進貨','訂貨'].includes(d.action)&&!l.quantity))throw Error('瓶數須為整數；進貨、訂貨須大於0');
   const key=JSON.stringify([l.sheet,l.code.trim()||'name:'+l.name.trim()]),nameKey=JSON.stringify([l.sheet,'name',l.name.normalize('NFKC').replace(/\s/g,'')]);if(seen.has(key)||(orderNames.has(nameKey)&&(manual||orderNames.get(nameKey))))throw Error('同批品項重複');seen.add(key);orderNames.set(nameKey,manual);
   if(Object.hasOwn(l,'create')&&(l.create!==true||!['進貨','沖銷'].includes(d.action)))throw Error('新品項標記無效');
@@ -28,7 +28,7 @@ function cloudDraft(input) {
  const total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);if(!Number.isSafeInteger(total))throw Error('金額超出可精確計算範圍');
  const shortageLinks=['沖銷','取消訂貨'].includes(d.action)?[]:Array.isArray(d.shortageLinks)?d.shortageLinks:[];
  if(shortageLinks.length>100)throw Error('缺藥關聯過多');const linked=new Set();
- for(const a of shortageLinks){const l=lines.find(l=>l.sheet===a.sheet&&l.code===a.code);if(!['訂貨','進貨'].includes(d.action)||!/^SH-[0-9a-f-]{36}$/i.test(a.shortageId)||!l||!Number.isInteger(a.quantity)||a.quantity<1||a.quantity>l.quantity||linked.has(a.sheet+'|'+a.code))throw Error('缺藥關聯無效');linked.add(a.sheet+'|'+a.code);}
+ for(const a of shortageLinks){const l=lines.find(l=>l.sheet===a.sheet&&l.code===a.code);if(!a.code||!['訂貨','進貨'].includes(d.action)||!/^SH-[0-9a-f-]{36}$/i.test(a.shortageId)||!l||!Number.isInteger(a.quantity)||a.quantity<1||a.quantity>l.quantity||linked.has(a.sheet+'|'+a.code))throw Error('缺藥關聯無效');linked.add(a.sheet+'|'+a.code);}
  return {kind:d.kind,version:d.version,...(d.version===2?{currency:'TWD'}:{}),...(shortageLinks.length?{shortageLinks:shortageLinks.map(a=>({shortageId:a.shortageId,sheet:a.sheet,code:a.code,quantity:a.quantity}))}:{}),id:d.id,action:d.action,date:d.date,actor:d.actor.trim(),note:d.note.trim(),lines,...(['沖銷','取消訂貨'].includes(d.action)?{reverses:d.reverses}:{})};
 }
 function cloudPlan(d,rows,events=[]) {
@@ -47,12 +47,12 @@ function cloudPlan(d,rows,events=[]) {
    if(rows.some(r=>r.sheet===l.sheet&&((l.code&&r.code===l.code)||r.name.normalize('NFKC').replace(/\s/g,'')===l.name.normalize('NFKC').replace(/\s/g,''))))throw Error(l.name+' 已有庫存品項，請重新同步並使用原品項');
    return {...l,before:'未建檔',after:'未建檔',...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity})};
   }
-  const matches=rows.filter(r=>r.sheet===l.sheet&&r.code===l.code);
+  const matches=rows.filter(r=>r.sheet===l.sheet&&(l.code?r.code===l.code:r.name===l.name));
   if(d.action==='建檔'||(d.action==='進貨'&&l.create)){
    if(matches.length||rows.some(r=>r.sheet===l.sheet&&r.name===l.name))throw Error(l.code+' 編號或藥名已存在');
    return {...l,before:0,after:l.quantity,...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity,priceBefore:'',priceAfter:l.unitPriceCents/100})};
   }
-  if(matches.length!==1||matches[0].name!==l.name)throw Error(l.code+' 編號或藥名不符，請重新同步');
+  if(matches.length!==1||matches[0].code!==l.code||matches[0].name!==l.name)throw Error(l.code+' 編號或藥名不符，請重新同步');
   const r=matches[0];if(!Number.isInteger(r.stock)||r.stock<0||r.formula)throw Error(l.code+' 庫存未填、含公式或非整數，請先核對');
   const delta=d.action==='進貨'?l.quantity:d.action==='沖銷'?-l.quantity:0;
   const priceUpdate=d.action==='進貨'&&l.unitPriceCents!==undefined;

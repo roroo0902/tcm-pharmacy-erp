@@ -3,8 +3,8 @@ const esc=value=>value.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'})
 
 export function chooseReceiptMode(previous,current,mergeError,signal){
  if(signal.aborted)return Promise.resolve(null);
- const originalItems=new Set(previous.lines.map(line=>JSON.stringify([line.sheet,line.code])));
- const repeated=current.lines.some(line=>originalItems.has(JSON.stringify([line.sheet,line.code])));
+ const originalItems=new Set(previous.lines.map(line=>JSON.stringify([line.sheet,line.code,line.code?null:line.name])));
+ const repeated=current.lines.some(line=>originalItems.has(JSON.stringify([line.sheet,line.code,line.code?null:line.name])));
  const mergeHelp=mergeError||(repeated?'有相同藥品，請確認是兩批到貨後再合併。':'在同一張預覽核對合計瓶數。');
  return new Promise(resolve=>{
   const dialog=document.createElement('dialog');

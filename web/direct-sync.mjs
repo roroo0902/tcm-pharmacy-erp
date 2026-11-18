@@ -61,7 +61,12 @@ export async function runDirect(operation,draft,previewToken){
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const priceMoney=c=>'NT$ '+(c/100).toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2});
 const priceCells=(l,order=false)=>`<td data-label="單價（元／瓶）">${l.unitPriceCents===undefined?'未提供':priceMoney(l.unitPriceCents)}</td><td data-label="${order?'訂貨小計（元）':'小計（元）'}">${l.unitPriceCents===undefined?'—':priceMoney(l.unitPriceCents*l.quantity)}</td>`;
-const priceChange=l=>l.priceAfter===undefined?'':`<li>${escape(l.sheet)} ${escape(l.code)}：E欄 ${escape(l.priceBefore===''?'未提供':l.priceBefore)} → ${priceMoney(l.unitPriceCents)}</li>`;
+function priceChange(line){
+ if(line.priceAfter===undefined)return '';
+ const [,vendor,type]=line.sheet.match(/^(.+?)(單方|複方)$/u)??[null,line.sheet,'未標示'];
+ const oldPrice=line.priceBefore===''?'未提供':line.priceBefore;
+ return `<li>廠商：${escape(vendor)} · 類型：${escape(type)} · 藥品：<strong>${escape(line.name)}</strong>（${escape(line.code)}）<br>E 欄單價：${escape(oldPrice)} → ${priceMoney(line.unitPriceCents)}</li>`;
+}
 function priceTotal(lines,order=false){const missing=lines.filter(l=>l.unitPriceCents===undefined).length,total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);return `<p class="price-total">${missing?'已填單價小計':order?'訂貨金額合計':'進貨金額合計'}：${priceMoney(total)}${missing?'（'+missing+' 項未提供單價）':''}</p>`;}
 export function revisedReceipt(draft,previewLines,values){
  if(draft.kind!=='tcm-cloud'||draft.action!=='進貨')throw Error('僅支援進貨數量修改');

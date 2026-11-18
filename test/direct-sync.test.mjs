@@ -53,7 +53,7 @@ test('price review rejects missing server prices and confirms exact cents with E
  globalThis.fetch=async()=>response({token:'p',lines:[{...line,unitPriceCents:undefined}]});
  await m.directReview(d,()=>asked=true,async()=>{},s=>status=s);assert.equal(asked,false);assert.match(status,/單價預覽不一致/);
  globalThis.fetch=async(u,init)=>{const [op,payload]=JSON.parse(init.body).parameters;if(op==='commit'){committed=payload;return response({message:'ok',lines:payload.lines});}return response({token:'p',lines:[{...line,amountCents:54075,priceBefore:180,priceAfter:180.25,before:5,after:8}]});};
- await m.directReview(d,(html,fn)=>{assert.match(html,/540.75/);if(!html.includes('同步完成')){assert.match(html,/E欄/);confirm=fn;}},async()=>{},()=>{});
+ await m.directReview(d,(html,fn)=>{assert.match(html,/540.75/);if(!html.includes('同步完成')){assert.match(html,/廠商：科達 · 類型：單方 · 藥品：<strong>測試<\/strong>（QA）/);assert.match(html,/E 欄單價：180 → NT\$ 180\.25/);confirm=fn;}},async()=>{},()=>{});
  d.lines[0].unitPriceCents=0;await confirm();assert.equal(committed.lines[0].unitPriceCents,18025);
 });
 test('client needs login, uses authenticated API deployment, and coalesces six sheet reads',async t=>{

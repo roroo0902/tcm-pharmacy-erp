@@ -82,21 +82,22 @@ export function mountOrderGrid({esc,fmt,ask}){
  async function load(syncPrices=false){if(busy){status('正在讀取 '+brand+category+'…');return;}busy=true;loadFailed=false;refreshStatus.start();summary();status('正在讀取 '+(brand+category||'廠商與品項')+'…');try{if(!isProcessing())loadingScreen=beginProcessing({reading:true,compact:true,catalogMessage:'正在向 Google 讀取'+(brand+category||'廠商與品項')+'的最新庫存與單價…'});const data=await readCatalog();if(!alive)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){seedShortage('order',rows,quantities,orderKey);shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();const selected=rows.filter(r=>r.brand===brand&&r.category===category);status(brand+category+'已更新，共 '+selected.length+' 項；'+new Date().toLocaleTimeString('zh-TW',{timeZone:'Asia/Taipei'})+'。數量已保留，庫存與金額已更新。');}catch(e){loadFailed=true;status('讀取失敗：'+e.message+'；已填內容仍保留，請按重新讀取工作表重試。');}finally{loadingScreen?.close();loadingScreen=null;busy=false;if(alive){refreshStatus.finish(!loadFailed);summary();}}}
  function selectSource(){ $('#og-search').value='';$('#og-only').checked=false;draw();load();}
  const recoveryStatus=text=>{if(alive)$('#og-recovery-status').textContent=text;};
- async function recoverPrevious(action){
+ async function recoverPrevious(action,continueOrder=false){
   if(recoveringPrevious||isProcessing())return;
   recoveringPrevious=true;
   const button=$('#og-recover-previous');
   button.disabled=true;
   button.textContent='處理上一筆'+action;
+  const resume=()=>{if(alive)$('#order-grid-form').requestSubmit();};
   const completed=action==='進貨'?'上一筆進貨已入帳':'上一筆訂貨已同步';
   try{
    const outcome=await recoverPendingTransaction({
-    action,ask,status:recoveryStatus,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,returnLabel:'返回訂貨',
+    action,ask,status:recoveryStatus,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,returnLabel:'返回訂貨',completionLabel:continueOrder?'繼續預覽本次訂貨':undefined,onContinue:continueOrder?resume:undefined,
     onResolved:async({alreadyPosted})=>{
      showPending();
      if(alreadyPosted){
       recoveryStatus(completed+'。');
-      ask('<h3>'+completed+'</h3><p>已填的訂貨數量和單價已保留。</p>',()=>{},'返回訂貨',null);
+      ask('<h3>'+completed+'</h3><p>已填的訂貨數量和單價已保留。上一筆不會重複入帳。</p>',continueOrder?resume:()=>{},continueOrder?'繼續預覽本次訂貨':'返回訂貨',continueOrder?'返回訂貨':null);
      }else await load();
     }
    });
@@ -111,7 +112,7 @@ export function mountOrderGrid({esc,fmt,ask}){
  function showPending(){let p;try{p=JSON.parse(localStorage.getItem(KEY)||'null');}catch{}
   if(p&&!p.verified&&['進貨','訂貨'].includes(p.action)){
    const count=Array.isArray(p.lines)?p.lines.length:0;
-   $('#og-pending').innerHTML=`<h3>${esc(p.date)} 有一筆${esc(p.action)}待確認，共 ${count} 項</h3><button type="button" id="og-recover-previous">處理上一筆${esc(p.action)}</button>`;
+   $('#og-pending').innerHTML=`<h3>${esc(p.date)} 有一筆${esc(p.action)}待確認，共 ${count} 項</h3><p>直接按「確認並預覽整批訂貨」，會先核對上一筆，再接續本次訂貨；已填數量與單價會保留。</p><button type="button" id="og-recover-previous">處理上一筆${esc(p.action)}</button>`;
    $('#og-recover-previous').onclick=()=>recoverPrevious(p.action);
    return;
   }
@@ -120,8 +121,8 @@ export function mountOrderGrid({esc,fmt,ask}){
  $('#order-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selectSource();}};$('#order-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selectSource();}};$('#og-search').oninput=draw;$('#og-only').onchange=draw;$('#og-date').onchange=draw;$('#og-refresh').onclick=()=>{if(busy)return;load(true);periodUI.refresh();};$('#og-clear').onclick=()=>{quantities.clear();prices.clear();manualLines=[];draw();};c.querySelectorAll('[data-og-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.ogSort;direction=sort===key&&direction==='asc'?'desc':'asc';sort=key;draw();});
  $('#order-grid-form').onsubmit=async e=>{e.preventDefault();if(busy||loadFailed||recoveringPrevious||isProcessing())return;try{const prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&['進貨','訂貨'].includes(prior.action)){
   showPending();
-  recoveryStatus('請先處理上一筆'+prior.action+'。已填的訂貨內容會保留。');
-  $('#og-recover-previous')?.focus();
+  recoveryStatus('正在核對上一筆'+prior.action+'，完成後接續本次訂貨。已填內容保留。');
+  await recoverPrevious(prior.action,true);
   return;
  }
  if(prior&&!prior.verified){

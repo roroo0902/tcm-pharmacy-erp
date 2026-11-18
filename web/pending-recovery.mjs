@@ -15,7 +15,7 @@ export async function lookupPostedTransaction(draft){
  return event;
 }
 
-export async function recoverPendingTransaction({action,ask,status,isActive,onChange,onResolved,receiptRows,returnLabel,storageKey=KEY}){
+export async function recoverPendingTransaction({action,ask,status,isActive,onChange,onResolved,receiptRows,returnLabel,storageKey=KEY,onContinue,completionLabel}){
  const receipt=action==='進貨',resultLabel=receipt?'入帳':'同步';
  status(`正在查詢上一筆${action}的${resultLabel}結果…`);
  let saved,current,draft,event;
@@ -56,7 +56,7 @@ export async function recoverPendingTransaction({action,ask,status,isActive,onCh
   storeResult({draft,lines:result.lines||[],time:result.time});
   if(isActive())await onResolved({alreadyPosted:false,posted:draft,pending:current});
  },status,{
-  requireUnposted:true,receiptRows,returnLabel,
+  requireUnposted:true,receiptRows,returnLabel,onContinue,completionLabel,
   beforeCommit:()=>{
    if(saved!==localStorage.getItem(storageKey))throw Error('待核對的交易已變動，請重新查詢。');
   },

@@ -17,3 +17,18 @@ test('merge is read-only, sums by sheet/code and retains quantities and source i
 test('merge rejects same order, future order, cancelled source and mismatched names',()=>{const h=mergedFixture();assert.throws(()=>h.c.erpOrderPdfEditSource({id,mergeIds:[id]}));assert.throws(()=>h.c.erpOrderPdfEditSource({id:h.previous.id,mergeIds:[id]}));h.events.push({draft:{id:'ERP-cancel11',action:'取消訂貨',reverses:h.previous.id}});assert.throws(()=>h.c.erpOrderPdfDownload({id,draft:h.source}),/取消/);const g=mergedFixture();g.previous.lines[0].name='不同名稱';assert.throws(()=>g.c.erpOrderPdfEditSource({id,mergeIds:[g.previous.id]}),/藥名不一致/);});
 test('merge mail previews use the selected sources, protect against cancellation and prevent duplicates',()=>{const h=mergedFixture(),before=JSON.stringify(h.events);const p=h.c.erpOrderPdfMailPreview({id,row:2,draft:h.source});assert.match(p.subject,/更新版/);assert.equal(h.sent.length,0);h.c.erpOrderPdfMailSend(p.token);assert.equal(h.sent[0].attachments.length,3);assert.match(h.sent[0].body,/ERP-previous1/);assert.equal(h.c.erpOrderPdfMailSend(p.token).duplicate,true);assert.equal(h.sent.length,1);assert.equal(JSON.stringify(h.events),before);const g=mergedFixture(),q=g.c.erpOrderPdfMailPreview({id,row:2,draft:g.source});g.events.push({draft:{id:'ERP-cancel12',action:'取消訂貨',reverses:g.previous.id}});assert.throws(()=>g.c.erpOrderPdfMailSend(q.token));assert.equal(g.sent.length,0);});
 test('prior candidates exclude cancelled and test orders and show legacy sent state',()=>{const h=mergedFixture();const old=h.c.erpOrderPdfMailPreview({id:h.previous.id,row:2,test:true});h.c.erpOrderPdfMailSend(old.token);h.props.delete('order-mail-sent-'+h.previous.id);const opts=h.c.erpOrderOutputOptions(id);assert.equal(opts.orders.length,1);assert.equal(opts.orders[0].sent,true);h.events.push({draft:{id:'ERP-cancel13',action:'取消訂貨',reverses:h.previous.id}});assert.equal(h.c.erpOrderOutputOptions(id).orders.length,0);});
+
+test('followup status is read-only and distinguishes unsent, sent and uncertain',()=>{
+ const h=server(),before=JSON.stringify(h.events);assert.equal(h.c.erpOrderFollowupStatus(id).state,'unsent');assert.equal(JSON.stringify(h.events),before);assert.equal(h.sent.length,0);
+ const p=h.c.erpOrderPdfMailPreview({id,row:2});h.c.erpOrderPdfMailSend(p.token);assert.equal(h.c.erpOrderFollowupStatus(id).state,'sent');
+ const g=server(),q=g.c.erpOrderPdfMailPreview({id,row:2});g.setFail();assert.throws(()=>g.c.erpOrderPdfMailSend(q.token));assert.equal(g.c.erpOrderFollowupStatus(id).state,'uncertain');
+});
+test('followup rejects missing and cancelled orders and tracks revised draft failures',()=>{
+ const h=server(),d=editable(h);d.rows[0].quantity=9;const p=h.c.erpOrderPdfMailPreview({id,row:2,draft:d});h.setFail();assert.throws(()=>h.c.erpOrderPdfMailSend(p.token));assert.equal(h.c.erpOrderFollowupStatus(id).state,'uncertain');
+ assert.throws(()=>h.c.erpOrderFollowupStatus('ERP-missing'));h.events.push({draft:{id:'ERP-cancel',action:'取消訂貨',reverses:id}});assert.throws(()=>h.c.erpOrderFollowupStatus(id));
+});
+
+test('uncertain source cannot bypass duplicate guard with revised PDF contents',()=>{
+ const h=server(),p=h.c.erpOrderPdfMailPreview({id,row:2});h.setFail();assert.throws(()=>h.c.erpOrderPdfMailSend(p.token));
+ const d=editable(h);d.rows[0].quantity=12;const q=h.c.erpOrderPdfMailPreview({id,row:2,draft:d});assert.throws(()=>h.c.erpOrderPdfMailSend(q.token),/待確認/);assert.equal(h.sent.length,1);
+});

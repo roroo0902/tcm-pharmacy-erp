@@ -1,5 +1,6 @@
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
-import {orderPrintControl,bindOrderPrint} from './order-print.mjs';
+import {chooseOrderFollowup} from './order-followup.mjs';
+import {orderPrintControl,bindOrderPrint,orderRpc,openExistingOrderMail} from './order-print.mjs';
 import {lossOrderEntries} from './loss-order-fill.mjs';
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {alignOrderWord} from './order-word-axis.mjs';
@@ -117,7 +118,7 @@ export function mountOrderGrid({esc,fmt,ask}){
    return;
   }
   const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;$('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+p.id)}</p></details><button type="button" id="og-check" class="secondary">重新確認同步結果</button>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id):''}`:'';if(!p)return;if(p.verified&&p.action==='訂貨')bindOrderPrint($('#og-pending'));$('#og-check').onclick=async()=>{try{const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(p.action)?'orders':'inventory')).text()).slice(1),cloudDraft(p));if(!found)throw Error('未找到交易；請沿用同一編號核對');const posted=JSON.parse(found[1]).draft;localStorage.setItem(KEY,JSON.stringify({...posted,verified:true}));showPending();await load();status('已確認工作表中的操作結果。');}catch(e){status(e.message);}};}
- function send(d){return directReview(d,ask,async()=>{clearShortage('order');localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));quantities.clear();prices.clear();manualLines=[];if(alive){showPending();await load();}},status,{autoMail:()=>alive,orderRows:()=>rows,onOrderAdd:line=>{addLine(line);},onOrderDraft:next=>{d=cloudDraft(next);localStorage.setItem(KEY,JSON.stringify(d));}});}
+ function send(d,outputMergeIds=null){return directReview(d,ask,async()=>{clearShortage('order');localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));quantities.clear();prices.clear();manualLines=[];if(alive){showPending();await load();}},status,{autoMail:()=>alive,outputMergeIds,orderRows:()=>rows,onOrderAdd:line=>{addLine(line);},onOrderDraft:next=>{d=cloudDraft(next);localStorage.setItem(KEY,JSON.stringify(d));}});}
  $('#order-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selectSource();}};$('#order-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selectSource();}};$('#og-search').oninput=draw;$('#og-only').onchange=draw;$('#og-date').onchange=draw;$('#og-refresh').onclick=()=>{if(busy)return;load(true);periodUI.refresh();};$('#og-clear').onclick=()=>{quantities.clear();prices.clear();manualLines=[];draw();};c.querySelectorAll('[data-og-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.ogSort;direction=sort===key&&direction==='asc'?'desc':'asc';sort=key;draw();});
  $('#order-grid-form').onsubmit=async e=>{e.preventDefault();if(busy||loadFailed||recoveringPrevious||isProcessing())return;try{const prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&['進貨','訂貨'].includes(prior.action)){
   showPending();
@@ -129,6 +130,23 @@ export function mountOrderGrid({esc,fmt,ask}){
  busy=true;summary();const checking=beginProcessing({reading:true,compact:true,catalogMessage:'正在確認上一筆結果，已填訂量會保留…'});
  try{const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(prior.action)?'orders':'inventory')).text()).slice(1),cloudDraft(prior));if(!found)throw Error('尚未找到上一筆結果，已填訂量保留。請按「重新確認同步結果」查詢上一筆操作。');const posted=JSON.parse(found[1]).draft;localStorage.setItem(KEY,JSON.stringify({...posted,verified:true}));showPending();
  }finally{checking.close();busy=false;summary();}
- }const d=cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id:'ERP-'+crypto.randomUUID(),action:'訂貨',date:$('#og-date').value,actor:$('#og-actor').value,note:'',lines:allLines(),shortageLinks:shortageLinks('order',orderLines(rows,quantities,prices))});localStorage.setItem(KEY,JSON.stringify(d));showPending();send(d);}catch(e){status(e.message.replaceAll('進貨','訂貨'));}};
+ }
+ let outputMergeIds=null;
+ if(prior?.verified&&prior.action==='訂貨'){
+  busy=true;summary();const checking=beginProcessing({reading:true,compact:true,catalogMessage:'正在核對上一筆訂貨的寄送狀態，本筆輸入會保留…'});
+  let previous;try{previous=await orderRpc('erpOrderFollowupStatus',prior.id);}finally{checking.close();busy=false;summary();}
+  if(!alive)return;
+  if(previous.state==='sending'||previous.state==='uncertain')throw Error('上一筆寄送結果待確認，請先查收信件並核對，系統不會自動重寄。本筆輸入已保留。');
+  if(previous.state==='unsent'){
+   busy=true;summary();let choice;try{choice=await chooseOrderFollowup(previous,{date:$('#og-date').value,actor:$('#og-actor').value,lines:allLines()});}finally{busy=false;summary();}
+   if(!alive||!choice)return;
+   busy=true;summary();let latest;try{latest=await orderRpc('erpOrderFollowupStatus',prior.id);}finally{busy=false;summary();}
+   if(!alive)return;
+   if(latest.state!=='unsent')throw Error('上一筆寄送狀態已變更，請重新核對；本筆輸入仍保留。');
+   if(choice==='previous'){openExistingOrderMail(prior.id);return;}
+   outputMergeIds=choice==='merge'?[prior.id]:[];
+  }
+ }
+ const d=cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id:'ERP-'+crypto.randomUUID(),action:'訂貨',date:$('#og-date').value,actor:$('#og-actor').value,note:'',lines:allLines(),shortageLinks:shortageLinks('order',orderLines(rows,quantities,prices))});localStorage.setItem(KEY,JSON.stringify(d));showPending();send(d,outputMergeIds);}catch(e){status(e.message.replaceAll('進貨','訂貨'));}};
  const stopWordAxis=alignOrderWord($('#order-grid'));periodUI=mountPeriodControls(c,{ask,onData:data=>{periodData=data;draw();}});const syncPeriod=()=>periodUI.refresh();window.addEventListener('erp-synced',syncPeriod);const stopCatalogWatch=watchSupplierCatalog(()=>{load();periodUI.refresh();});showPending();load();return protectDraft(()=>{alive=false;loadingScreen?.close();loadingScreen=null;stopWordAxis();periodUI.dispose();window.removeEventListener('erp-synced',syncPeriod);stopCatalogWatch();},()=>quantities.size>0||prices.size>0||manualLines.length>0);
 }

@@ -101,10 +101,11 @@ function erpOrderPdfMailSend(token){
   const s=orderDeliverySnapshot_(preview.id,preview.row,preview.test,preview.draft);if(JSON.stringify(s)!==raw)throw Error('訂單或員工 email 已變動，請重新預覽，尚未寄送');
   const props=PropertiesService.getScriptProperties(),key=orderMailKey_(s),oldRaw=props.getProperty(key),old=oldRaw?JSON.parse(oldRaw):null;
   if(old?.state==='sent')return {state:'sent',duplicate:true,time:old.time,message:'此訂單已交付 Google 寄送給此員工，未重複寄送。'};
+  if((s.plans[0].sources||[{id:s.id}]).some(source=>['sending','uncertain'].includes(props.getProperty('order-mail-state-'+source.id))))throw Error('來源訂單寄送結果待確認，請先查收信件，不會自動重寄');
   if(old)throw Error('上次寄送結果待確認，請先查收信件；系統不會自動重寄');
   if(MailApp.getRemainingDailyQuota()<1)throw Error('今日寄信額度不足，尚未寄送');
-  const files=orderDeliveryFiles_(s.plans);const time=new Date().toISOString();props.setProperty(key,JSON.stringify({state:'sending',time}));
-  try{MailApp.sendEmail({to:s.email,subject:s.subject,body:(s.plans[0].merged?'更新版，取代前版，請勿重複下單。來源訂單：'+s.plans[0].sources.map(x=>x.id).join('、')+'\n\n':'')+s.name+' 您好：\n\n附件為本次核對後的訂藥 PDF 草稿（如有修訂，正式訂量尚未變更），共 '+s.files.length+' 份。\n'+s.files.map(f=>f.brand+'：'+f.count+' 項').join('\n')+'\n訂單編號：'+s.id+'\n\n'+(s.test?'此為功能測試郵件，請勿依此重複下單。\n':'')+'產生與寄送 PDF 不會增加庫存或重新登錄訂貨。',attachments:files.map(f=>f.blob),name:'瑞恩藥庫'});}catch(e){props.setProperty(key,JSON.stringify({state:'uncertain',time}));throw Error('Google 寄送結果待確認，請先查收信件，不會自動重寄');}
+  const files=orderDeliveryFiles_(s.plans);const time=new Date().toISOString();props.setProperty(key,JSON.stringify({state:'sending',time}));for(const source of s.plans[0].sources||[{id:s.id}])props.setProperty('order-mail-state-'+source.id,'sending');
+  try{MailApp.sendEmail({to:s.email,subject:s.subject,body:(s.plans[0].merged?'更新版，取代前版，請勿重複下單。來源訂單：'+s.plans[0].sources.map(x=>x.id).join('、')+'\n\n':'')+s.name+' 您好：\n\n附件為本次核對後的訂藥 PDF 草稿（如有修訂，正式訂量尚未變更），共 '+s.files.length+' 份。\n'+s.files.map(f=>f.brand+'：'+f.count+' 項').join('\n')+'\n訂單編號：'+s.id+'\n\n'+(s.test?'此為功能測試郵件，請勿依此重複下單。\n':'')+'產生與寄送 PDF 不會增加庫存或重新登錄訂貨。',attachments:files.map(f=>f.blob),name:'瑞恩藥庫'});}catch(e){props.setProperty(key,JSON.stringify({state:'uncertain',time}));for(const source of s.plans[0].sources||[{id:s.id}])props.setProperty('order-mail-state-'+source.id,'uncertain');throw Error('Google 寄送結果待確認，請先查收信件，不會自動重寄');}
   props.setProperty(key,JSON.stringify({state:'sent',time}));for(const source of s.plans[0].sources||[{id:s.id}])props.setProperty('order-mail-sent-'+source.id,time);return {state:'sent',duplicate:false,time,message:'已交付 Google 寄送給 '+s.name+'，請收件人確認收件匣或垃圾郵件。'};
  }finally{lock.releaseLock();}
 }
@@ -113,3 +114,19 @@ function erpOrderPdfMailPermissionCheck(){orderDeliveryAuth_();return MailApp.ge
 
 
 function erpOrderPdfDraftPreview(input){orderDeliveryAuth_();const plans=orderDeliveryRevised_(input?.id,input?.draft);return {groups:plans.map(p=>({brand:p.brand,items:p.items}))};}
+
+// Read-only gate for the most recent confirmed order retained by the client.
+function erpOrderFollowupStatus(id){
+ orderDeliveryAuth_();const events=orderDeliveryEvents_(),plans=orderDeliveryPlans_(id,events),d=events.find(e=>e.draft.id===id).draft;
+ const props=PropertiesService.getScriptProperties().getProperties(),roster=orderDeliveryRoster_();
+ let state=props['order-mail-state-'+id]||'unsent';
+ if(orderWasSent_(id,plans,roster,props))state='sent';
+ else if(state==='unsent'){
+  const variants=[plans,reviseOrderPdf_(plans,{rows:orderPdfSeed_(plans).rows})];
+  for(const staff of roster)if(staff.valid)for(const p of variants)for(const test of [false,true]){
+   const raw=props[orderMailKey_({id,email:staff.email,hash:loss3Hash_(p),test})];
+   if(raw&&JSON.parse(raw).state!=='sent')state='uncertain';
+  }
+ }
+ return {id,date:d.date,actor:d.actor,count:d.lines.length,brands:plans.map(p=>p.brand),state,lines:d.lines};
+}

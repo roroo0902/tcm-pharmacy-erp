@@ -5,7 +5,7 @@
  */
 function erpRecognizeReceipt_(input) {
   if (!input || typeof input.brand !== 'string') throw Error('照片資料格式錯誤');
-  const sources = ['科達','天明','富田'];
+  const sources = erpOrderSources_(undefined,false).map(source=>source.brand);
   if (!sources.includes(input.brand)) throw Error('不支援的廠商');
   if (!['image/jpeg','image/png'].includes(input.mimeType)) throw Error('只允許 JPG 或 PNG');
   if (typeof input.base64 !== 'string' || input.base64.length < 100 || input.base64.length > 3200000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(input.base64)) throw Error('照片資料過大或格式無效');
@@ -22,7 +22,7 @@ function erpRecognizeReceipt_(input) {
     '請讀取每一列的藥名、印刷品號、進貨數量與原單位；沒有讀到的欄位給空字串，不可臆造。',
     '不要將盒、袋、克、公斤換算成瓶；禁止估算、補足或以常見配方推測數字。',
     '同一照片可能有多列。輸出唯一 JSON 物件，格式：{"lines":[{"name":"","code":"","quantity":null,"unit":"","confidence":"low","evidence":""}]}。',
-    'quantity 必須是能確定讀出的正整數，否則 null；confidence 僅允許 high/medium/low；evidence 為圖片中該列的簡短逐字片段。',
+    'quantity 必須是能確定讀出的正整數，否則 null；confidence 僅允許 high/medium/low；evidence 為圖片中該列的簡短逐字片段，有規格時優先保留原文（如 100g、100 克）。',
     '圖片沒有可辨識進貨品項時傳回 {"lines":[]}；最多 100 列，不得包含病患個資。'
   ].join('\n');
   const lineSchema={type:'object',additionalProperties:false,properties:{name:{type:'string'},code:{type:'string'},quantity:{type:['integer','null']},unit:{type:'string'},confidence:{type:'string',enum:['high','medium','low']},evidence:{type:'string'}},required:['name','code','quantity','unit','confidence','evidence']};

@@ -1,9 +1,18 @@
 // Pure helpers: OCR suggestions never write inventory and never resolve fuzzy matches automatically.
 export const normalizeDrug = value => String(value ?? '').normalize('NFKC').toUpperCase().replace(/[\s\-—_()（）\[\]【】.,，。:：/／]+/g, '');
 
+function isSingleFormulaPack(line) {
+  const label = [line.unit, line.name, line.evidence].map(value => String(value ?? '').normalize('NFKC'));
+  return label.some(text => /(?:^|[^0-9.])100(?:\.0+)?\s*(?:g(?![a-z])|公克|克)/i.test(text));
+}
+
+export function receiptCandidates(line, candidates) {
+  return isSingleFormulaPack(line) ? candidates.filter(row => row.category === '單方') : candidates;
+}
+
 export function matchRecognized(line, candidates) {
   const code = normalizeDrug(line.code), name = normalizeDrug(line.name);
-  const valid = candidates.filter(row => row.code && row.drug);
+  const valid = receiptCandidates(line, candidates).filter(row => row.code && row.drug);
   const byCode = code ? valid.filter(row => normalizeDrug(row.code) === code) : [];
   if (byCode.length === 1) {
     const nameDiffers = !!name && normalizeDrug(byCode[0].drug) !== name;
@@ -39,6 +48,7 @@ export function addToBasket(basket, pendingLines, candidates, brand) {
     if (line.removed) continue;
     const r = lookup.get(line.selected);
     if (!r) throw Error('請為所有保留品項選擇既有庫存藥名');
+    if (isSingleFormulaPack(line) && r.category !== '單方') throw Error('100g 品項只能加入單方');
     if (!line.reviewed) throw Error('每項都必須由人員勾選「已核對」');
     const qty = Number(line.quantity);
     if (!Number.isInteger(qty) || qty < 1 || qty > 1000000) throw Error('入庫瓶數必須為 1～1,000,000 的整數');

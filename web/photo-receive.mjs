@@ -1,8 +1,8 @@
-import {SOURCES,parseSheet,exportUrl} from './sheets-data.mjs';
-import {directEnabled,authorize,runDirect,directSheet,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
+import {loadReceiptCatalog} from './supplier-catalog.mjs';
+import {directEnabled,authorize,runDirect,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {csvRows} from './sheets-data.mjs';
-import {matchRecognized,cleanRecognized,addToBasket} from '../src/photo-receive-data.mjs';
+import {matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=photostock20261119';
 import {quantitySteppers} from './quantity-stepper.mjs';
 const KEY='tcm-cloud-pending-v1';
 const todayTaipei=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
@@ -25,10 +25,8 @@ async function jpegData(file){
 }
 
 export function mountPhotoReceive({esc,fmt,ask}){
- const root=document.querySelector('#content'),abort=new AbortController();
- let alive=true,run=0,rows=[],recognized=[],basket=[],loading=false,selected=SOURCES[0].brand,pending=null,catalogReady=false;
- const sources=SOURCES;
- const brands=[...new Set(sources.map(s=>s.brand))];
+ const root=document.querySelector('#content');
+ let alive=true,run=0,rows=[],recognized=[],basket=[],loading=false,selected='',pending=null,catalogReady=false;
  root.innerHTML='<style>#photo-receive-panel{text-align:center}#photo-receive-panel label,#photo-receive-panel input,#photo-receive-panel select{text-align:center}#photo-receive-panel select{text-align-last:center}#photo-receive-panel .panelhead,#photo-receive-panel .actions,#photo-receive-panel .staff-controls,#photo-receive-panel .check-label{justify-content:center}#photo-receive-panel th,#photo-receive-panel td,body:has(#photo-receive-panel) .direct-review-table th,body:has(#photo-receive-panel) .direct-review-table td{text-align:center;vertical-align:middle}#photo-receive-panel .ai-item{min-width:0;overflow-wrap:anywhere}.ai-item{background:var(--surface,#fff);border:1px solid #dce3ea;border-radius:12px;padding:14px;margin:12px 0;display:grid;gap:8px}.ai-item label{display:block}.ai-item select,.ai-item input[type=number]{width:100%;max-width:100%;box-sizing:border-box}.ai-item .check-label{display:flex;align-items:center;gap:8px}.ai-item .check-label input{width:auto}</style><section class="panel" id="photo-receive-panel"><div class="panelhead"><div><h2>AI 拍照進貨</h2><span class="muted">選廠商 → 拍照 → AI 解析 → 人工核對 → 預覽 → 確認入庫</span></div></div>'+
   '<p class="notice">AI 辨識結果只是草稿。必須選到現有藥品並逐項核對，最後會再次讀取 Google 即時庫存；未確認不會修改庫存。</p>'+
   '<div class="grid"><label>廠商<select id="ai-source"></select></label><label>進貨日期<input type="date" id="ai-date" max="'+todayTaipei()+'" value="'+todayTaipei()+'"></label><label>經手人<select id="ai-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">單據或備註<input type="text" id="ai-note" maxlength="500"></label><label class="full">拍照或選擇照片<input id="ai-image" type="file" accept="image/*" capture="environment"></label></div>'+
@@ -37,32 +35,34 @@ export function mountPhotoReceive({esc,fmt,ask}){
  const $=sel=>root.querySelector(sel);
  const status=text=>{if(alive)$('#ai-status').textContent=text;};
  const lockBusy=busy=>{loading=busy;$('#ai-scan').disabled=busy;$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!recognized.some(x=>!x.removed);};
- $('#ai-source').innerHTML=brands.map(brand=>'<option value="'+esc(brand)+'">'+esc(brand)+'</option>').join('');
  function currentRows(){return rows.filter(r=>r.brand===selected);}
  async function load(){
-  const seq=++run,brand=selected;catalogReady=false;rows=[];
+  const seq=++run;catalogReady=false;rows=[];
   recognized.forEach(line=>{line.reviewed=false;});drawResult();
-  status('正在讀取 '+brand+' 的單方與複方名冊…');
+  status('正在讀取已啟用廠商與藥品名冊…');
   try{
-   const lists=await Promise.all(sources.filter(s=>s.brand===brand).map(async source=>{
-    const response=directEnabled()?await directSheet(source,abort.signal):await fetch(exportUrl(source),{cache:'no-store',signal:abort.signal});
-    if(!response.ok||!response.headers.get('content-type')?.includes('text/csv'))throw Error('讀取 '+source.name+' 失敗，請重新載入完整名冊');
-    return parseSheet(await response.text(),source);
-   }));
+   const catalog=await loadReceiptCatalog();
    if(seq!==run||!alive)return;
-   rows=lists.flat();catalogReady=true;drawResult();drawBasket();
-   status('已讀取 '+brand+' 單方與複方共 '+rows.length+' 項；分類依既有名冊自動帶入。');
+   const brands=[...new Set(catalog.sources.map(source=>source.brand))];
+   const previous=selected;
+   selected=brands.includes(selected)?selected:brands[0];
+   if(previous&&previous!==selected)recognized=[];
+   $('#ai-source').innerHTML=brands.map(brand=>'<option value="'+esc(brand)+'">'+esc(brand)+'</option>').join('');
+   $('#ai-source').value=selected;
+   rows=catalog.rows;catalogReady=true;drawResult();drawBasket();
+   status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');
   }catch(error){if(seq===run&&alive){rows=[];catalogReady=false;drawResult();status(error.message);}}
  }
 
  const matchLine=(line)=>matchRecognized(line,currentRows());
  function drawResult(){
   if(!alive)return;
-  const options=currentRows().map(r=>'<option value="'+esc(String(r.id))+'">'+esc(r.category+'｜'+r.code+'｜'+r.drug)+'</option>').join('');
   const list=recognized.filter(x=>!x.removed);
   $('#ai-result').innerHTML=!list.length?'<p class="muted">辨識後，這裡會顯示每一筆藥名、數量及配對結果。</p>':'<h3>核對辨識結果</h3><p class="muted">請核對藥名、規格及數量。若照片標示為盒、袋、包等，請在「實際入庫瓶數」填正確換算後數量，不直接將 AI 數字入庫。</p>'+
   list.map(line=>{const m=matchLine(line);if(!line.manualSelection&&!line.selected&&m.row)line.selected=String(m.row.id);
-   const found=currentRows().find(r=>String(r.id)===line.selected);
+   const candidates=receiptCandidates(line,currentRows());
+   const options=candidates.map(r=>'<option value="'+esc(String(r.id))+'">'+esc(r.category+'｜'+r.code+'｜'+r.drug)+'</option>').join('');
+   const found=candidates.find(r=>String(r.id)===line.selected);
    return '<div class="ai-item"><div><b>'+esc(line.name||'未讀出藥名')+'</b><span class="muted">　原始編號 '+esc(line.code||'未讀出')+'</span></div>'+
     '<p class="muted">原照片：'+esc(line.evidence||'無可核對文字')+'；辨識數量 '+esc(line.quantity||'不明')+' '+esc(line.unit||'單位不明')+'；AI 自評 '+esc(line.confidence)+'</p>'+
     '<label>選擇現有庫存藥品<select data-select="'+line.id+'"><option value="">請選擇相符藥品</option>'+options+'</select></label>'+
@@ -90,7 +90,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   if(loading)return;
   try{
    if(!directEnabled())throw Error('AI 拍照功能需要已授權的 Google 雲端入口');
-   if(!catalogReady||!rows.length)throw Error('請先完成此廠商的藥品清單讀取');
+   if(!catalogReady||!currentRows().length)throw Error('請先完成此廠商的藥品清單讀取');
    const file=$('#ai-image').files[0];if(!file)throw Error('請先上傳照片');
    const scanBrand=selected,scanRun=run;
    lockBusy(true);status('正在壓縮照片、辨識藥名與數量…');
@@ -138,5 +138,5 @@ export function mountPhotoReceive({esc,fmt,ask}){
  };
  window.addEventListener('erp-synced',load);
  drawResult();drawBasket();showPending();load();
- return()=>{alive=false;run++;abort.abort();window.removeEventListener('erp-synced',load);};
+ return()=>{alive=false;run++;window.removeEventListener('erp-synced',load);};
 }

@@ -72,7 +72,9 @@ function erpDailyLossGrid_(input){
   if(!sources.length)return {sources,sheets,date,loss,completion,readAt:new Date().toISOString()};
   const ranges=sources.flatMap(({name})=>{
    const title="'"+name.replace(/'/g,"''")+"'";
-   return ['B:B','D:D','E1','F:G'].map(range=>title+'!'+range);
+   const last=Math.max(2,ss.getSheetByName(name).getLastRow());
+   if(last>10000)throw Error('來源範圍異常');
+   return ['B1:B'+last,'D1:D'+last,'E1','F1:G'+last].map(range=>title+'!'+range);
   });
   const inventory=Sheets.Spreadsheets.get(LOSS3.inventory,{ranges,fields:'sheets(properties(sheetId),data(startRow,startColumn,rowData(values(formattedValue,effectiveValue,userEnteredValue(formulaValue),effectiveFormat(numberFormat(type))))))'});
   const grids=new Map((inventory.sheets||[]).map(sh=>[sh.properties.sheetId,sh.data]));

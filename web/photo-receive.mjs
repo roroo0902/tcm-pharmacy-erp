@@ -25,10 +25,42 @@ async function jpegData(file){
  }finally{URL.revokeObjectURL(url);}
 }
 
+function renderPhotoReview(lines,{esc,candidatesFor,matchLine,unitMessage}){
+ const list=lines.filter(line=>!line.removed);
+ if(!list.length)return '<p class="muted">辨識後，這裡會顯示每一筆藥名、數量及配對結果。</p>';
+ const rows=list.map(line=>{
+  const match=matchLine(line);
+  if(!line.manualSelection&&!line.selected&&match.row)line.selected=String(match.row.id);
+  const candidates=candidatesFor(line);
+  const found=candidates.find(row=>String(row.id)===line.selected);
+  const options=candidates.map(row=>'<option value="'+esc(String(row.id))+'">'+esc(row.category+'｜'+row.code+'｜'+row.drug)+'</option>').join('');
+  const name=esc(line.name||'未讀出藥名'),id=esc(line.id);
+  line.sourceQuantity??=line.quantity;
+  return '<tr><td><strong>'+name+'</strong><small>原始編號 '+esc(line.code||'未讀出')+'</small></td>'+
+   '<td>'+esc(line.unit||'單位不明')+'／'+esc(line.sourceQuantity||'數量不明')+
+   '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
+   '<td><div class="ai-review-match"><span class="ai-review-state"'+(found?' data-matched':'')+'>'+esc(found?.category||'待配對')+'</span>'+
+   '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select></div>'+
+   '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶':match.reason)+'</small></td>'+
+   '<td><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
+   '<td><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已逐項核對藥名、編號、單位與瓶數" '+(line.reviewed?'checked':'')+'></td>'+
+   '<td><button type="button" data-remove="'+id+'" aria-label="排除 '+name+'" class="secondary small">排除</button></td></tr>';
+ }).join('');
+ return '<div class="ai-review-head"><h3>核對辨識結果</h3><span data-ai-review-count role="status"></span></div>'+
+  '<p class="muted ai-review-note">請核對藥名、規格及數量。單據以盒、袋或包計量時，請填寫換算後的實際入庫瓶數。</p>'+
+  '<div class="ai-review-wrap" tabindex="0" role="region" aria-label="核對辨識結果表格"><table class="ai-review-table"><thead><tr>'+
+  '<th scope="col">藥品／原始編號</th><th scope="col">規格／單據數量</th><th scope="col">配對庫存藥品</th><th scope="col">入庫瓶數</th><th scope="col">已核對</th><th scope="col">操作</th>'+
+  '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function updatePhotoReviewCount(root,lines){
+ const count=root.querySelector('[data-ai-review-count]');
+ if(count)count.textContent='已辨識 '+lines.length+' 項 · 已核對 '+lines.filter(line=>line.reviewed&&!line.removed).length+' 項'+(lines.some(line=>line.removed)?' · 已排除 '+lines.filter(line=>line.removed).length+' 項':'');
+}
+
 export function mountPhotoReceive({esc,fmt,ask}){
  const root=document.querySelector('#content');
  let alive=true,run=0,rows=[],recognized=[],basket=[],pastedImage=null,loading=false,selected='',pending=null,catalogReady=false;
- root.innerHTML='<style>#photo-receive-panel{text-align:center}#photo-receive-panel label,#photo-receive-panel input,#photo-receive-panel select{text-align:center}#photo-receive-panel select{text-align-last:center}#photo-receive-panel .panelhead,#photo-receive-panel .actions,#photo-receive-panel .staff-controls,#photo-receive-panel .check-label{justify-content:center}#photo-receive-panel th,#photo-receive-panel td,body:has(#photo-receive-panel) .direct-review-table th,body:has(#photo-receive-panel) .direct-review-table td{text-align:center;vertical-align:middle}#photo-receive-panel .ai-item{min-width:0;overflow-wrap:anywhere}.ai-item{background:var(--surface,#fff);border:1px solid #dce3ea;border-radius:12px;padding:14px;margin:12px 0;display:grid;gap:8px}.ai-item label{display:block}.ai-item select,.ai-item input[type=number]{width:100%;max-width:100%;box-sizing:border-box}.ai-item .check-label{display:flex;align-items:center;gap:8px}.ai-item .check-label input{width:auto}</style><section class="panel" id="photo-receive-panel"><div class="panelhead"><div><h2>AI 拍照進貨</h2><span class="muted">選廠商 → 拍照 → AI 解析 → 人工核對 → 預覽 → 確認入庫</span></div></div>'+
+ root.innerHTML="<style>#photo-receive-panel{text-align:center}#photo-receive-panel label,#photo-receive-panel input,#photo-receive-panel select{text-align:center}#photo-receive-panel select{text-align-last:center}#photo-receive-panel .panelhead,#photo-receive-panel .actions,#photo-receive-panel .staff-controls{justify-content:center}#photo-receive-panel th,#photo-receive-panel td,body:has(#photo-receive-panel) .direct-review-table th,body:has(#photo-receive-panel) .direct-review-table td{text-align:center;vertical-align:middle}\nbody:has(#photo-receive-panel) aside{background:#102641}\nbody:has(#photo-receive-panel) aside nav a.active{border-color:#cda653;border-radius:0;box-shadow:inset 0 0 0 2px #182b45, inset 0 0 0 3px #b78e43;background:#203957}\n#photo-receive-panel .ai-review-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 18px;margin:18px 0 6px;text-align:left}\n#photo-receive-panel .ai-review-head h3{margin:0}\n#photo-receive-panel .ai-review-note{text-align:left;margin:0 0 10px}\n#photo-receive-panel .ai-review-wrap{overflow:auto;max-height:36rem;border:2px solid #755030;background:#f7e6c1;box-shadow:inset 0 0 0 2px #c4985b}\n#photo-receive-panel table.ai-review-table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;color:#3d2a1b}\n#photo-receive-panel .ai-review-table :is(th,td){padding:6px 9px;border-right:1px solid #c4a27366;border-bottom:1px solid #c4a27366;line-height:1.25}\n#photo-receive-panel .ai-review-table th{position:sticky;top:0;z-index:2;background:#e7c993;color:#392313;text-align:left;white-space:nowrap}\n#photo-receive-panel .ai-review-table td{background:linear-gradient(110deg,#fff8e6,#f5e2bc);text-align:left}\n#photo-receive-panel .ai-review-table tr:nth-child(even) td{background:linear-gradient(110deg,#fcf0d3,#f0d9ac)}\n#photo-receive-panel .ai-review-table :is(th,td):nth-child(n+4){text-align:center}\n#photo-receive-panel .ai-review-table small{display:block;font-size:12px;color:#614a35;margin-top:3px}\n#photo-receive-panel .ai-review-table details{font-size:12px;max-width:220px;margin-top:3px}\n#photo-receive-panel .ai-review-table summary{cursor:pointer}\n#photo-receive-panel .ai-review-table select{max-width:100%;width:100%;min-height:32px;margin:0;font-size:14px;text-align:left;text-align-last:left}\n#photo-receive-panel .ai-review-match{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:6px}\n#photo-receive-panel .ai-review-state{padding:3px 6px;white-space:nowrap;background:#efd194;color:#65400f;border:1px solid #b98536;font-size:12px}\n#photo-receive-panel .ai-review-state[data-matched]{background:#dce8c0;border-color:#859a57;color:#314421}\n#photo-receive-panel .ai-review-table .quantity-stepper{width:138px;grid-template-columns:30px minmax(50px,1fr) 30px;gap:4px;margin:auto}\n#photo-receive-panel .ai-review-table .quantity-stepper input{min-height:32px;font-size:14px}\n#photo-receive-panel .ai-review-table .quantity-stepper .quantity-clear{display:none}\n#photo-receive-panel .ai-review-table input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#285331}\n#photo-receive-panel :is(#ai-scan,#ai-reload,#ai-add,#ai-preview,[data-remove],.ai-review-table .quantity-adjust){background:linear-gradient(#f7db93,#d6a74b);color:#35220e;border:2px solid #805722;border-radius:3px;box-shadow:inset 0 0 0 1px #ffedb1,0 2px 0 #60401b}\n#photo-receive-panel .ai-review-table :is([data-remove],.quantity-adjust){min-height:32px;font-size:14px}\n#photo-receive-panel .ai-review-table .quantity-adjust{min-width:30px}\n#photo-receive-panel .ai-review-table [data-remove]{white-space:nowrap;padding:4px 8px}\n</style>"+'<section class="panel" id="photo-receive-panel"><div class="panelhead"><div><h2>AI 拍照進貨</h2><span class="muted">選廠商 → 拍照 → AI 解析 → 人工核對 → 預覽 → 確認入庫</span></div></div>'+
   '<p class="notice">AI 辨識結果只是草稿。必須選到現有藥品並逐項核對，最後會再次讀取 Google 即時庫存；未確認不會修改庫存。</p>'+
   '<div class="grid"><label>廠商<select id="ai-source"></select></label><label>進貨日期<input type="date" id="ai-date" max="'+todayTaipei()+'" value="'+todayTaipei()+'"></label><label>經手人<select id="ai-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">單據或備註<input type="text" id="ai-note" maxlength="500"></label><label class="full">拍照或選擇照片<input id="ai-image" type="file" accept="image/*" capture="environment"><small id="ai-image-hint" role="status">也可選取此欄位後貼上圖片。</small></label></div>'+
   '<div class="actions"><button type="button" id="ai-scan">AI 解析照片</button><button type="button" class="secondary" id="ai-reload">更新現有藥品</button></div><p id="ai-status" role="status"></p>'+
@@ -59,22 +91,15 @@ export function mountPhotoReceive({esc,fmt,ask}){
  function drawResult(){
   if(!alive)return;
   const list=recognized.filter(x=>!x.removed);
-  $('#ai-result').innerHTML=!list.length?'<p class="muted">辨識後，這裡會顯示每一筆藥名、數量及配對結果。</p>':'<h3>核對辨識結果</h3><p class="muted">請核對藥名、規格及數量。若照片標示為盒、袋、包等，請在「實際入庫瓶數」填正確換算後數量，不直接將 AI 數字入庫。</p>'+
-  list.map(line=>{const m=matchLine(line);if(!line.manualSelection&&!line.selected&&m.row)line.selected=String(m.row.id);
-   const candidates=receiptCandidates(line,currentRows());
-   const options=candidates.map(r=>'<option value="'+esc(String(r.id))+'">'+esc(r.category+'｜'+r.code+'｜'+r.drug)+'</option>').join('');
-   const found=candidates.find(r=>String(r.id)===line.selected);
-   return '<div class="ai-item"><div><b>'+esc(line.name||'未讀出藥名')+'</b><span class="muted">　原始編號 '+esc(line.code||'未讀出')+'</span></div>'+
-    '<p class="muted">原照片：'+esc(line.evidence||'無可核對文字')+'；辨識數量 '+esc(line.quantity||'不明')+' '+esc(line.unit||'單位不明')+'；AI 自評 '+esc(line.confidence)+'</p>'+
-    '<label>選擇現有庫存藥品<select data-select="'+line.id+'"><option value="">請選擇相符藥品</option>'+options+'</select></label>'+
-    '<p>入庫分類：'+esc(found?.name||'未配對／待分類')+'</p><label>實際入庫瓶數<input data-qty="'+line.id+'" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></label>'+
-    '<p class="muted">'+esc(m.reason)+'；'+esc(unitMessage(line.unit))+(found?'；現庫存 '+esc(found.bottles??'待核對')+' 瓶':'')+'</p>'+
-    '<label class="check-label"><input data-reviewed="'+line.id+'" type="checkbox" '+(line.reviewed?'checked':'')+'>已逐項核對藥名、編號、進貨單位及實際瓶數</label>'+
-    '<button type="button" data-remove="'+line.id+'" class="secondary small">不列入此項</button></div>';
-  }).join('');
-  root.querySelectorAll('[data-select]').forEach(el=>{const line=recognized.find(x=>x.id===el.dataset.select);el.value=line.selected;el.onchange=()=>{line.selected=el.value;line.manualSelection=true;line.reviewed=false;drawResult();};});
-  root.querySelectorAll('[data-qty]').forEach(el=>el.oninput=()=>{const line=recognized.find(x=>x.id===el.dataset.qty);line.quantity=el.value;line.reviewed=false;root.querySelector('[data-reviewed="'+line.id+'"]').checked=false;});
-  root.querySelectorAll('[data-reviewed]').forEach(el=>el.onchange=()=>{recognized.find(x=>x.id===el.dataset.reviewed).reviewed=el.checked;});
+  const review=$('#ai-result');
+  const scroll=review.querySelector('.ai-review-wrap');
+  const left=scroll?.scrollLeft??0, top=scroll?.scrollTop??0;
+  review.innerHTML=renderPhotoReview(recognized,{esc,candidatesFor:line=>receiptCandidates(line,currentRows()),matchLine,unitMessage});
+  review.querySelector('.ai-review-wrap')?.scrollTo(left,top);
+  updatePhotoReviewCount(root,recognized);
+  root.querySelectorAll('[data-select]').forEach(el=>{const line=recognized.find(x=>x.id===el.dataset.select);el.value=line.selected;el.onchange=()=>{line.selected=el.value;line.manualSelection=true;line.reviewed=false;drawResult();root.querySelector('[data-select="'+line.id+'"]')?.focus({preventScroll:true});};});
+  root.querySelectorAll('[data-qty]').forEach(el=>el.oninput=()=>{const line=recognized.find(x=>x.id===el.dataset.qty);line.quantity=el.value;line.reviewed=false;root.querySelector('[data-reviewed="'+line.id+'"]').checked=false;updatePhotoReviewCount(root,recognized);});
+  root.querySelectorAll('[data-reviewed]').forEach(el=>el.onchange=()=>{recognized.find(x=>x.id===el.dataset.reviewed).reviewed=el.checked;updatePhotoReviewCount(root,recognized);});
   root.querySelectorAll('[data-remove]').forEach(el=>el.onclick=()=>{recognized.find(x=>x.id===el.dataset.remove).removed=true;drawResult();});
   quantitySteppers(root,'[data-qty]');
   $('#ai-add').disabled=!list.length||!catalogReady||loading;

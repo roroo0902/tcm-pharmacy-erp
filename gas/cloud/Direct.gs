@@ -21,7 +21,7 @@ function erpDirect(operation,input,token){
  if(operation==='readShortage')return shortageRead_();
  if(operation==='saveShortage')return shortageSave_(input);
  if(operation==='readOrderCatalog')return (input?.receipt===true||input?.orderGrid===true)?erpSupplierInventoryCatalog_():erpOrderCatalog_();
- if(operation==='readLossCatalog')return erpLossCatalog_(input);
+ if(operation==='readLossCatalog'||operation==='readDailyLossGrid')return erpDailyLossGrid_(input);
  if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);
  if(operation==='readAll'){
   const ss=SpreadsheetApp.openById(LOSS3.inventory),sheets={};
@@ -64,7 +64,7 @@ function erpDirectValues_(sheet,maxColumns){
 }
 
 // Read only: current inventory and the requested day's cumulative audit and status.
-function erpLossCatalog_(input){
+function erpDailyLossGrid_(input){
  const date=loss3Date_(input?.date);if(date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不能讀取未來耗損日期');
  const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他交易處理中，請重新讀取');
  try{
@@ -76,7 +76,7 @@ function erpLossCatalog_(input){
   });
   const inventory=Sheets.Spreadsheets.get(LOSS3.inventory,{ranges,fields:'sheets(properties(sheetId),data(startRow,startColumn,rowData(values(formattedValue,effectiveValue,userEnteredValue(formulaValue),effectiveFormat(numberFormat(type)))))'});
   const grids=new Map((inventory.sheets||[]).map(sh=>[sh.properties.sheetId,sh.data]));
-  const ledger=lossLedgerRead_(ss,date),latestStatus=new Map();
+  const ledger=lossLedgerReadScoped_(ss,date),latestStatus=new Map();
   let completionError='';
   try{for(const r of periodStatusRows_(ss).rows)if(loss3Date_(r[0])===date)latestStatus.set(r[1],r);}
   catch(e){completionError=e.message;}

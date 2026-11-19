@@ -289,14 +289,14 @@ test('generated period backend exactly matches the pure core and adapter sources
  vm.runInContext(fs.readFileSync('gas/cloud/order-catalog.gs','utf8'),h.ctx);h.ctx.erpOrderSources_=()=>[source];
  vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8'),h.ctx);
  state.formulas[2]=[];state.formulas[2][16]='=999';
- const day=h.ctx.erpLossCatalog_({date:dates[2]});
+ const day=h.ctx.erpDailyLossGrid_({date:dates[2]});
  assert.equal(day.loss[0].posted,2);assert.equal(day.loss[0].stock,50);
  assert.equal(day.completion[source.name].fingerprint,h.day(dates[2]).fingerprint);
- assert.equal(h.ctx.erpLossCatalog_({date:dates[1]}).loss[0].posted,5);
+ assert.equal(h.ctx.erpDailyLossGrid_({date:dates[1]}).loss[0].posted,5);
  state.formulas[2][5]='=TODAY()';
- assert.match(h.ctx.erpLossCatalog_({date:dates[2]}).loss[0].error,/庫存或更新日期/);
+ assert.match(h.ctx.erpDailyLossGrid_({date:dates[2]}).loss[0].error,/庫存或更新日期/);
  state.values[2][1]='';
- const r=h.ctx.erpLossCatalog_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);
+ const r=h.ctx.erpDailyLossGrid_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);
  assert.equal(reads,4);assert.equal(h.batches.length,0);
 });
  test('planning projection uses ledger only and preserves source while enforcing range bounds',()=>{

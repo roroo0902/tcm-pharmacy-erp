@@ -25,7 +25,10 @@ export function mountLoss({esc,fmt,ask,message}){
  $('#content').insertAdjacentHTML('afterbegin',lossLayout);
  const stopWordAxis=alignOrderWord($('#loss-table'));
  const completion=mountLossCompletion($('#content'),{esc,context:()=>({date,sheet:selected?.name})});
- const readLoss=createLossLoader(date=>readLossWithTimeout(()=>runDirect('readLossCatalog',{date})));
+ const readLoss=createLossLoader(date=>readLossWithTimeout(async()=>{
+  try{return await runDirect('readDailyLossGrid',{date});}
+  catch(e){if(!e.message.includes('不支援的操作'))throw e;return runDirect('readLossCatalog',{date});}
+ }));
  const status=t=>{$('#loss-state').textContent=t;};
  function summary(){const count=dayDraft.quantities.size;$('#loss-clear').disabled=!count;$('#loss-summary').textContent=`已填 ${count} 項（含其他分頁）`;
  document.querySelectorAll('[data-delta]').forEach(cell=>{const r=rowById.get(cell.dataset.delta),result=lossCalculation(dayDraft.quantities.get(r.id),r),after=$('[data-after="'+r.id+'"]');cell.textContent=result.delta;after.textContent=result.after;after.classList.toggle('loss-insufficient',result.insufficient);});}

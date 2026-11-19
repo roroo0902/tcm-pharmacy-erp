@@ -105,7 +105,8 @@ function lossV3PrepareDate(input){loss3Actor_();const d=loss3Draft_(input),lock=
 // Append-only daily cumulative ledger. Source inventory date columns are never written.
 const LOSS_LEDGER='每日耗損明細';
 const LOSS_LEDGER_HEADERS=['日期','廠商／類別','藥品編號','藥品名稱','當日累計瓶數','版本','來源','核對狀態','備註','經手人','更新時間'];
-function lossLedgerRead_(ss,onlyDate){
+function lossLedgerRead_(ss){return lossLedgerReadScoped_(ss);}
+function lossLedgerReadScoped_(ss,onlyDate){
  const sh=ss.getSheetByName(LOSS_LEDGER);if(!sh)throw Error('獨立耗損明細尚未完成移轉，請聯絡維護人員');
  const last=sh.getLastRow();
  if(last>100000)throw Error('耗損明細已達讀取上限，請先封存');

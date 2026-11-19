@@ -105,12 +105,16 @@ function lossV3PrepareDate(input){loss3Actor_();const d=loss3Draft_(input),lock=
 // Append-only daily cumulative ledger. Source inventory date columns are never written.
 const LOSS_LEDGER='每日耗損明細';
 const LOSS_LEDGER_HEADERS=['日期','廠商／類別','藥品編號','藥品名稱','當日累計瓶數','版本','來源','核對狀態','備註','經手人','更新時間'];
-function lossLedgerRead_(ss){
+function lossLedgerRead_(ss,onlyDate){
  const sh=ss.getSheetByName(LOSS_LEDGER);if(!sh)throw Error('獨立耗損明細尚未完成移轉，請聯絡維護人員');
- if(sh.getLastRow()>100000)throw Error('耗損明細已達讀取上限，請先封存');
- const v=sh.getDataRange().getValues(),latest=new Map();
- if(v[0].slice(0,11).join('|')!==LOSS_LEDGER_HEADERS.join('|'))throw Error('每日耗損明細表頭已變更');
- for(const r of v.slice(1)){if(r.every(x=>x===''))continue;const date=loss3Date_(r[0]),key=JSON.stringify([date,String(r[1]),String(r[2])]);
+ const last=sh.getLastRow();
+ if(last>100000)throw Error('耗損明細已達讀取上限，請先封存');
+ const v=onlyDate?sh.getRange(1,1,Math.max(1,last),9).getValues():sh.getDataRange().getValues(),latest=new Map();
+ const headers=onlyDate?[...v[0],...sh.getRange(1,10,1,2).getValues()[0]]:v[0].slice(0,11);
+ if(headers.join('|')!==LOSS_LEDGER_HEADERS.join('|'))throw Error('每日耗損明細表頭已變更');
+ for(const r of v.slice(1)){if(r.every(x=>x===''))continue;const date=loss3Date_(r[0]);
+ if(onlyDate&&date!==onlyDate)continue;
+ const key=JSON.stringify([date,String(r[1]),String(r[2])]);
  if(!r[1]||!r[2]||!r[3]||!Number.isInteger(r[5])||r[5]<0||!['已核對','待核對'].includes(r[7]))throw Error('每日耗損明細格式待核對');
  if(r[7]==='已核對')LossCumulative.lossUnits(r[4]);
  const old=latest.get(key);if(old&&r[5]<=old.revision)throw Error('每日耗損明細版本重複或倒退');
@@ -121,7 +125,10 @@ function lossLedgerRows_(changes,actor,time){return changes.map(r=>[r.date,r.she
 function lossLedgerAppend_(sh,rows){return {appendCells:{sheetId:sh.getSheetId(),rows:rows.map(r=>({values:r.map(v=>({userEnteredValue:typeof v==='number'?{numberValue:v}:{stringValue:String(v)}}))})),fields:'userEnteredValue'}};}
 function lossLedgerSnapshot_(ss,source,dates,ledger){
  const sh=ss.getSheetByName(source.name);if(!sh||sh.getLastRow()>10000)throw Error('來源範圍異常');
- const v=sh.getRange(1,1,Math.max(2,sh.getLastRow()),7).getValues(),counts=new Map();
+ return lossLedgerSnapshotRows_(sh.getRange(1,1,Math.max(2,sh.getLastRow()),7).getValues(),source,dates,ledger);
+}
+function lossLedgerSnapshotRows_(v,source,dates,ledger){
+ const counts=new Map();
  for(const r of v.slice(2)){const code=String(r[1]||'').trim();if(code)counts.set(code,(counts.get(code)||0)+1);}
  const rows=v.slice(2).filter(r=>String(r[3]||'').trim()).map(r=>{const code=String(r[1]||'').trim(),name=String(r[3]).trim(),values={},errors={};for(const date of dates){const entry=ledger.latest.get(JSON.stringify([date,source.name,code]));values[date]=entry?.error?null:entry?.total??null;const error=!code||counts.get(code)!==1?'編號缺少或重複':entry?.error|| (entry&&entry.name!==name?'明細藥名與目前品項不符':'');if(error)errors[date]=error;}return {sheet:source.name,code,name,values,errors};});
  const fingerprints={};for(const d of dates)fingerprints[d]=loss3Hash_(['ledger-v1',source.gid,d,rows.map(r=>[r.code,r.name,r.values[d],r.errors[d]||'',ledger.latest.get(JSON.stringify([d,source.name,r.code]))?.revision||0])]);

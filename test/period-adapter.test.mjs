@@ -269,10 +269,36 @@ test('generated period backend exactly matches the pure core and adapter sources
  test('migration is idempotent, excludes weekly totals, retains formula errors and never changes source',()=>{
  const h=harness(false);h.state('每日耗損明細').name='old fixture';h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=2';const before=copy(h.state(source.name));const result=h.ctx.lossLedgerMigrate();assert.equal(result.sourceUnchanged,true);assert.deepEqual(h.state(source.name),before);assert.equal(h.ctx.lossLedgerMigrate().alreadyMigrated,true);assert.equal(h.batches.length,1);assert.equal(h.read().rows[0].total,null);assert.ok(h.state('耗損明細移轉核對').values.some(r=>String(r[3]).includes('公式')));
  });
- test('catalog uses ledger totals, retains missing-code errors and ignores source date formulas',()=>{
- const h=harness(false);h.state(source.name).formulas[2]=[];h.state(source.name).formulas[2][16]='=999';vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8').replaceAll('\r\n','\n'),h.ctx);assert.equal(h.ctx.erpLossCatalog_({date:dates[2]}).loss[0].posted,2);h.state(source.name).values[2][1]='';const r=h.ctx.erpLossCatalog_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);assert.equal(h.batches.length,0);
- });
-
+ test('daily catalog batches the required cells, validates formulas, and returns same-date completion',()=>{
+ const h=harness(false),state=h.state(source.name);
+ state.values[0][4]='價格';
+ const get=h.ctx.Sheets.Spreadsheets;
+ let reads=0;
+ get.get=(id,{ranges,fields})=>{
+  reads++;
+  assert.equal(id,vm.runInContext('LOSS3.inventory',h.ctx));
+  assert.deepEqual([...ranges],['B:B','D:D','E1','F:G'].map(range=>"'驗收單方'!"+range));
+  assert.match(fields,/formulaValue/);
+  return {sheets:[{properties:{sheetId:source.gid},data:[[5,2],[4,1],[1,1],[3,1]].map(([startColumn,width])=>({
+   startColumn,rowData:state.values.slice(0,startColumn===4?1:undefined).map((row,i)=>({values:Array.from({length:width},(_,j)=>{
+    const v=row[startColumn+j]??'',formulaValue=state.formulas[i]?.[startColumn+j];
+    return {formattedValue:String(v),effectiveValue:typeof v==='number'?{numberValue:v}:{stringValue:v},...(formulaValue?{userEnteredValue:{formulaValue}}:{})};
+   })}))
+  }))}]};
+ };
+ vm.runInContext(fs.readFileSync('gas/cloud/order-catalog.gs','utf8'),h.ctx);h.ctx.erpOrderSources_=()=>[source];
+ vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8'),h.ctx);
+ state.formulas[2]=[];state.formulas[2][16]='=999';
+ const day=h.ctx.erpLossCatalog_({date:dates[2]});
+ assert.equal(day.loss[0].posted,2);assert.equal(day.loss[0].stock,50);
+ assert.equal(day.completion[source.name].fingerprint,h.day(dates[2]).fingerprint);
+ assert.equal(h.ctx.erpLossCatalog_({date:dates[1]}).loss[0].posted,5);
+ state.formulas[2][5]='=TODAY()';
+ assert.match(h.ctx.erpLossCatalog_({date:dates[2]}).loss[0].error,/庫存或更新日期/);
+ state.values[2][1]='';
+ const r=h.ctx.erpLossCatalog_({date:dates[2]}).loss[0];assert.equal(r.posted,null);assert.match(r.error,/編號/);
+ assert.equal(reads,4);assert.equal(h.batches.length,0);
+});
  test('planning projection uses ledger only and preserves source while enforcing range bounds',()=>{
  const h=harness(false),s=h.state(source.name);s.values[2][16]=999;vm.runInContext(fs.readFileSync('gas/cloud/Direct.gs','utf8').replaceAll('\r\n','\n'),h.ctx);const r=h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:dates[2]});assert.deepEqual(Array.from(r.values[2].slice(13)),[3,5,2]);assert.equal(s.values[2][16],999);assert.equal(h.batches.length,0);assert.throws(()=>h.ctx.lossLedgerPlanning_({sheet:source.name,start:dates[0],end:'2026-11-04'}),/63/);
  });

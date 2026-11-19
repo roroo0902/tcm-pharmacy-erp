@@ -63,18 +63,48 @@ function erpDirectValues_(sheet,maxColumns){
  return sheet.getDataRange().getDisplayValues();
 }
 
-// Read only: raw dates and latest cumulative audit, with no date-column creation.
+// Read only: current inventory and the requested day's cumulative audit and status.
 function erpLossCatalog_(input){
  const date=loss3Date_(input?.date);if(date>Utilities.formatDate(new Date(),'Asia/Taipei','yyyy-MM-dd'))throw Error('不能讀取未來耗損日期');
  const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他交易處理中，請重新讀取');
  try{
- const data={sources:erpOrderSources_(),sheets:{},weekly:{}},ss=SpreadsheetApp.openById(LOSS3.inventory),ledger=lossLedgerRead_(ss),loss=[];
- for(const source of data.sources){const range=ss.getSheetByName(source.name).getDataRange(),v=range.getValues(),f=range.getFormulas(),snap=lossLedgerSnapshot_(ss,source,[date],ledger);data.sheets[source.name]=range.getDisplayValues();let ri=0;
- for(let i=2;i<v.length;i++){const r=v[i],name=String(r[3]||'').trim();if(!name)continue;const row=snap.rows[ri++],stock=r[6];let error=row.errors[date]||'';
- if(f[i]?.[6]||f[i]?.[5]||!Number.isInteger(stock)||stock<0)error=error||'庫存或更新日期無法核對';
- loss.push({sheet:source.name,code:row.code,name,row:i+1,stock:Number.isInteger(stock)?stock:null,posted:error?null:row.values[date]??0,error});
- }}
- return {...data,date,loss,readAt:new Date().toISOString()};
+  const ss=SpreadsheetApp.openById(LOSS3.inventory),sources=erpOrderSources_(ss,false),sheets={},loss=[],completion={};
+  if(!sources.length)return {sources,sheets,date,loss,completion,readAt:new Date().toISOString()};
+  const ranges=sources.flatMap(({name})=>{
+   const title="'"+name.replace(/'/g,"''")+"'";
+   return ['B:B','D:D','E1','F:G'].map(range=>title+'!'+range);
+  });
+  const inventory=Sheets.Spreadsheets.get(LOSS3.inventory,{ranges,fields:'sheets(properties(sheetId),data(startRow,startColumn,rowData(values(formattedValue,effectiveValue,userEnteredValue(formulaValue),effectiveFormat(numberFormat(type)))))'});
+  const grids=new Map((inventory.sheets||[]).map(sh=>[sh.properties.sheetId,sh.data]));
+  const ledger=lossLedgerRead_(ss,date),latestStatus=new Map();
+  let completionError='';
+  try{for(const r of periodStatusRows_(ss).rows)if(loss3Date_(r[0])===date)latestStatus.set(r[1],r);}
+  catch(e){completionError=e.message;}
+  for(const source of sources){
+   const grid=grids.get(source.gid),byColumn=new Map((grid||[]).filter(g=>!g.startRow).map(g=>[g.startColumn,g.rowData||[]]));
+   if([1,3,4,5].some(c=>!byColumn.has(c)))throw Error(source.name+' 庫存品項來源未完整讀取');
+   const count=Math.max(...[...byColumn.values()].map(rows=>rows.length));
+   if(count>10000)throw Error('來源範圍異常');
+   const cell=(row,col,offset=0)=>byColumn.get(col)[row]?.values?.[offset];
+   const display=c=>c?.formattedValue??'';
+   const raw=c=>c?.effectiveValue?.stringValue??c?.effectiveValue?.numberValue??c?.effectiveValue?.boolValue??display(c);
+   const stock=c=>['DATE','TIME','DATE_TIME'].includes(c?.effectiveFormat?.numberFormat?.type)?null:c?.effectiveValue?.numberValue;
+   const values=Array.from({length:count},(_,i)=>['',raw(cell(i,1)),'',raw(cell(i,3))]);
+   const rows=Array.from({length:count},(_,i)=>['',display(cell(i,1)),'',display(cell(i,3)),display(cell(i,4)),'',display(cell(i,5,1))]);
+   erpSupplierHeaders_(source.name,rows);
+   const snap=lossLedgerSnapshotRows_(values,source,[date],ledger);
+   completion[source.name]={date,sheet:source.name,...(completionError?{error:completionError}:periodCompletionState_(snap,date,latestStatus.get(source.name)))};
+   sheets[source.name]=rows;
+   let ri=0;
+   for(let i=2;i<count;i++){
+    if(!String(values[i][3]||'').trim())continue;
+    const row=snap.rows[ri++],stockCell=cell(i,5,1),bottles=stock(stockCell);
+    let error=row.errors[date]||'';
+    if(stockCell?.userEnteredValue?.formulaValue||cell(i,5)?.userEnteredValue?.formulaValue||!Number.isInteger(bottles)||bottles<0)error=error||'庫存或更新日期無法核對';
+    loss.push({sheet:source.name,code:row.code,name:row.name,row:i+1,stock:Number.isInteger(bottles)?bottles:null,posted:error?null:row.values[date]??0,error});
+   }
+  }
+  return {sources,sheets,date,loss,completion,readAt:new Date().toISOString()};
  }finally{lock.releaseLock();}
 }
 

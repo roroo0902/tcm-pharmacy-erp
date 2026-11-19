@@ -2,7 +2,7 @@ import {parseSupplierCatalog} from './supplier-catalog.mjs?v=googlesync20261114'
 export function verifiedLossCatalog(data,date){
  if(data?.date!==date||!Array.isArray(data.loss))throw Error('耗損日期核對失敗，請重新讀取');
  const catalog=parseSupplierCatalog(data),map=new Map();for(const x of data.loss){const key=JSON.stringify([x.sheet,x.code,x.row]);if(map.has(key))throw Error('耗損核對結果重複');map.set(key,x);}
- return {...catalog,rows:catalog.rows.map(r=>{const x=map.get(JSON.stringify([r.name,r.code,r.row]));if(!x||x.name!==r.drug)throw Error('品項位置變更，請重新讀取');return {...r,bottles:x.stock,posted:x.posted,postedError:x.error||''};}),readAt:data.readAt};
+ return {...catalog,rows:catalog.rows.map(r=>{const x=map.get(JSON.stringify([r.name,r.code,r.row]));if(!x||x.name!==r.drug)throw Error('品項位置變更，請重新讀取');return {...r,bottles:x.stock,posted:x.posted,postedError:x.error||''};}),readAt:data.readAt,completion:data.completion};
 }
 export function lossCalculation(value,row){
  if(value==null||value==='')return {delta:'—',after:'—',insufficient:false};

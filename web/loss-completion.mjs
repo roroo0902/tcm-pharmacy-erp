@@ -9,5 +9,5 @@ export function mountLossCompletion(root,{context,esc}){
    (pending?`<strong style="display:block;color:#963b24">正常品項 ${r.eligibleCount} 筆${r.eligibleComplete?'已完成':'可先完成'}；仍有 ${pending} 筆待核對，不列為零耗損。</strong><details><summary>查看待核對品項（${pending} 筆）</summary><ul>${r.pendingItems.map(x=>`<li>${esc(x.name)}：${esc(x.reason)}</li>`).join('')}</ul></details>`:'');
  }
  async function refresh(){const n=++ticket,ctx=context();if(!ctx.sheet)return;try{const r=await runDirect('readLossDay',ctx);if(disposed||n!==ticket)return;render(r);}catch(e){if(!disposed&&n===ticket)state.textContent=e.message;}}
- return {refresh,dispose:()=>{disposed=true;ticket++;}};
+ return {refresh,show:r=>{ticket++;if(r)render(r);else state.textContent='正在核對本分類的耗損登錄狀態。';},dispose:()=>{disposed=true;ticket++;}};
 }

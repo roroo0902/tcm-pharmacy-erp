@@ -3,7 +3,7 @@ import {directEnabled,authorize,runDirect,directReview,directLog} from './direct
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {csvRows} from './sheets-data.mjs';
 import {lookupPostedTransaction} from './pending-recovery.mjs';
-import {matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=photostock20261119';
+import {matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=photomatch20261120';
 import {quantitySteppers} from './quantity-stepper.mjs';
 const KEY='tcm-cloud-pending-v1',DISCARDED='tcm-photo-receipt-last-discarded-v1';
 const todayTaipei=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
@@ -30,7 +30,11 @@ function renderPhotoReview(lines,{esc,candidatesFor,matchLine,unitMessage}){
  if(!list.length)return '<p class="muted">辨識後，這裡會顯示每一筆藥名、數量及配對結果。</p>';
  const rows=list.map(line=>{
   const match=matchLine(line);
-  if(!line.manualSelection&&!line.selected&&match.row)line.selected=String(match.row.id);
+  if(!line.manualSelection){
+   const selection=match.row?String(match.row.id):'';
+   if(selection!==line.selected)line.reviewed=false;
+   line.selected=selection;
+  }
   const candidates=candidatesFor(line);
   const found=candidates.find(row=>String(row.id)===line.selected);
   const options=candidates.map(row=>'<option value="'+esc(String(row.id))+'">'+esc(row.category+'｜'+row.code+'｜'+row.drug)+'</option>').join('');
@@ -41,7 +45,7 @@ function renderPhotoReview(lines,{esc,candidatesFor,matchLine,unitMessage}){
    '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
    '<td><div class="ai-review-match"><span class="ai-review-state"'+(found?' data-matched':'')+'>'+esc(found?.category||'待配對')+'</span>'+
    '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select></div>'+
-   '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶':match.reason)+'</small></td>'+
+   '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):match.reason)+'</small></td>'+
    '<td><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
    '<td><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已逐項核對藥名、編號、單位與瓶數" '+(line.reviewed?'checked':'')+'></td>'+
    '<td><button type="button" data-remove="'+id+'" aria-label="排除 '+name+'" class="secondary small">排除</button></td></tr>';
@@ -135,7 +139,6 @@ export function mountPhotoReceive({esc,fmt,ask}){
    // Do not persist the image or raw API response in localStorage.
    recognized=cleanRecognized(result);
    if(!recognized.length)throw Error('AI 未辨識到藥品項目，請重拍或改用一般進貨登錄');
-   for(const line of recognized){const m=matchLine(line);line.selected=m.row?String(m.row.id):'';}
    drawResult();status('AI 辨識 '+recognized.length+' 項；請逐項比對，並由人工勾選核對。');
   }catch(error){status(error.message);}finally{lockBusy(false);}
  };

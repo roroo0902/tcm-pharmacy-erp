@@ -51,3 +51,27 @@ test('same code in different sheets does not merge into one destination',()=>{
  const list=addToBasket([],[{selected:'1',quantity:1,reviewed:true},{selected:'compound:3',quantity:2,reviewed:true}],[rows[0],{...mixed[2],code:rows[0].code}],'科達');
  assert.equal(list.length,2);assert.notEqual(list[0].sheet,list[1].sheet);
 });
+
+const compound = (code, drug) => ({...mixed[2], id: code, code, drug});
+const receiptRows = [
+  compound('B1109', '甘麥大棗湯'),
+  compound('B1043', '香砂六君子'),
+  compound('B034', '辛夷清肺湯'),
+  compound('B1087', '芍藥甘草湯')
+];
+
+test('photo receipts ignore the trailing formulation and recognize the catalog spelling', () => {
+  assert.equal(matchRecognized({name:'甘麥大棗湯（濃縮細粒）', unit:'２００Ｇ'}, receiptRows).row?.code, 'B1109');
+  assert.equal(matchRecognized({name:'甘麥大棗湯 濃縮細粒', code:'Ｂ１１０９'}, receiptRows).row?.code, 'B1109');
+  assert.equal(matchRecognized({name:'香砂六君子湯 濃縮細粒'}, receiptRows).row?.code, 'B1043');
+});
+
+test('normalized name matching keeps uncertain receipts pending', () => {
+  for (const name of ['辛夷散 濃縮細粒', '芎藥甘草湯 濃縮細粒', '濃縮細粒甘麥大棗湯', '濃縮細粒']) {
+    assert.equal(matchRecognized({name}, receiptRows).row, null);
+  }
+  const aliasCollision = [...receiptRows, compound('B9000','香砂六君子湯')];
+  assert.equal(matchRecognized({name:'香砂六君子湯 濃縮細粒'}, aliasCollision).row, null);
+  assert.equal(matchRecognized({name:'香砂六君子湯 濃縮細粒', code:'B1109'}, receiptRows).row, null);
+  assert.equal(matchRecognized({name:'甘麥大棗湯 濃縮細粒', code:'B1109', unit:'100g'}, receiptRows).row, null);
+});

@@ -1,6 +1,13 @@
 // Pure helpers: OCR suggestions never write inventory and never resolve fuzzy matches automatically.
 export const normalizeDrug = value => String(value ?? '').normalize('NFKC').toUpperCase().replace(/[\s\-—_()（）\[\]【】.,，。:：/／]+/g, '');
 
+function canonicalDrugName(value) {
+  const name = normalizeDrug(value);
+  const withoutForm = name.replace(/(?<=.)濃縮細粒$/, '');
+  // The supplier receipt and catalog use these two spellings for the same formula.
+  return withoutForm === '香砂六君子湯' ? '香砂六君子' : withoutForm;
+}
+
 function isSingleFormulaPack(line) {
   const label = [line.unit, line.name, line.evidence].map(value => String(value ?? '').normalize('NFKC'));
   return label.some(text => /(?:^|[^0-9.])100(?:\.0+)?\s*(?:g(?![a-z])|公克|克)/i.test(text));
@@ -11,17 +18,17 @@ export function receiptCandidates(line, candidates) {
 }
 
 export function matchRecognized(line, candidates) {
-  const code = normalizeDrug(line.code), name = normalizeDrug(line.name);
+  const code = normalizeDrug(line.code), name = canonicalDrugName(line.name);
   const valid = receiptCandidates(line, candidates).filter(row => row.code && row.drug);
   const byCode = code ? valid.filter(row => normalizeDrug(row.code) === code) : [];
   if (byCode.length === 1) {
-    const nameDiffers = !!name && normalizeDrug(byCode[0].drug) !== name;
-    return nameDiffers ? {row:null,reason:'品號與藥名衝突，請人工選擇',warning:true} : {row:byCode[0],reason:'編號完全相符',warning:false};
+    const nameDiffers = !!name && canonicalDrugName(byCode[0].drug) !== name;
+    return nameDiffers ? {row:null,reason:'品號與藥名衝突，請人工選擇',warning:true} : {row:byCode[0],reason:'已依品號配對',warning:false};
   }
   if (byCode.length > 1) return {row: null, reason: '庫存編號重複，禁止自動比對', warning: true};
-  const byName = name ? valid.filter(row => normalizeDrug(row.drug) === name) : [];
-  if (code && !byCode.length) return {row:null,reason:'照片品號未找到，請人工核對藥名與編號',warning:true};
-  if (byName.length === 1) return {row: byName[0], reason: '藥名完全相符，請再核對編號', warning: !!code};
+  if (code) return {row:null,reason:'照片品號未找到，請人工核對藥名與編號',warning:true};
+  const byName = name ? valid.filter(row => canonicalDrugName(row.drug) === name) : [];
+  if (byName.length === 1) return {row: byName[0], reason: '已依藥名配對，請核對品號', warning: false};
   return {row: null, reason: byName.length > 1 ? '同名品項不只一筆' : '未找到完全相符品項，請手動選擇', warning: true};
 }
 

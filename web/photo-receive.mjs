@@ -2,9 +2,10 @@ import {loadReceiptCatalog} from './supplier-catalog.mjs';
 import {directEnabled,authorize,runDirect,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {csvRows} from './sheets-data.mjs';
+import {lookupPostedTransaction} from './pending-recovery.mjs';
 import {matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=photostock20261119';
 import {quantitySteppers} from './quantity-stepper.mjs';
-const KEY='tcm-cloud-pending-v1';
+const KEY='tcm-cloud-pending-v1',DISCARDED='tcm-photo-receipt-last-discarded-v1';
 const todayTaipei=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
 const unitMessage=unit=>(unit==='瓶'||unit==='罐')?'照片單位可能正確，仍需核對':'照片不是「瓶／罐」，請手動換算成實際入庫瓶數';
 
@@ -114,9 +115,27 @@ export function mountPhotoReceive({esc,fmt,ask}){
  function showPending(){
   try{pending=JSON.parse(localStorage.getItem(KEY)||'null');}catch{pending=null;}
   const unresolved=pending&&pending.kind==='tcm-cloud'&&!pending.verified;
-  $('#ai-pending').innerHTML=unresolved?'<h3>上次有一筆待核對交易</h3><p>交易編號：'+esc(pending.id)+'</p><p class="muted">為防止重複入庫，在讀回或以同一交易重試前，不能建立另一筆新進貨。</p><button type="button" id="ai-retry" class="secondary">使用原交易重新核對</button><button type="button" id="ai-readback" class="secondary">查詢 Google 交易紀錄</button>':'';
+  $('#ai-pending').innerHTML=unresolved?'<h3>上次有一筆待核對交易</h3><p>交易編號：'+esc(pending.id)+'</p><p class="muted">為防止重複入庫，在讀回或以同一交易重試前，不能建立另一筆新進貨。</p><button type="button" id="ai-retry" class="secondary">使用原交易重新核對</button><button type="button" id="ai-readback" class="secondary">查詢 Google 交易紀錄</button>'+(pending.action==='進貨'?'<button type="button" id="ai-discard" class="secondary">取消未入帳的待核對紀錄</button>':''):'';
   if(unresolved){
    $('#ai-retry').onclick=()=>send(cloudDraft(pending));
+   const discard=$('#ai-discard');
+   if(discard)discard.onclick=()=>{
+    const saved=localStorage.getItem(KEY),original=pending;
+    if(!saved||JSON.parse(saved).id!==original.id){showPending();status('待核對紀錄已變動，請重新查詢。');return;}
+    ask('<p>系統會再次查詢 Google 交易紀錄。查無入帳時，將保留本機備份並取消這筆待核對紀錄。</p><p>交易編號：'+esc(original.id)+'</p>',async()=>{
+     try{
+      const draft=cloudDraft(JSON.parse(saved));
+      if(draft.action!=='進貨'||JSON.parse(saved).verified)throw Error('只可取消未入帳的待核對進貨。');
+      const event=await lookupPostedTransaction(draft);
+      if(!alive)return;
+      if(localStorage.getItem(KEY)!==saved)throw Error('待核對紀錄已變動，請重新查詢。');
+      if(event)throw Error('Google 已有這筆入帳紀錄，請先核對入帳結果。');
+      localStorage.setItem(DISCARDED,JSON.stringify({draft:JSON.parse(saved),cancelledAt:new Date().toISOString()}));
+      localStorage.removeItem(KEY);
+      showPending();status('Google 查無入帳，已取消這筆待核對紀錄並保留本機備份。');
+     }catch(error){status(error.message);}
+    },'查詢並取消待核對紀錄');
+   };
    $('#ai-readback').onclick=async()=>{try{await authorize();const response=await directLog('inventory');const record=csvRows(await response.text()).slice(1).find(r=>r[0]===pending.id);if(!record)throw Error('未發現該交易；請沿用原交易編號重新核對');const stored=JSON.parse(record[1]).draft;if(JSON.stringify(cloudDraft(stored))!==JSON.stringify(cloudDraft(pending)))throw Error('同編號內容與雲端不一致，請停止操作');localStorage.setItem(KEY,JSON.stringify({...pending,verified:true}));showPending();status('已查到相同交易的入庫紀錄');}catch(error){status(error.message);}};
   }
  }
@@ -124,7 +143,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   if(!directEnabled()){status('目前僅支援經授權的 Google 同步，尚未送出');return;}
   directReview(draft,ask,async()=>{
    localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));basket=[];drawBasket();showPending();await load();
-  },status);
+  },status,{beforeCommit:()=>{if(JSON.parse(localStorage.getItem(KEY)||'null')?.id!==draft.id)throw Error('待核對紀錄已變動，請重新預覽。');}});
  }
  $('#ai-preview').onclick=()=>{
   try{

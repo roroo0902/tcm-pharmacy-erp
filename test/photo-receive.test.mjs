@@ -75,3 +75,16 @@ test('normalized name matching keeps uncertain receipts pending', () => {
   assert.equal(matchRecognized({name:'香砂六君子湯 濃縮細粒', code:'B1109'}, receiptRows).row, null);
   assert.equal(matchRecognized({name:'甘麥大棗湯 濃縮細粒', code:'B1109', unit:'100g'}, receiptRows).row, null);
 });
+
+test('printed weight in OCR names preserves same-row codes and conflict review', () => {
+  const [correct, blank, conflict] = cleanRecognized({lines:[
+    {code:'B1109', name:'甘麥大棗湯 濃縮細粒 200g', unit:'瓶', quantity:1},
+    {code:'', name:'香砂六君子湯（２００公克）', unit:'瓶', quantity:1},
+    {code:'B1109', name:'香砂六君子湯 200g', unit:'瓶', quantity:1}
+  ]});
+  assert.equal(matchRecognized(correct, receiptRows).row?.code, 'B1109');
+  assert.equal(blank.code, '');
+  assert.equal(matchRecognized(blank, receiptRows).row?.code, 'B1043');
+  assert.equal(matchRecognized(conflict, receiptRows).row, null);
+  assert.equal(matchRecognized({...correct,name:'甘麥大棗湯 濃縮細粒 100g'}, receiptRows).row, null);
+});

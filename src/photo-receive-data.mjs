@@ -2,7 +2,9 @@
 export const normalizeDrug = value => String(value ?? '').normalize('NFKC').toUpperCase().replace(/[\s\-—_()（）\[\]【】.,，。:：/／]+/g, '');
 
 function canonicalDrugName(value) {
-  const name = normalizeDrug(value);
+  const printedName = String(value ?? '').normalize('NFKC');
+  // OCR sometimes includes the printed package weight in the drug name.
+  const name = normalizeDrug(printedName.replace(/(?:\s+|[（(]|(?<=濃縮細粒))\d+(?:\.\d+)?\s*(?:g|公克|克)\s*[）)]?\s*$/iu, ''));
   const withoutForm = name.replace(/(?<=.)濃縮細粒$/, '');
   // The supplier receipt and catalog use these two spellings for the same formula.
   return withoutForm === '香砂六君子湯' ? '香砂六君子' : withoutForm;

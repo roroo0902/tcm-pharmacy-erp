@@ -5,7 +5,7 @@ import {directEnabled,authorize,runDirect,directReview,directLog} from './direct
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {csvRows} from './sheets-data.mjs';
 import {lookupPostedTransaction} from './pending-recovery.mjs';
-import {matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=photomatch20261120';
+import {matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=receiptweight20261120';
 import {quantitySteppers} from './quantity-stepper.mjs';
 const KEY='tcm-cloud-pending-v1',DISCARDED='tcm-photo-receipt-last-discarded-v1';
 const todayTaipei=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});

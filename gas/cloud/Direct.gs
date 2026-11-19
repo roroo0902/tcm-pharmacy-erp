@@ -20,7 +20,7 @@ function erpDirect(operation,input,token){
  if(operation==='completeLossDay')return periodComplete_(input);
  if(operation==='readShortage')return shortageRead_();
  if(operation==='saveShortage')return shortageSave_(input);
- if(operation==='readOrderCatalog')return erpOrderCatalog_();
+ if(operation==='readOrderCatalog')return input?.receipt===true?erpReceiptCatalog_():erpOrderCatalog_();
  if(operation==='readLossCatalog')return erpLossCatalog_(input);
  if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);
  if(operation==='readAll'){

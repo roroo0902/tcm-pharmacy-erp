@@ -8,7 +8,7 @@ import {chooseReceiptMode} from './receipt-choice.mjs';
 import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
-import {createSupplierLoader,supplierSelection} from './supplier-catalog.mjs?v=googlesync20261114';
+import {createSupplierLoader,loadReceiptCatalog,supplierSelection} from './supplier-catalog.mjs?v=receiptread20261119';
 import {priceCents,money,pricingTotal} from './receipt-pricing.mjs?v=compact20261030';
 import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
 import {directEnabled,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
@@ -25,7 +25,7 @@ const sameDraft=(a,b)=>JSON.stringify(cloudDraft(a))===JSON.stringify(cloudDraft
 export function mountReceiptGrid({esc,fmt,ask}){
  const c=document.querySelector('#content'),$=s=>c.querySelector(s),abort=new AbortController(),quantities=new Map(),prices=new Map();
  let rows=[],sources=[],source=null,brand='',category='',sort='code',direction='asc',alive=true,loading=false,loadFailed=false,ticket=0,pending=null,checkingPending=false;
- let shortageSeeded=false;const readCatalog=createSupplierLoader();
+ let shortageSeeded=false;const readCatalog=createSupplierLoader(loadReceiptCatalog);
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
  c.innerHTML=`${supplyLayout}<style>
 #receipt-process[hidden]{display:none}
@@ -67,6 +67,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   c.querySelectorAll('.receipt-qty').forEach(input=>input.parentElement.querySelector('.quantity-clear').insertAdjacentHTML('beforebegin','<span class="quantity-unit">瓶</span>'));
   summary();
  }
+ const catalogStatus=()=>status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已保留數量；單價依原表 E 欄帶入，手動修改以欄位標示為準`);
  function summary(){
   let count=0,total=0,invalid=false;
   for(const v of quantities.values()){if(v==='')continue;count++;const n=Number(v);if(!Number.isInteger(n)||n<1||n>1000000)invalid=true;else total+=n;}
@@ -84,7 +85,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  async function load(syncPrices=false,{showDialog=false,compact=true}={}){
   closeCatalogScreen();
   const run=++ticket;loading=true;refreshStatus.start();loadFailed=false;status('正在讀取 '+(brand+category||'共用廠商與品項')+'…');$('#receipt-submit').disabled=true;
-  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:compact&&brand&&category?`正在讀取${brand}／${category}…`:"正在讀取廠商與品項…"});const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){seedShortage('receive',rows,quantities,receiptKey);shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();status(`${source?.name||'尚無分類'} · ${rows.filter(r=>r.name===source?.name).length} 項 · 共 ${sources.length} 個分類 · 已保留數量；單價依原表 E 欄帶入，手動修改以欄位標示為準`);}
+  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:"正在讀取廠商與品項…"});const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){seedShortage('receive',rows,quantities,receiptKey);shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();catalogStatus();}
   catch(e){if(alive&&run===ticket){loadFailed=true;status(e.message+'；已填數量仍保留，請重新讀取工作表重試');}}
   finally{if(alive&&run===ticket){closeCatalogScreen();loading=false;refreshStatus.finish(!loadFailed);summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
  }
@@ -244,7 +245,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
    if(alive){processButton.disabled=false;summary();}
   }
  }
- const selected=()=>{$('#receipt-search').value='';draw();load(false,{showDialog:true,compact:true});};
+ const selected=()=>{$('#receipt-search').value='';draw();if(!loading&&!loadFailed)catalogStatus();};
  $('#receipt-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selected();}};
  $('#receipt-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selected();}};
  $('#receipt-search').oninput=draw;$('#receipt-refresh').onclick=()=>{if(!loading)load(true,{showDialog:true,compact:true});};

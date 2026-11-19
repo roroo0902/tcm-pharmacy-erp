@@ -10,12 +10,13 @@ export function parseSupplierCatalog(data){
   if(!source.name||!source.brand||!['單方','複方'].includes(source.category)||!Number.isInteger(source.gid)||ids.has(source.gid)||groups.has(group))throw Error('廠商來源設定不完整或重複');
   ids.add(source.gid);groups.add(group);
   const grid=data.sheets?.[source.name];if(!Array.isArray(grid))throw Error('來源缺少 '+source.name);
-  const csv=grid.map(row=>row.map(value=>'"'+String(value??'').replaceAll('"','""')+'"').join(',')).join('\n');
-  return parseSheet(csv,source).map(row=>({...row,weekly:data.weekly?.[source.name]?.[row.code]??null}));
+  const values=grid.map(row=>row.map(value=>String(value??'')));
+  return parseSheet(values,source).map(row=>({...row,weekly:data.weekly?.[source.name]?.[row.code]??null}));
  });
  return {sources:data.sources,rows,sheets:data.sheets};
 }
 export async function loadSupplierCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog'));}
+export async function loadReceiptCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog',{receipt:true}));}
 export function supplierSelection(sources,brand,category){
  const brands=[...new Set(sources.map(s=>s.brand))];
  if(!brands.includes(brand))brand=brands[0]||'';

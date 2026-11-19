@@ -29,3 +29,26 @@ test('catalog discovers new standard suppliers, excludes backups, validates sche
  config={getDataRange:()=>({getValues:()=>[['啟用','廠商','類別','工作表ID','顯示順序'],['是','順天堂','複方',2,1],['否','科達','單方',1,2]]})};assert.equal(context.erpOrderSources_().length,1);
  all[1].getRange=()=>({getDisplayValues:()=>[[],[]]});assert.throws(()=>context.erpOrderSources_(),/欄位格式/);
 });
+test('receipt catalog batches only visible columns and preserves their sheet coordinates',()=>{
+ const source={name:"測試'單方",brand:"測試'",category:'單方',gid:7};
+ let request;
+ const context=vm.createContext({ERP:{inventory:'inventory'},SpreadsheetApp:{openById:()=>({})},
+  Sheets:{Spreadsheets:{Values:{batchGet:(id,options)=>{
+   request={id,...options};return {valueRanges:[
+    {values:[['編號'],['編號'],['A101'],[],['A102']]},
+    {values:[['藥品名稱','價格'],['','','','未拆封'],['甲','12.50','1/24','6'],[],['乙','','','0']]},
+    {values:[['有叫藥'],['缺藥','缺藥率'],['是','12%']]},
+   ]};
+  }}}}
+ });
+ vm.runInContext(fs.readFileSync('gas/cloud/order-catalog.gs','utf8'),context);
+ context.erpOrderSources_=(_,verify)=>{assert.equal(verify,false);return [source];};
+ const output=context.erpReceiptCatalog_();
+ assert.deepEqual(Array.from(request.ranges),["'測試''單方'!B:B","'測試''單方'!D:G","'測試''單方'!K:L"]);
+ assert.equal(request.valueRenderOption,'FORMATTED_VALUE');
+ const rows=output.sheets[source.name];
+ assert.deepEqual(Array.from(rows[2]),['','A101','','甲','12.50','1/24','6','','','','是','12%']);
+ assert.equal(rows[4][1],'A102');
+ assert.equal(rows[4][6],'0');
+ assert.equal(output.weekly,undefined);
+});

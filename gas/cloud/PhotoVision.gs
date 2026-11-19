@@ -29,7 +29,12 @@ function erpRecognizeReceipt_(input) {
   const request={model:model,store:false,max_output_tokens:12000,instructions:prompt,input:[{role:'user',content:[{type:'input_text',text:'辨識這張進貨照片。所選廠商：'+input.brand},{type:'input_image',image_url:'data:'+input.mimeType+';base64,'+input.base64,detail:'high'}]}],text:{format:{type:'json_schema',name:'receipt_lines',strict:true,schema:{type:'object',additionalProperties:false,properties:{lines:{type:'array',items:lineSchema}},required:['lines']}}}};
   let response;
   try {response=UrlFetchApp.fetch('https://api.openai.com/v1/responses',{method:'post',contentType:'application/json',headers:{Authorization:'Bearer '+apiKey.trim()},payload:JSON.stringify(request),muteHttpExceptions:true});}
-  catch (_) {throw Error('OpenAI 連線未完成，請稍後重試；尚未入庫');}
+  catch (error) {
+    if (/script\.external_request|permission|權限|授權/i.test(String(error.message||error))) {
+      throw Error('AI 辨識需要 Apps Script 的外部連線授權，請由部署帳號授權後再試');
+    }
+    throw Error('OpenAI 連線未完成，請稍後重試；尚未入庫');
+  }
   const status=response.getResponseCode();
   if(status!==200)throw Error(status===401?'OpenAI 金鑰無效，請檢查 OPENAI_API_KEY':status===429?'OpenAI 額度或速率限制，請檢查 API 帳務或稍後重試':'OpenAI 辨識服務無法完成（HTTP '+status+'）；請檢查模型權限或稍後重試');
   let body;

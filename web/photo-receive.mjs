@@ -1,3 +1,5 @@
+import {protectDraft} from './page-safety.mjs';
+import {photoModelLabel} from './photo-model.mjs';
 import {loadReceiptCatalog} from './supplier-catalog.mjs';
 import {directEnabled,authorize,runDirect,directReview,directLog} from './direct-sync.mjs?v=compact20261030';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
@@ -71,9 +73,10 @@ export function mountPhotoReceive({esc,fmt,ask}){
   '<div id="ai-result"></div><div class="actions"><button type="button" id="ai-add" disabled>核對後加入進貨清單</button></div><h3>本次進貨清單（尚未入庫）</h3><div id="ai-basket"></div><div class="actions"><button type="button" id="ai-preview" disabled>預覽庫存變化並確認同步</button></div><section id="ai-pending"></section></section>';
  const $=sel=>root.querySelector(sel);
  const status=text=>{if(alive)$('#ai-status').textContent=text;};
- const lockBusy=busy=>{loading=busy;$('#ai-scan').disabled=busy;$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!recognized.some(x=>!x.removed);};
+ const lockBusy=busy=>{loading=busy;if(!alive)return;$('#ai-scan').disabled=busy;$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!recognized.some(x=>!x.removed);};
  function currentRows(){return rows.filter(r=>r.brand===selected);}
  async function load(){
+  if(!alive)return;
   const seq=++run;catalogReady=false;rows=[];
   recognized.forEach(line=>{line.reviewed=false;});drawResult();
   status('正在讀取已啟用廠商與藥品名冊…');
@@ -109,6 +112,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   $('#ai-add').disabled=!list.length||!catalogReady||loading;
  }
  function drawBasket(){
+  if(!alive)return;
   $('#ai-basket').innerHTML=basket.length?'<div class="tablewrap"><table><thead><tr><th>藥品</th><th>原庫存</th><th>本次進貨</th><th>預估庫存</th><th>修改</th></tr></thead><tbody>'+
   basket.map((line,i)=>{const r=rows.find(x=>x.name===line.sheet&&x.code===line.code&&x.drug===line.name);return '<tr><td>'+esc(line.sheet+' '+line.code+' '+line.name)+'</td><td>'+esc(r?.bottles??'待更新')+'</td><td>'+fmt(line.quantity)+'</td><td>'+esc(r?fmt(r.bottles+line.quantity):'待更新')+'</td><td><button type="button" class="secondary small" data-basket-remove="'+i+'">移除</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="muted">尚未加入品項。可依序上傳多張照片，將品項累積到同一進貨清單。</p>';
   root.querySelectorAll('[data-basket-remove]').forEach(b=>b.onclick=()=>{basket.splice(Number(b.dataset.basketRemove),1);drawBasket();});
@@ -133,13 +137,16 @@ export function mountPhotoReceive({esc,fmt,ask}){
    const file=$('#ai-image').files[0]||pastedImage;if(!file)throw Error('請先上傳照片');
    const scanBrand=selected,scanRun=run;
    lockBusy(true);status('正在壓縮照片、辨識藥名與數量…');
-   await authorize();const base64=await jpegData(file);
+   await authorize();
+   if(!alive||selected!==scanBrand||scanRun!==run)return;
+   const base64=await jpegData(file);
+   if(!alive||selected!==scanBrand||scanRun!==run)return;
    const result=await runDirect('recognizeReceipt',{brand:scanBrand,mimeType:'image/jpeg',base64});
    if(!alive||selected!==scanBrand||scanRun!==run){status('已切換廠商，上一張照片的辨識結果未套用。');return;}
    // Do not persist the image or raw API response in localStorage.
    recognized=cleanRecognized(result);
    if(!recognized.length)throw Error('AI 未辨識到藥品項目，請重拍或改用一般進貨登錄');
-   drawResult();status('AI 辨識 '+recognized.length+' 項；請逐項比對，並由人工勾選核對。');
+   drawResult();status('AI 辨識 '+recognized.length+' 項；'+photoModelLabel(result)+'；請逐項比對，並由人工勾選核對。');
   }catch(error){status(error.message);}finally{lockBusy(false);}
  };
  $('#ai-add').onclick=()=>{
@@ -150,6 +157,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   }catch(error){status(error.message);}
  };
  function showPending(){
+  if(!alive)return;
   try{pending=JSON.parse(localStorage.getItem(KEY)||'null');}catch{pending=null;}
   const unresolved=pending&&pending.kind==='tcm-cloud'&&!pending.verified;
   $('#ai-pending').innerHTML=unresolved?'<h3>上次有一筆待核對交易</h3><p>交易編號：'+esc(pending.id)+'</p><p class="muted">為防止重複入庫，在讀回或以同一交易重試前，不能建立另一筆新進貨。</p><button type="button" id="ai-retry" class="secondary">使用原交易重新核對</button><button type="button" id="ai-readback" class="secondary">查詢 Google 交易紀錄</button>'+(pending.action==='進貨'?'<button type="button" id="ai-discard" class="secondary">取消未入帳的待核對紀錄</button>':''):'';
@@ -194,5 +202,5 @@ export function mountPhotoReceive({esc,fmt,ask}){
  };
  window.addEventListener('erp-synced',load);
  drawResult();drawBasket();showPending();load();
- return()=>{alive=false;run++;window.removeEventListener('erp-synced',load);};
+ return protectDraft(()=>{alive=false;run++;window.removeEventListener('erp-synced',load);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim()));
 }

@@ -61,3 +61,50 @@ test('a fresh confirmation can retry an uncertain attempt, while its original to
  assert.throws(()=>h.c.erpOrderPdfMailSend(second.token),/待確認/);
  assert.equal(h.sent.length,2);
 });
+
+// Three independent rounds exercise union completeness through source, preview and PDF HTML.
+for(let round=1;round<=3;round++){
+ const line=(sheet,code,quantity)=>({sheet,code,name:'QA-'+sheet+'-'+code,quantity});
+ const cases=[
+  ['disjoint',[line('科達單方','X',round)],[line('科達單方','Y',round+1)]],
+  ['same-item sums',[line('科達單方','X',round)],[line('科達單方','X',round+2)]],
+  ['cross-brand/category',[line('科達單方','X',round),line('天明單方','X',2)],[line('科達複方','X',3),line('富田複方','X',4)]],
+  ['multi-page union',Array.from({length:25},(_,i)=>line('科達單方','P'+i,i+1)),Array.from({length:24},(_,i)=>line('科達單方','C'+i,i+2))]
+ ];
+ for(const [label,previous,current] of cases)test(`merge round ${round}: ${label} has no missing line or quantity`,()=>{
+  const h=server();h.c.MailApp.sendEmail=()=>assert.fail('No mail allowed');
+  const old={...draft,id:'ERP-old-12345678-'+round,date:'2026-11-16',lines:previous};h.events.splice(0,h.events.length,{draft:old},{draft:{...draft,lines:current}});
+  const before=JSON.stringify(h.events),expected=new Map();
+  for(const l of [...previous,...current]){const k=l.sheet+'|'+l.code;expected.set(k,(expected.get(k)||0)+l.quantity);}
+  const source=h.c.erpOrderPdfEditSource({id,mergeIds:[old.id]});
+  assert.equal(source.rows.length,expected.size);
+  for(const r of source.rows){assert.equal(r.quantity,expected.get(r.key));assert.equal(r.parts.previous+r.parts.current,r.quantity);}
+  const review=h.c.erpOrderPdfDraftPreview({id,draft:source}),items=Array.from(review.groups).flatMap(g=>Array.from(g.items));
+  assert.equal(items.length,expected.size);assert.equal(items.reduce((n,l)=>n+l.quantity,0),[...expected.values()].reduce((a,b)=>a+b,0));
+  for(const r of source.rows){const found=items.filter(x=>x.name===r.name);assert.equal(found.length,1);assert.equal(found[0].quantity,r.quantity);}
+  const pdf=h.c.erpOrderPdfDownload({id,draft:source});
+  assert.equal(pdf.files.length,new Set(source.rows.map(r=>r.brand)).size);
+  for(const file of pdf.files){const html=Buffer.from(file.base64,'base64').toString();const actual=[...html.matchAll(/<td>(QA-[^<]+)<\/td><td>(\d+)<\/td>/g)].map(m=>({name:m[1],quantity:Number(m[2])}));const wanted=source.rows.filter(r=>r.brand===file.brand);assert.equal(actual.length,wanted.length);for(const r of wanted){assert.equal(actual.filter(x=>x.name===r.name&&x.quantity===r.quantity).length,1);}}
+  assert.equal(JSON.stringify(h.events),before);assert.equal(h.sent.length,0);
+ });
+ test(`merge round ${round}: cancellation and duplicate ID selection are rejected`,()=>{
+  const h=mergedFixture();h.c.MailApp.sendEmail=()=>assert.fail('No mail allowed');
+  assert.throws(()=>h.c.erpOrderPdfEditSource({id,mergeIds:[id]}));
+  assert.throws(()=>h.c.erpOrderPdfEditSource({id,mergeIds:[h.previous.id,h.previous.id]}));
+  h.events.push({draft:{id:'ERP-cancel-merge',action:'取消訂貨',reverses:h.previous.id}});
+  assert.throws(()=>h.c.erpOrderPdfDraftPreview({id,draft:h.source}));assert.throws(()=>h.c.erpOrderPdfDownload({id,draft:h.source}));
+  const g=mergedFixture();g.events.push({draft:{id:'ERP-cancel-current',action:'取消訂貨',reverses:id}});assert.throws(()=>g.c.erpOrderPdfEditSource({id,mergeIds:[g.previous.id]}));assert.equal(h.sent.length,0);assert.equal(g.sent.length,0);
+ });
+}
+
+for(let round=1;round<=3;round++)test(`unposted merge round ${round}: union, same-item sum and category boundaries`,async()=>{
+ const {mergeUnpostedOrders}=await import('../web/order-merge-draft.mjs');
+ const l=(sheet,code,quantity)=>({sheet,code,name:'QA-'+sheet+'-'+code,quantity});
+ const a={...draft,lines:[l('科達單方','X',round),l('天明單方','Y',2)]};
+ const b={...draft,id:'ERP-second-12345678',lines:[l('科達單方','X',round+1),l('科達複方','X',3),l('富田單方','Z',4)]};
+ const before=JSON.stringify([a,b]),merged=mergeUnpostedOrders(a,b);
+ assert.equal(merged.id,a.id);assert.equal(merged.lines.length,4);
+ assert.equal(merged.lines.find(x=>x.sheet==='科達單方').quantity,round*2+1);
+ assert.equal(merged.lines.reduce((n,x)=>n+x.quantity,0),round*2+10);
+ assert.equal(JSON.stringify([a,b]),before);
+});

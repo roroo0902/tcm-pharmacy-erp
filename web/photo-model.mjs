@@ -1,0 +1,1 @@
+export function photoModelLabel(result){const safe=v=>typeof v==='string'&&/^[a-zA-Z0-9.-]{3,100}$/.test(v)?v:null;const actual=safe(result?.model),requested=safe(result?.requestedModel);return actual?'本次模型：'+actual:requested?'本次請求模型：'+requested+'（服務未回傳實際版本）':'本次模型：服務未提供，尚未核實';}

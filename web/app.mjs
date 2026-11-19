@@ -12,7 +12,7 @@ import {updateQuestTheme} from './quest-theme.mjs?v=ryan20261103';
 import {mountLoss} from './loss.mjs?v=lossreadmodal20261115';
 import {mountReceive} from './receive.mjs?v=compact20261030';
 import {mountOrders} from './orders.mjs?v=calendartags20261103';
-import {mountSheets} from './sheets.mjs?v=cards20261102';
+import {mountSheets} from './sheets.mjs?v=stockread20261119';
 import {mountCatalog} from './catalog.mjs?v=potions2';
 import {today,empty,validate,addItem,addEntry,loadLegacy} from './store.mjs?v=20261027';
 const KEY='tcm-pharmacy-local-v1', $=s=>document.querySelector(s), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

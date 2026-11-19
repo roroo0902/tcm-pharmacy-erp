@@ -1,9 +1,9 @@
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {exportInventory,filterInventory,selectInventory} from './inventory-export.mjs';
 import {money} from './receipt-pricing.mjs';
-import {directEnabled,directSheet,directPollMs} from './direct-sync.mjs?v=compact20261030';
+import {directEnabled,runDirect,directPollMs} from './direct-sync.mjs?v=compact20261030';
 import {sortSheetRows} from './sheets-sort.mjs';
-import {SOURCES,parseSheet,sheetUrl,exportUrl} from './sheets-data.mjs?v=compact20261030';
+import {SOURCES,parseSheet,sheetUrl,exportUrl} from './sheets-data.mjs?v=stockread20261119';
 export function mountSheets({esc,fmt}){
  const content=document.querySelector('#content');let alive=true,busy=false,page=0,statusFilter='all',sortKey='code',sortDirection='asc';const sortYear=Number(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}).slice(0,4));const controller=new AbortController(),snapshots=new Map(),errors=new Map();
  content.innerHTML=`<style>
@@ -33,7 +33,20 @@ export function mountSheets({esc,fmt}){
  $('#cloud-sources').innerHTML=SOURCES.map(s=>`<p><a href="${sheetUrl(s)}" target="_blank" rel="noopener">${s.name} ↗</a>　<span class="muted">${snapshots.has(s.gid)?snapshots.get(s.gid).rows.length+' 筆 · '+time(snapshots.get(s.gid).time):'尚未讀取'}</span>${errors.has(s.gid)?` <span class="pill out">${esc(errors.get(s.gid))}</span>`:''}</p>`).join('');
  }
  let loadingScreen;
- async function sync({showDialog=false}={}){if(busy||!alive)return;busy=true;draw();$('#cloud-refresh').disabled=true;$('#cloud-status').textContent='正在向 Google 讀取最新內容…';try{if(showDialog&&!isProcessing())loadingScreen=beginProcessing({reading:true,compact:true,readOnly:true,catalogMessage:'正在向 Google 讀取最新庫存與品項…'});await Promise.all(SOURCES.map(async s=>{try{const response=directEnabled()?await directSheet(s,controller.signal):await fetch(exportUrl(s),{credentials:'omit',cache:'no-store',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});if(!response.ok)throw Error('Google 回應 '+response.status);if(!response.headers.get('content-type')?.includes('text/csv'))throw Error('來源需要登入或未提供資料');const rows=parseSheet(await response.text(),s);if(!alive)return;snapshots.set(s.gid,{rows,time:Date.now()});errors.delete(s.gid);}catch(e){if(alive)errors.set(s.gid,e.name==='TimeoutError'?'讀取逾時':e.message==='Failed to fetch'?'連線或分享權限有變，請重試':e.message);}}));}finally{loadingScreen?.close();loadingScreen=null;busy=false;if(alive){$('#cloud-refresh').disabled=false;$('#cloud-status').textContent=errors.size?`有 ${errors.size} 個分頁同步失敗；成功分頁已更新，舊資料已標示。`:`已同步 ${SOURCES.length} 個分頁 · ${time(Date.now())}`;draw();}}}
+ async function sync({showDialog=false}={}){if(busy||!alive)return;busy=true;$('#cloud-export').disabled=true;$('#cloud-export-status').textContent='正在同步，完成後即可匯出。';$('#cloud-refresh').disabled=true;$('#cloud-status').textContent='正在向 Google 讀取最新內容…';try{if(showDialog&&!isProcessing())loadingScreen=beginProcessing({reading:true,compact:true,readOnly:true,catalogMessage:'正在向 Google 讀取最新庫存與品項…'});const snapshot=directEnabled()?runDirect('readAll',{overview:true}):null;
+ await Promise.all(SOURCES.map(async s=>{try{
+  let rows;
+  if(snapshot){
+   const values=(await snapshot).sheets[s.name];
+   if(!values)throw Error('來源缺少 '+s.name);
+   rows=parseSheet(values,s);
+  }else{
+   const response=await fetch(exportUrl(s),{credentials:'omit',cache:'no-store',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(25000)])});
+   if(!response.ok)throw Error('Google 回應 '+response.status);
+   if(!response.headers.get('content-type')?.includes('text/csv'))throw Error('來源需要登入或未提供資料');
+   rows=parseSheet(await response.text(),s);
+  }
+  if(!alive)return;snapshots.set(s.gid,{rows,time:Date.now()});errors.delete(s.gid);}catch(e){if(alive)errors.set(s.gid,e.name==='TimeoutError'?'讀取逾時':e.message==='Failed to fetch'?'連線或分享權限有變，請重試':e.message);}}));}finally{loadingScreen?.close();loadingScreen=null;busy=false;if(alive){$('#cloud-refresh').disabled=false;$('#cloud-status').textContent=errors.size?`有 ${errors.size} 個分頁同步失敗；成功分頁已更新，舊資料已標示。`:`已同步 ${SOURCES.length} 個分頁 · ${time(Date.now())}`;draw();}}}
  for(const selector of ['#cloud-search','#cloud-brand','#cloud-category'])$(selector).oninput=()=>{page=0;draw();};$('#cloud-prev').onclick=()=>{page--;draw();};$('#cloud-next').onclick=()=>{page++;draw();};$('#cloud-refresh').onclick=()=>sync({showDialog:true});
  const onVisible=()=>{if(!document.hidden)sync();};document.addEventListener('visibilitychange',onVisible);const timer=setInterval(()=>{if(!document.hidden)sync();},directEnabled()?directPollMs():60000);window.addEventListener('erp-synced',sync);draw();sync({showDialog:true});return()=>{alive=false;loadingScreen?.close();loadingScreen=null;window.removeEventListener('erp-synced',sync);controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',onVisible);};
 }

@@ -25,7 +25,7 @@ function erpDirect(operation,input,token){
  if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);
  if(operation==='readAll'){
   const ss=SpreadsheetApp.openById(LOSS3.inventory),sheets={};
-  for(const name of LOSS3.names)sheets[name]=erpDirectValues_(ss.getSheetByName(name));
+  for(const name of LOSS3.names)sheets[name]=erpDirectValues_(ss.getSheetByName(name),input?.overview===true?13:undefined);
   return {sheets};
  }
  if(operation==='readLog'){
@@ -52,8 +52,13 @@ function erpDirectCanonical_(value){
  if(value&&typeof value==='object')return Object.keys(value).sort().reduce((out,key)=>{out[key]=erpDirectCanonical_(value[key]);return out;},{});
  return value;
 }
-function erpDirectValues_(sheet){
+function erpDirectValues_(sheet,maxColumns){
  if(!sheet)throw Error('找不到來源工作表');
+ if(maxColumns){
+  const lastRow=sheet.getLastRow();
+  if(lastRow>10000)throw Error('來源範圍過大，請聯絡維護人員調整讀取方式');
+  return sheet.getRange(1,1,Math.max(lastRow,1),Math.max(1,Math.min(sheet.getLastColumn(),maxColumns))).getDisplayValues();
+ }
  if(sheet.getLastRow()>10000||sheet.getLastColumn()>2000)throw Error('來源範圍過大，請聯絡維護人員調整讀取方式');
  return sheet.getDataRange().getDisplayValues();
 }

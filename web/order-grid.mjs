@@ -14,7 +14,7 @@ import {periodControls,mountPeriodControls} from './period-controls.mjs?v=google
 import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
-import {createSupplierLoader,supplierSelection} from './supplier-catalog.mjs?v=googlesync20261114';
+import {createSupplierLoader,loadOrderGridCatalog,supplierSelection} from './supplier-catalog.mjs?v=orderread20261119';
 import {directReview,directLog} from './direct-sync.mjs?v=compact20261030';
 import {csvRows,sheetUrl} from './sheets-data.mjs';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
@@ -28,7 +28,7 @@ const columns=[['code','藥品／編號'],['brandCategory','廠牌／類別'],['
 export function mountOrderGrid({esc,fmt,ask}){
  const c=document.querySelector('#content'),$=s=>c.querySelector(s),quantities=new Map(),prices=new Map();let sources=[],rows=[],brand='',category='',sort='code',direction='asc',alive=true,busy=false,loadFailed=false;
  let manualLines=[],page=1,pageSize=10;
- let loadingScreen=null;let periodData=null,periodUI;let shortageSeeded=false,recoveringPrevious=false;const readCatalog=createSupplierLoader();
+ let loadingScreen=null;let periodData=null,periodUI;let shortageSeeded=false,recoveringPrevious=false;const readCatalog=createSupplierLoader(loadOrderGridCatalog);
  const status=t=>{if(alive)$('#order-grid-state').textContent=t;};
  c.innerHTML=`${supplyLayout}<style>#order-grid td.order-period-loss{white-space:normal;min-width:180px;max-width:300px;line-height:1.6}#order-grid td.order-period-loss details{font-size:13px;line-height:1.7}#order-grid td.order-period-loss summary{cursor:pointer;min-height:44px;padding:8px}#order-grid th,#order-grid td{vertical-align:middle;text-align:right;font-variant-numeric:tabular-nums}#order-grid th:first-child,#order-grid td:first-child,#order-grid th:nth-last-child(-n+2),#order-grid td:nth-last-child(-n+2){text-align:left}#order-grid .sort-heading{color:inherit;background:transparent;border:0;padding:0;font:inherit;white-space:nowrap}#order-grid input{text-align:right;min-width:0;max-width:120px}#order-grid .order-price{width:72px}#order-grid .receipt-quantity{min-width:174px}.order-selector-label{display:block;margin-top:14px;margin-bottom:6px}#order-grid .quantity-stepper{grid-template-columns:26px 64px 26px 16px;gap:6px;width:150px;margin-inline:auto}#order-grid .quantity-stepper input{width:64px;height:34px;min-height:34px;font-size:14px;font-weight:400;padding:4px}#order-grid .quantity-adjust{width:26px;min-width:26px;min-height:28px;height:28px;font-size:18px;border-radius:5px}#order-grid .quantity-clear{height:22px;min-height:22px;padding:0 4px;font-size:12px;justify-self:center}#order-grid th:nth-child(5),#order-grid td:nth-child(5){text-align:center}#order-grid td small{display:block;line-height:20px;font-size:11px}#order-grid .order-price{width:72px;height:34px;min-height:34px;padding:4px 6px;font-size:14px}#order-grid th .sort-heading{width:100%;text-align:inherit}
 #order-grid th:not(:first-child),#order-grid td:not(:first-child){text-align:center}
@@ -104,7 +104,7 @@ export function mountOrderGrid({esc,fmt,ask}){
  $('#og-prev').onclick=()=>turnPage(-1);
  $('#og-next').onclick=()=>turnPage(1);
  $('#og-page-size').onchange=e=>{pageSize=Number(e.target.value);resetPage();};
- function selectSource(){ $('#og-search').value='';$('#og-only').checked=false;resetPage();load();}
+ function selectSource(){ $('#og-search').value='';$('#og-only').checked=false;resetPage();if(!busy&&!loadFailed)status(brand+category+'共 '+rows.filter(r=>r.brand===brand&&r.category===category).length+' 項，已保留訂量。');}
  const recoveryStatus=text=>{if(alive)$('#og-recovery-status').textContent=text;};
  let resumedChoice=null;
  async function recoverPrevious(action,continueOrder=false,selection=null){
@@ -197,7 +197,7 @@ export function mountOrderGrid({esc,fmt,ask}){
   if(saved!==localStorage.getItem(KEY))throw Error('訂單狀態已變更，請重新預覽。');
   localStorage.setItem(KEY,JSON.stringify(d));showPending();
  }});}
- $('#order-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selectSource();}};$('#order-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selectSource();}};$('#og-search').oninput=resetPage;$('#og-only').onchange=resetPage;$('#og-date').onchange=draw;$('#og-refresh').onclick=()=>{if(busy)return;load(true);periodUI.refresh();};$('#og-clear').onclick=()=>{quantities.clear();prices.clear();manualLines=[];draw();};c.querySelectorAll('[data-og-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.ogSort;direction=sort===key&&direction==='asc'?'desc':'asc';sort=key;resetPage();});
+ $('#order-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selectSource();}};$('#order-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selectSource();}};$('#og-search').oninput=resetPage;$('#og-only').onchange=resetPage;$('#og-date').onchange=draw;$('#og-refresh').onclick=()=>{if(!busy)load(true);};$('#og-clear').onclick=()=>{quantities.clear();prices.clear();manualLines=[];draw();};c.querySelectorAll('[data-og-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.ogSort;direction=sort===key&&direction==='asc'?'desc':'asc';sort=key;resetPage();});
  $('#order-grid-form').addEventListener('invalid',e=>{
   const field=e.target;
   recoveryStatus((field.getAttribute('aria-label')||field.closest('label')?.firstChild?.textContent||'訂貨欄位')+'：'+field.validationMessage);

@@ -321,7 +321,7 @@ function erpOrderSources_(ss=SpreadsheetApp.openById(ERP.inventory),readHeaders=
 function erpSupplierHeaders_(name,rows){
  if(rows[0]?.[1]!=='編號'||rows[0]?.[3]!=='藥品名稱'||rows[0]?.[4]!=='價格'||rows[1]?.[6]!=='未拆封')throw Error(name+' 欄位格式不符，請依標準庫存表建立');
 }
-function erpReceiptCatalog_(){
+function erpSupplierInventoryCatalog_(){
  const ss=SpreadsheetApp.openById(ERP.inventory),sources=erpOrderSources_(ss,false),sheets={};
  if(!sources.length)return {sources,sheets};
  const ranges=sources.flatMap(({name})=>{
@@ -329,7 +329,7 @@ function erpReceiptCatalog_(){
   return ['B:B','D:G','K:L'].map(range=>title+'!'+range);
  });
  const result=Sheets.Spreadsheets.Values.batchGet(ERP.inventory,{ranges,valueRenderOption:'FORMATTED_VALUE'});
- if(result.valueRanges?.length!==ranges.length)throw Error('進貨品項來源未完整讀取');
+ if(result.valueRanges?.length!==ranges.length)throw Error('庫存品項來源未完整讀取');
  sources.forEach(({name},index)=>{
   const [codes,details,shortages]=result.valueRanges.slice(index*3,index*3+3).map(range=>range.values||[]);
   // Rebuild original column positions and row numbers for the shared catalog parser.

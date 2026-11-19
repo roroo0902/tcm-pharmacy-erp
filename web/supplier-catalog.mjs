@@ -17,6 +17,7 @@ export function parseSupplierCatalog(data){
 }
 export async function loadSupplierCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog'));}
 export async function loadReceiptCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog',{receipt:true}));}
+export async function loadOrderGridCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog',{orderGrid:true}));}
 export function supplierSelection(sources,brand,category){
  const brands=[...new Set(sources.map(s=>s.brand))];
  if(!brands.includes(brand))brand=brands[0]||'';

@@ -74,7 +74,7 @@ function erpDailyLossGrid_(input){
    const title="'"+name.replace(/'/g,"''")+"'";
    return ['B:B','D:D','E1','F:G'].map(range=>title+'!'+range);
   });
-  const inventory=Sheets.Spreadsheets.get(LOSS3.inventory,{ranges,fields:'sheets(properties(sheetId),data(startRow,startColumn,rowData(values(formattedValue,effectiveValue,userEnteredValue(formulaValue),effectiveFormat(numberFormat(type)))))'});
+  const inventory=Sheets.Spreadsheets.get(LOSS3.inventory,{ranges,fields:'sheets(properties(sheetId),data(startRow,startColumn,rowData(values(formattedValue,effectiveValue,userEnteredValue(formulaValue),effectiveFormat(numberFormat(type))))))'});
   const grids=new Map((inventory.sheets||[]).map(sh=>[sh.properties.sheetId,sh.data]));
   const ledger=lossLedgerReadScoped_(ss,date),latestStatus=new Map();
   let completionError='';

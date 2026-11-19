@@ -279,6 +279,7 @@ test('generated period backend exactly matches the pure core and adapter sources
   assert.equal(id,vm.runInContext('LOSS3.inventory',h.ctx));
   assert.deepEqual([...ranges],['B:B','D:D','E1','F:G'].map(range=>"'驗收單方'!"+range));
   assert.match(fields,/formulaValue/);
+  assert.equal([...fields].filter(c=>c==='(').length,[...fields].filter(c=>c===')').length);
   return {sheets:[{properties:{sheetId:source.gid},data:[[5,2],[4,1],[1,1],[3,1]].map(([startColumn,width])=>({
    startColumn,rowData:state.values.slice(0,startColumn===4?1:undefined).map((row,i)=>({values:Array.from({length:width},(_,j)=>{
     const v=row[startColumn+j]??'',formulaValue=state.formulas[i]?.[startColumn+j];

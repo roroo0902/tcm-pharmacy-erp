@@ -24,6 +24,8 @@ const sameDraft=(a,b)=>JSON.stringify(cloudDraft(a))===JSON.stringify(cloudDraft
 
 export function mountReceiptGrid({esc,fmt,ask}){
  const c=document.querySelector('#content'),$=s=>c.querySelector(s),abort=new AbortController(),quantities=new Map(),prices=new Map();
+ // Ownership is scoped to this mounted form, never written into a pending transaction.
+ let ownedNormalReceipt=null;
  let rows=[],sources=[],source=null,brand='',category='',sort='code',direction='asc',alive=true,loading=false,loadFailed=false,ticket=0,pending=null,checkingPending=false;
  let shortageSeeded=false,shortageHandoff=null;const readCatalog=createSupplierLoader(loadReceiptCatalog);
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
@@ -138,10 +140,16 @@ export function mountReceiptGrid({esc,fmt,ask}){
     const outcome=await recoverPendingTransaction({
      action:'進貨',ask,status:report,isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,storageKey,
      onResolved:async({alreadyPosted,posted,pending:original})=>{
+      let preserved=false;
       if(original.receiptInput&&(!alreadyPosted||sameDraft(posted,original)))consumeCurrent(original.receiptInput);
+      else if(storageKey===KEY&&!original.receiptInput&&!original.receiptMerge){
+       if(consumeOwnedNormal(original,posted,alreadyPosted))draw();
+       else preserved=quantities.size>0||prices.size>0;
+      }
       if(storageKey===SEPARATE&&savedTransaction(SEPARATE)?.verified&&savedTransaction(SEPARATE)?.id===posted.id)localStorage.removeItem(SEPARATE);
       showPending();
-      if(alreadyPosted)report('已查到這筆進貨的入帳紀錄。');
+      if(preserved)report('已核對上一筆；目前輸入已保留。請重新確認，避免重複入帳。');
+      else if(alreadyPosted)report('已查到這筆進貨的入帳紀錄。');
       await load();
      }
     });
@@ -193,6 +201,26 @@ export function mountReceiptGrid({esc,fmt,ask}){
  function consumeCurrent(original){
   try{if(sameDraft(currentDraft(original.id),original))clearCurrent();}catch{}
  }
+ function normalReceiptSignature(id){
+  const sorted=map=>[...map].sort(([a],[b])=>a<b?-1:a>b?1:0);
+  return JSON.stringify([currentDraft(id),sorted(quantities),sorted(prices)]);
+ }
+ function matchesOwnedNormal(id,owned){
+  try{return !!owned&&owned.id===id&&normalReceiptSignature(id)===owned.form;}catch{return false;}
+ }
+ function consumeOwnedNormal(original,posted,alreadyPosted){
+  const owned=ownedNormalReceipt;
+  if(owned?.id===original.id)ownedNormalReceipt=null;
+  if(!matchesOwnedNormal(original.id,owned))return false;
+  try{
+   if(JSON.stringify(cloudDraft(original))!==owned.pending)return false;
+   if(alreadyPosted&&!sameDraft(posted,original))return false;
+   const stored=savedTransaction(KEY);
+   if(stored?.verified!==true||stored.id!==original.id||!sameDraft(stored,posted))return false;
+  }catch{return false;}
+  clearCurrent();
+  return true;
+ }
  function send(d,plan){
   if(directEnabled()){
    const key=plan?.key||KEY;
@@ -203,7 +231,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
      if(key===SEPARATE)localStorage.removeItem(key);
      else localStorage.setItem(key,JSON.stringify({...d,verified:true,receiptEvent}));
     }
-    if(!plan)clearCurrent();
+    if(!plan){ownedNormalReceipt=null;clearCurrent();}
     else if(plan.input)consumeCurrent(plan.input);
     if(alive){showPending();await load();}
    },plan?pendingStatus:status,{requireUnposted:!!plan,onPreviewError:warnPreview,receiptRows:()=>rows,beforeCommit:plan?reviewed=>{
@@ -213,15 +241,19 @@ export function mountReceiptGrid({esc,fmt,ask}){
     showPending();
    }:undefined,onDraftChange:next=>{
     if(plan){Object.assign(d,next);return;}
+    const owned=ownedNormalReceipt,current=savedTransaction(KEY);
+    let track=false;
+    try{track=alive&&matchesOwnedNormal(d.id,owned)&&!current?.verified&&current?.id===d.id&&JSON.stringify(cloudDraft(current))===owned.pending;}catch{}
+    if(owned?.id===d.id)ownedNormalReceipt=null;
     for(const l of next.lines.filter(l=>l.create)){if(!rows.some(r=>r.name===l.sheet&&r.code===l.code)){const s=sources.find(s=>s.name===l.sheet);if(s)rows.push({...s,code:l.code,drug:l.name,bottles:0,pendingCreate:true,unitPriceCents:l.unitPriceCents});}}
     Object.assign(d,next);
-    const current=savedTransaction(KEY);
     if(current?.id===d.id&&!current.verified)localStorage.setItem(KEY,JSON.stringify(d));
     for(const l of d.lines){
      const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});
      quantities.set(key,String(l.quantity));
      prices.set(key,l.unitPriceCents===undefined?'':String(l.unitPriceCents/100));
     }
+    if(track)try{ownedNormalReceipt={id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(cloudDraft(d))};}catch{}
     if(alive){draw();showPending();}
    }});
   }
@@ -305,7 +337,9 @@ export function mountReceiptGrid({esc,fmt,ask}){
    }
    const d=currentDraft();
    pendingStatus('');
-   localStorage.setItem(KEY,JSON.stringify(d));
+   const owned={id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(d)};
+   localStorage.setItem(KEY,owned.pending);
+   ownedNormalReceipt=owned;
    showPending();
    send(d);
   }catch(e){status(e.message);warnPreview(e.message);}

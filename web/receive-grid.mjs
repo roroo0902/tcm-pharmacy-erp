@@ -132,7 +132,8 @@ export function mountReceiptGrid({esc,fmt,ask}){
   if(checkingPending||isProcessing())return;
   checkingPending=true;
   processButton.disabled=true;
-  const report=recovering?pendingStatus:status;
+  let caution='';
+  const report=recovering?text=>pendingStatus([text,caution].filter(Boolean).join('；')):status;
   try{
    if(recovering){
     processButton.textContent=pendingKey===SEPARATE?'處理本次待核對進貨':'處理上一筆進貨';
@@ -148,7 +149,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
       }
       if(storageKey===SEPARATE&&savedTransaction(SEPARATE)?.verified&&savedTransaction(SEPARATE)?.id===posted.id)localStorage.removeItem(SEPARATE);
       showPending();
-      if(preserved)report('已核對上一筆；目前輸入已保留。請重新確認，避免重複入帳。');
+      if(preserved){caution='已核對上一筆；目前輸入已保留。請重新確認，避免重複入帳。';report('');}
       else if(alreadyPosted)report('已查到這筆進貨的入帳紀錄。');
       await load();
      }

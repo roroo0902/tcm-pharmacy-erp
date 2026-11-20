@@ -41,6 +41,8 @@ async function fixture({initial}={}){
    if(fail)return;
    writes.push(structuredClone(d));ledger.push(structuredClone(d));stock+=d.lines[0].quantity;afterWrite?.();
    await verified({lines:[{...d.lines[0],after:stock}],time:'fixture'});
+   // The actual direct review writes its generic result after the onSuccess callback.
+   status('隔離後端已確認同步');
   }});
  };
  const deps={cloudDraft,localStorage,directLog,directReview,csvRows:JSON.parse};

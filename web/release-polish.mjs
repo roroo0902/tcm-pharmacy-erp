@@ -8,6 +8,8 @@ const workbenchCss=`
   color:#fff1c5; background:#18324c; border-radius:5px; font-size:12px;
   line-height:1.5; font-variant-numeric:tabular-nums; letter-spacing:.04em;
 }
+/* Dark dialog notes keep their inherited color; this targets parchment cells only. */
+#confirm .direct-review-table td .muted {color:#344b60;font-size:12px;line-height:1.5}
 #content :is(#order-state,#order-grid-state,#receipt-state,#loss-state,#sh-state):not(:empty),
 #content #sh-list > :is([role="status"],[role="alert"]) {
   padding:10px 12px; margin-block:10px; border:1px solid #a6b7bf;

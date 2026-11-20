@@ -24,3 +24,13 @@ test('optional shell hero does not prevent delivery of scoped CSS',()=>{
  const {elements,doc}=shell(true,true);assert.doesNotThrow(()=>mountReleasePolish(doc));
  assert.equal(elements.size,1);assert.ok(elements.has('erp-release-workbench-style'));
 });
+
+test('parchment table links use dark readable secondary text, separate from dialog notes',()=>{
+ const {elements,doc}=shell();mountReleasePolish(doc);
+ const css=elements.get('erp-release-workbench-style').textContent;
+ const rule=css.match(/#confirm \.direct-review-table td \.muted\s*\{color:#([a-f0-9]+);font-size:(\d+)px;line-height:([\d.]+)\}/);
+ assert.ok(rule);assert.ok(Number(rule[2])>=12);assert.ok(Number(rule[3])>=1.4);
+ const linear=c=>c/255<=0.04045?(c/255)/12.92:((c/255+0.055)/1.055)**2.4;
+ const lum=h=>h.match(/../g).map(x=>linear(parseInt(x,16))).reduce((a,c,i)=>a+c*[.2126,.7152,.0722][i],0);
+ assert.ok((lum('fffbee')+.05)/(lum(rule[1])+.05)>=4.5);
+});

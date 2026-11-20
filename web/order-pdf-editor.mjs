@@ -1,11 +1,17 @@
 import {openMailLoading} from './mail-progress.mjs';
+import {createMailSendGate} from './mail-send-gate.mjs';
+// Separate gate for print-sheet writes; stays with this app page even if an editor closes.
+const printGate=createMailSendGate();
+const sharedPrintOutput=Symbol('shared print output');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export async function openOrderPdfEditor({id,mergeIds=[],rpc,onMail,output='pdf',autoMail=false}){
  const dialog=document.createElement('dialog');dialog.className='pdf-editor';dialog.style.cssText='width:calc(100% - 24px);max-width:1080px;white-space:normal;overflow-wrap:anywhere';dialog.innerHTML=`<style>.pdf-editor .pdf-guild-header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid #bda267;padding-bottom:14px}.pdf-editor .pdf-guild-header h2{margin:0;border:0;padding:0;flex:1;min-width:180px}.pdf-editor .pdf-slime{position:relative;display:block;width:72px;height:80px;flex:none}.pdf-editor .pdf-slime img{position:relative;z-index:1;width:72px;height:72px;object-fit:contain;transform-origin:50% 90%;animation:pdf-slime-hop 3s ease-in-out infinite}.pdf-editor .pdf-slime::after{content:"";position:absolute;bottom:2px;left:14px;width:44px;height:8px;background:#060d1c;border-radius:50%;opacity:.35;animation:pdf-slime-shadow 3s ease-in-out infinite}@keyframes pdf-slime-hop{0%,62%,100%{transform:translateY(0) scale(1)}68%{transform:translateY(2px) scale(1.09,.9)}78%{transform:translateY(-12px) scale(.96,1.04)}88%{transform:translateY(1px) scale(1.1,.9)}94%{transform:translateY(0) scale(1)}}@keyframes pdf-slime-shadow{0%,62%,100%{transform:scaleX(1);opacity:.35}78%{transform:scaleX(.7);opacity:.18}88%{transform:scaleX(1.12);opacity:.4}}@media(max-width:600px){.pdf-editor .pdf-guild-header{gap:10px}.pdf-editor .pdf-slime{width:56px;height:66px}.pdf-editor .pdf-slime img{width:56px;height:56px}.pdf-editor .pdf-slime::after{left:8px;width:40px}}@media(prefers-reduced-motion:reduce){.pdf-editor .pdf-slime img,.pdf-editor .pdf-slime::after{animation:none!important}}</style><div class="pdf-guild-header"><span class="pdf-slime" aria-hidden="true"><img src="./web/assets/slime-hop.svg" width="72" height="72" alt=""></span><h2>訂藥內容確認與編輯</h2></div><p role="status">正在讀取本次已確認訂單…</p><div data-body></div><div class="actions"><button type="button" data-close>關閉</button></div>`;document.body.append(dialog);dialog.showModal();
- const status=dialog.querySelector('[role=status]'),body=dialog.querySelector('[data-body]');let source,rows=[],brand,stage=1,urls=[],closed=false,busy=false,reviewBusy=false;const storageKey='erp-order-pdf-draft-v1:'+id+(mergeIds.length?':merge:'+mergeIds.join(','):'');
+ const status=dialog.querySelector('[role=status]'),body=dialog.querySelector('[data-body]'),closeButton=dialog.querySelector('[data-close]');
+ const printKeys=[sharedPrintOutput,...new Set([id,...mergeIds])];
+ let source,rows=[],brand,stage=1,urls=[],closed=false,busy=false,reviewBusy=false,printBusy=false;const storageKey='erp-order-pdf-draft-v1:'+id+(mergeIds.length?':merge:'+mergeIds.join(','):'');
  const snapshot=()=>({sourceHash:source.sourceHash,mergeIds,rows:rows.map(r=>({...r}))});
  const save=()=>{try{localStorage.setItem(storageKey,JSON.stringify(snapshot()));return true;}catch{status.textContent='此瀏覽器無法儲存草稿；請保持視窗開啟，勿重新整理。';return false;}};
- const cleanup=()=>{closed=true;if(source)save();urls.forEach(u=>URL.revokeObjectURL(u));dialog.remove();};dialog.querySelector('[data-close]').onclick=()=>{if(!busy||reviewBusy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy&&!reviewBusy)e.preventDefault();});dialog.addEventListener('close',cleanup,{once:true});
+ const cleanup=()=>{closed=true;if(source)save();urls.forEach(u=>URL.revokeObjectURL(u));dialog.remove();};closeButton.onclick=()=>{if(!busy||reviewBusy||printBusy)dialog.close();};dialog.addEventListener('cancel',e=>{if(busy&&!reviewBusy&&!printBusy)e.preventDefault();});dialog.addEventListener('close',cleanup,{once:true});
  try{source=await rpc('erpOrderPdfEditSource',{id,mergeIds});if(closed)return;rows=source.rows;brand=source.brands[0];let saved;try{saved=JSON.parse(localStorage.getItem(storageKey)||'null');}catch{}if(saved?.sourceHash===source.sourceHash&&Array.isArray(saved.rows)){rows=saved.rows;status.textContent='已恢復此瀏覽器的 PDF 草稿。';}else{status.textContent=saved?'原訂單已更新，已載入最新內容；舊草稿未套用。':'請核對各廠牌品項與數量，修改只影響 PDF 草稿。';}
  for(const b of source.brands)if(!rows.some(r=>r.manual&&r.brand===b)){rows.push(blank(b),blank(b));}draw();
  }catch(e){if(!closed)status.textContent=e.message;}
@@ -20,7 +26,43 @@ export async function openOrderPdfEditor({id,mergeIds=[],rpc,onMail,output='pdf'
  }
  function table(manual){const list=rows.map((r,i)=>({r,i})).filter(({r})=>r.brand===brand&&r.manual===manual);return `<table><thead><tr><th>類別</th><th>藥品／編號</th><th>預計寄出數量（瓶）</th><th>操作</th></tr></thead><tbody>${list.length?list.map(({r,i})=>`<tr data-row="${i}"><td data-label="類別">${manual?`<select data-field="category" aria-label="手動品項類別"><option value="">選擇類別</option>${['單方','複方'].map(c=>`<option ${r.category===c?'selected':''}>${c}</option>`).join('')}</select>`:esc(r.category)}</td><td data-label="藥品／編號">${manual?`<input data-field="name" aria-label="手動藥品名稱" maxlength="120" placeholder="輸入藥品名稱" value="${esc(r.name)}">`:`<b>${esc(r.name)}</b><small>${esc(r.code)}</small>${r.parts?`<small>${r.parts.previous} ＋ ${r.parts.current} ＝ ${r.parts.previous+r.parts.current} 瓶</small>`:""}`}</td><td data-label="預計寄出數量（瓶）"><div class="pdf-stepper"><button type="button" class="secondary" data-adjust="-1" aria-label="減少${esc(r.name||'手動品項')}數量">−</button><input data-field="quantity" aria-label="${esc(r.name||'手動品項')}寄出數量" type="number" min="1" max="1000000" step="1" inputmode="numeric" placeholder="數量" value="${esc(r.quantity)}"><button type="button" class="secondary" data-adjust="1" aria-label="增加${esc(r.name||'手動品項')}數量">＋</button></div></td><td><button type="button" class="secondary" data-remove>移除</button></td></tr>`).join(''):'<tr><td colspan="4">目前沒有品項</td></tr>'}</tbody></table>`;}
  function summary(){const list=rows.filter(r=>r.brand===brand&&r.name.trim());body.querySelector('[data-summary]').textContent=`${brand} ${list.length} 項・已填合計 ${list.reduce((n,r)=>n+(Number(r.quantity)||0),0)} 瓶`;}
+ async function generatePrint(main,draft,printSnapshot){
+  const blocked=printGate.blocked(printKeys);
+  if(blocked){
+   status.textContent=blocked==='pending'?'本頁已有列印版正在產生；離開不會取消，請勿另開同一共用列印表。':'前一次列印版結果待核對。請先查看既有列印工作表，本頁不會重複產生。';
+   return;
+  }
+  const attempt=printSnapshot&&printGate.begin(printKeys,printSnapshot);
+  if(!attempt){status.textContent='列印狀態已變更，請返回修改並重新核對內容，不要沿用舊預覽。';return;}
+  busy=true;printBusy=true;
+  const attached=()=>!closed&&dialog.open;
+  const controls=main.querySelectorAll('button');
+  controls.forEach(b=>b.disabled=true);
+  closeButton.textContent='先離開（不取消列印）';
+  status.textContent='正在產生列印版；可先離開，列印不會取消。結果確認前請勿重複產生。';
+  let printed;
+  try{
+   const result=await rpc('erpPrintConfirmedOrder',{id,draft});
+   if(result?.id!==id||!Array.isArray(result.sheets)||!result.sheets.length||result.sheets.some(s=>!s||typeof s.title!=='string'||typeof s.url!=='string'||!s.url||!Number.isInteger(s.count)||s.count<1))throw Error('回傳的列印結果無法核對。');
+   printed=result;printGate.settle(attempt,'complete');
+  }catch(e){
+   printGate.settle(attempt,'uncertain');
+   if(attached())status.textContent='列印結果待核對，請先查看既有列印工作表，不要重複產生。'+(e?.message?' '+e.message:'');
+  }finally{
+   busy=false;printBusy=false;
+   if(attached()){
+    closeButton.textContent='關閉';
+    controls.forEach(b=>b.disabled=false);
+    if(printed)main.querySelector('[data-generate]').disabled=true;
+   }
+  }
+  if(printed&&attached()){
+   main.querySelector('.pdf-output').innerHTML=printed.sheets.map(s=>`<p><a href="${esc(s.url)}" target="_blank" rel="noopener">開啟 ${esc(s.title)}（${s.count} 項）</a></p>`).join('');
+   status.textContent=printed.message||'列印版已產生並讀回核對。';
+  }
+ }
  async function review(){if(busy)return;busy=true;reviewBusy=true;body.querySelectorAll('button,input,select').forEach(x=>x.disabled=true);status.textContent='正在核對草稿與原訂單…';const draft=snapshot();save();try{const result=await rpc('erpOrderPdfDraftPreview',{id,draft});if(closed)return;stage=2;draw();const main=body.querySelector('[data-stage]');main.innerHTML=result.groups.map(g=>`<h3>${esc(g.brand)}（${g.items.length} 項）</h3><table><thead><tr><th>類別</th><th>藥品／編號</th><th>數量（瓶）</th><th>來源</th></tr></thead><tbody>${g.items.map(r=>`<tr><td data-label="類別">${esc(r.category)}</td><td data-label="藥品／編號">${esc(r.name)}<small>${esc(r.code)}</small></td><td data-label="數量（瓶）">${r.quantity}</td><td>${r.manual?'手動新增':'原訂單'}</td></tr>`).join('')}</tbody></table>`).join('')+'<p>確認以下內容後才會產生 PDF；正式訂量與庫存不變更。</p><div class="pdf-actions"><button type="button" class="secondary" data-back>返回修改</button><button type="button" data-generate>確認內容並產生' + (output==='print'?'列印版':autoMail?'PDF，下一步選擇收件人':'PDF') + '</button></div><div class="pdf-output"></div>';
- main.querySelector('[data-back]').onclick=()=>{urls.forEach(u=>URL.revokeObjectURL(u));urls=[];stage=1;draw();status.textContent='返回編輯；修改後請重新核對並產生 PDF。';};main.querySelector('[data-generate]').onclick=async()=>{if(busy)return;busy=true;main.querySelectorAll('button').forEach(b=>b.disabled=true);status.textContent='正在依修訂內容產生 PDF…';const loading=output==='print'?null:openMailLoading('pdf');try{if(output==='print'){const printed=await rpc('erpPrintConfirmedOrder',{id,draft});if(closed)return;main.querySelector('.pdf-output').innerHTML=printed.sheets.map(s=>`<p><a href="${esc(s.url)}" target="_blank" rel="noopener">開啟 ${esc(s.title)}（${s.count} 項）</a></p>`).join('');status.textContent=printed.message;return;}const response=await loading.wait(rpc('erpOrderPdfDownload',{id,draft}));if(response.left){if(!closed)status.textContent='已返回；PDF 尚未寄送，可重新產生。';return;}const pdf=response.value;loading.close();if(closed)return;const files=main.querySelector('.pdf-output');files.innerHTML=pdf.files.map(f=>{const url=URL.createObjectURL(new Blob([Uint8Array.from(atob(f.base64),c=>c.charCodeAt(0))],{type:'application/pdf'}));urls.push(url);return `<p><a href="${esc(url)}" download="${esc(f.name)}" target="_blank" rel="noopener">下載 ${esc(f.brand)} PDF（${f.count} 項）</a></p>`;}).join('')+'<button type="button" data-mail-draft>選擇員工寄送這份 PDF</button>';files.querySelector('[data-mail-draft]').onclick=()=>{dialog.close();onMail(draft);};status.textContent=`已依草稿產生 ${pdf.files.length} 份 PDF。`;if(autoMail){dialog.close();await onMail(draft);}}catch(e){status.textContent=e.message;loading?.failure(e);}finally{busy=false;main.querySelectorAll('button').forEach(b=>b.disabled=false);}};status.textContent='內容已核對，請確認預計寄出的品項與數量。';
+ const printSnapshot=output==='print'&&!printGate.blocked(printKeys)?printGate.snapshot(printKeys):null;
+ main.querySelector('[data-back]').onclick=()=>{urls.forEach(u=>URL.revokeObjectURL(u));urls=[];stage=1;draw();status.textContent='返回編輯；修改後請重新核對並產生 PDF。';};main.querySelector('[data-generate]').onclick=async()=>{if(busy)return;if(output==='print')return generatePrint(main,draft,printSnapshot);busy=true;main.querySelectorAll('button').forEach(b=>b.disabled=true);status.textContent='正在依修訂內容產生 PDF…';const loading=openMailLoading('pdf');try{const response=await loading.wait(rpc('erpOrderPdfDownload',{id,draft}));if(response.left){if(!closed)status.textContent='已返回；PDF 尚未寄送，可重新產生。';return;}const pdf=response.value;loading.close();if(closed)return;const files=main.querySelector('.pdf-output');files.innerHTML=pdf.files.map(f=>{const url=URL.createObjectURL(new Blob([Uint8Array.from(atob(f.base64),c=>c.charCodeAt(0))],{type:'application/pdf'}));urls.push(url);return `<p><a href="${esc(url)}" download="${esc(f.name)}" target="_blank" rel="noopener">下載 ${esc(f.brand)} PDF（${f.count} 項）</a></p>`;}).join('')+'<button type="button" data-mail-draft>選擇員工寄送這份 PDF</button>';files.querySelector('[data-mail-draft]').onclick=()=>{dialog.close();onMail(draft);};status.textContent=`已依草稿產生 ${pdf.files.length} 份 PDF。`;if(autoMail){dialog.close();await onMail(draft);}}catch(e){status.textContent=e.message;loading?.failure(e);}finally{busy=false;main.querySelectorAll('button').forEach(b=>b.disabled=false);}};status.textContent='內容已核對，請確認預計寄出的品項與數量。';
  }catch(e){if(!closed){status.textContent=e.message;body.querySelectorAll('button,input,select').forEach(x=>x.disabled=false);}}finally{busy=false;reviewBusy=false;}}
 }

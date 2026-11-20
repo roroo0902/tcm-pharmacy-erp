@@ -36,7 +36,8 @@ test('rendered recheck ignores stale-before-click and stale-response records, bu
   const next=mode==='same-id-change'?{...old,note:'changed signoff'}:newer;
   if(mode==='before-click')f.swap(next);
   const check=f.$('#og-check').onclick();await tick();
-  if(mode!=='before-click'){if(mode!=='unchanged')f.swap(next);finish([record(old)]);}
+  if(mode!=='before-click'&&mode!=='unchanged')f.swap(next);
+  finish?.([record(old)]);
   await check;
   if(mode==='unchanged'){assert.equal(f.raw().verified,true);assert.equal(f.writes.length,1);assert.match(f.statistics().last,/已確認/);}
   else{

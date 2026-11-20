@@ -3,6 +3,7 @@ const pages={
  cloud:['01 / WORLD INVENTORY','補給地圖','查看各廠牌的藥品庫存，為下一次補給做好準備。'],
  overview:['02 / SUPPLY CHEST','藥庫寶箱','直接同步 Google 工作表，掌握最新品項與庫存。'],
  orders:['03 / MERCHANT GUILD','商人公會','核對訂貨品項與瓶數，將待發送訂單存入 Google 工作表。'],
+ orderPlanning:['03 / ORDER PLANNING','批次訂貨規劃','依耗損期間核對建議量、編輯批次訂貨，並儲存草稿。'],
  receive:['04 / RESTOCK QUEST','補給入庫','選擇廠牌、核對到貨，在本頁確認後同步入庫。'],
  photoReceive:['04 / AI RESTOCK','智慧補給','拍照辨識進貨單，逐項核對既有藥名與庫存後再入帳。'],
  loss:['05 / DAILY JOURNAL','每日冒險紀錄','填寫當日累計耗損，在本頁核對入帳差額。'],

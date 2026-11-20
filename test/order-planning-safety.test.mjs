@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import * as orders from '../src/orders.mjs';
 import {lossOrderEntries} from '../web/loss-order-fill.mjs';
 import * as sort from '../web/order-sort.mjs';
+import {protectDraft} from '../web/page-safety.mjs';
 
 const code='QA20261120A', date='2026-01-19';
 const source={name:'科達單方',brand:'科達',category:'單方'};
@@ -46,7 +47,7 @@ function mountHarness({historical=[]}={}){
    const node=$('qty:'+m[1]);node.dataset={qty:m[1]};node.value=m[2];return node;
   });
  };
- const deps={...orders,...sort,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
+ const deps={...orders,...sort,protectDraft,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
   SOURCES:[source],ORDER_ENDPOINT:'fixture-disabled',today:()=>date,SHEET_ID:'other',directEnabled:()=>false,
   fetch:async()=>({ok:true,headers:{get:()=> 'text/csv'},text:async()=>''}),csvRows:()=>[['','編號']],
   runDirect:(name)=>{assert.equal(name,'readLossPlanning');return reply();}};
@@ -97,5 +98,20 @@ test('existing local QA draft stays in history but cannot reach Google sync',()=
   assert.match(h.$('#order-history').innerHTML,/PO-old-qa/);
   h.$('send:PO-old-qa').onclick();
   assert.match(h.$('#order-state').textContent,/歷史草稿含驗收專用品項/);
+ }finally{h.unmount();}
+});
+
+test('order planning detects unsaved edits including zero and clears them only on successful save',async()=>{
+ const h=mountHarness(),{$}=h,normal=orders.calculateOrderRows(grid(),source,options).rows[1];
+ try{
+  assert.equal(h.unmount.hasUnsavedChanges(),false);
+  await $('#order-load').onclick();
+  assert.equal(h.unmount.hasUnsavedChanges(),false);
+  const input=$('qty:'+normal.id);input.value='0';input.oninput();
+  assert.equal(h.unmount.hasUnsavedChanges(),true);
+  await $('#order-save').onclick();
+  assert.equal(h.unmount.hasUnsavedChanges(),false);
+  $('#order-days').value='8';
+  assert.equal(h.unmount.hasUnsavedChanges(),true);
  }finally{h.unmount();}
 });

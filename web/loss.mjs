@@ -1,3 +1,4 @@
+import {protectDraft} from './page-safety.mjs';
 import {createLossResultCheck,showLossCheckResult} from './loss-result-check.mjs';
 import {alignOrderWord} from './order-word-axis.mjs';
 import {isProcessing,beginProcessing} from './processing-screen.mjs';
@@ -22,7 +23,7 @@ export function mountLoss({esc,fmt,ask,message}){
  let dayDraft=draftFor(date);
  const readResult=()=>{try{return JSON.parse(localStorage.getItem(RESULT_KEY)||'null');}catch{return null;}};
  $('#content').innerHTML=`<section class="panel"><div class="panelhead"><div><h2>登錄當日累計耗損</h2><span class="muted">填今天累計耗損幾瓶（限整數）· 只登錄已填品項，留白保留已入帳累計 · 填 0 表示歸零</span></div><a class="secondary" href="${LOSS_SHEET}" target="_blank" rel="noopener">開啟耗損表 ↗</a></div><label>廠商</label><div class="order-tabs" id="loss-brands" role="group" aria-label="耗損廠商"></div><label>類別</label><div class="order-tabs" id="loss-categories" role="group" aria-label="耗損單方或複方"></div><div class="grid"><label>耗損日期<input id="loss-date" type="date" value="${date}" max="${date}"></label><label>經手人<select id="loss-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">更正原因（調低累計或歸零必填）<textarea id="loss-reason" maxlength="500" rows="2"></textarea></label></div><div class="panelhead loss-tools"><input id="loss-search" aria-label="搜尋耗損品項" placeholder="搜尋藥品名稱或編號"><button class="secondary" id="loss-refresh">重新讀取工作表</button></div><p id="loss-state" role="status"></p><p id="loss-qty-help" class="muted">留白：不改已入帳累計。填 0：當日累計歸零。調低或歸零前，請填上方「更正原因」。</p><div class="tablewrap"><table id="loss-table"><thead><tr><th><button class="sort-heading" data-sort="code">藥品／編號 ↕</button></th><th>廠牌／類別</th><th><button class="sort-heading" data-sort="bottles">原表未拆封瓶數 ↕</button></th><th><button type="button" class="sort-heading" data-sort="posted" aria-label="依當日已入帳耗損排序">當日<br>已入帳耗損 ↕</button></th><th>本次填寫的當日累計</th><th>本次差額</th><th>登錄後瓶數</th><th>原表</th></tr></thead><tbody></tbody></table></div><div class="actions"><span id="loss-summary"></span><button id="loss-clear" type="button" class="secondary">清除本次輸入</button><button id="loss-submit">預覽本次已填品項</button><button type="button" id="loss-submit-complete" class="secondary">預覽並完成正常品項登錄</button></div>${lossCompletionMarkup}<div id="loss-pending"></div><p class="muted">以 Google 雲端紀錄為準，送出後仍須在 Google 預覽並確認。相同累計不重扣；確認前若有人更新庫存，系統會要求重新預覽。</p><p class="muted">新增品項請先至「藥品建帳」完成 Google 同步，再重新讀取。耗損存入獨立每日明細，不新增或覆寫原表日期欄。</p></section>`;
- $('#loss-reason').oninput=e=>{dayDraft.reason=e.target.value;};
+ $('#loss-reason').oninput=e=>{dayDraft.reason=e.target.value;summary();};
  $('#content').insertAdjacentHTML('afterbegin',lossLayout);
  const stopWordAxis=alignOrderWord($('#loss-table'));
  const completion=mountLossCompletion($('#content'),{esc,context:()=>({date,sheet:selected?.name})});
@@ -31,7 +32,7 @@ export function mountLoss({esc,fmt,ask,message}){
   catch(e){if(!e.message.includes('不支援的操作'))throw e;return runDirect('readLossCatalog',{date});}
  }));
  const status=t=>{$('#loss-state').textContent=t;};
- function summary(){const count=dayDraft.quantities.size;$('#loss-clear').disabled=!count;$('#loss-summary').textContent=`已填 ${count} 項（含其他分頁）`;
+ function summary(){const count=dayDraft.quantities.size;$('#loss-clear').disabled=!count&&!dayDraft.reason.trim();$('#loss-summary').textContent=`已填 ${count} 項（含其他分頁）`;
  document.querySelectorAll('[data-delta]').forEach(cell=>{const r=rowById.get(cell.dataset.delta),result=lossCalculation(dayDraft.quantities.get(r.id),r),after=$('[data-after="'+r.id+'"]');cell.textContent=result.delta;after.textContent=result.after;after.classList.toggle('loss-insufficient',result.insufficient);});}
 
  function draw(){if(disposed)return;$('#loss-reason').value=dayDraft.reason;const selection=supplierSelection(sources,brand,category);({brand,category,source:selected}=selection);
@@ -134,5 +135,5 @@ export function mountLoss({esc,fmt,ask,message}){
  ask('<p>將重新開啟這筆耗損的 Google 核對頁，日期與累計量保持不變，確認前不扣庫存。</p>',()=>{const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(draft);form.append(input);document.body.append(form);form.submit();form.remove();message('已開啟 Google 核對頁，請於完成後查詢同步結果。');},'開啟 Google 核對頁');
  }
  showPending();
- if(directEnabled()){$('#loss-submit').textContent='預覽本次已填品項';const notes=$('#loss-submit').parentElement.parentElement.querySelectorAll(':scope > p.muted');notes[0].textContent='在站內核對差額後按確認入帳。相同累計不重扣；雲端資料變更時需重新預覽。';notes[1].textContent='新增品項請先至藥品建帳；耗損存入獨立每日明細。若要將整個分類標記完成，請選「預覽並完成正常品項登錄」。';}const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>load();window.addEventListener('erp-synced',sync);load({showDialog:true});return()=>{disposed=true;closeCatalogScreen();stopWordAxis();completion.dispose();stopCatalogWatch();generation++;window.removeEventListener('erp-synced',sync);};
+ if(directEnabled()){$('#loss-submit').textContent='預覽本次已填品項';const notes=$('#loss-submit').parentElement.parentElement.querySelectorAll(':scope > p.muted');notes[0].textContent='在站內核對差額後按確認入帳。相同累計不重扣；雲端資料變更時需重新預覽。';notes[1].textContent='新增品項請先至藥品建帳；耗損存入獨立每日明細。若要將整個分類標記完成，請選「預覽並完成正常品項登錄」。';}const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>load();window.addEventListener('erp-synced',sync);load({showDialog:true});return protectDraft(()=>{disposed=true;closeCatalogScreen();stopWordAxis();completion.dispose();stopCatalogWatch();generation++;window.removeEventListener('erp-synced',sync);},()=>[...drafts.values()].some(d=>d.quantities.size>0||d.reason.trim()!==''));
 }

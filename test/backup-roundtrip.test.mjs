@@ -23,7 +23,8 @@ function fixture(kind,storage=new Map()){
  }else{
   const src=fs.readFileSync('web/orders.mjs','utf8').split(/\r?\n/);vm.runInContext(src.filter(x=>x.includes('const stored=')||x.includes('const download=')||x.includes("$('#order-backup').onclick=")||x.includes("$('#order-restore').onchange=")).join('\n'),c);
  }
- return {storage,downloads,key,export:()=>el(kind==='legacy'?'#export':'#order-backup').onclick(),async restore(raw){pending=null;await el(kind==='legacy'?'#restore':'#order-restore').onchange({target:{files:[{size:raw.length,text:async()=>raw}]}})},cancel(){pending=null},async confirm(){assert.equal(typeof pending,'function');await pending();pending=null},get pending(){return pending},get notice(){return notice},reopen(){return kind==='legacy'?validate(JSON.parse(storage.get(key))):validateOrderStore(JSON.parse(storage.get(key)))},get rendered(){return rendered}};
+ async function choose(file){const input=el('#restore'),path='C:/fakepath/'+file.name;if(input.value===path)return false;input.value=path;input.files=[file];pending=null;await input.onchange({target:input});return true;}
+ return {choose,storage,downloads,key,export:()=>el(kind==='legacy'?'#export':'#order-backup').onclick(),async restore(raw){pending=null;await el(kind==='legacy'?'#restore':'#order-restore').onchange({target:{files:[{size:raw.length,text:async()=>raw}]}})},cancel(){pending=null},async confirm(){assert.equal(typeof pending,'function');await pending();pending=null},get pending(){return pending},get notice(){return notice},reopen(){return kind==='legacy'?validate(JSON.parse(storage.get(key))):validateOrderStore(JSON.parse(storage.get(key)))},get rendered(){return rendered}};
 }
 for(const kind of ['legacy','orders']){
  const key=kind==='legacy'?legacyKey:orderKey,initial=kind==='legacy'?legacy:orders;
@@ -32,3 +33,16 @@ for(const kind of ['legacy','orders']){
  test(`${kind}: cross-import rejects without prompt or changes`,async()=>{const h=fixture(kind,new Map([[key,JSON.stringify(initial)]])),other=kind==='legacy'?{kind:'tcm-purchase-backup',version:2,...orders}:legacy,before=h.storage.get(key);await h.restore(JSON.stringify(other));assert.equal(h.pending,null);assert.equal(h.storage.get(key),before);assert.match(h.notice,/格式/);});
  test(`${kind}: corrupt JSON rejects without changes`,async()=>{const h=fixture(kind,new Map([[key,JSON.stringify(initial)]])),before=h.storage.get(key);await h.restore('{broken');assert.equal(h.pending,null);assert.equal(h.storage.get(key),before);});
 }
+
+test('legacy: the same file can be reselected after invalid JSON or cancellation without changing data',async()=>{
+ const h=fixture('legacy',new Map([[legacyKey,JSON.stringify(legacy)]])),before=h.storage.get(legacyKey);
+ let reads=0;const bad={name:'backup.json',size:7,text:async()=>{reads++;return '{broken';}};
+ assert.equal(await h.choose(bad),true);assert.equal(await h.choose(bad),true);assert.equal(reads,2);
+ assert.equal(h.pending,null);assert.equal(h.storage.get(legacyKey),before);
+ const changed=structuredClone(legacy);changed.items[0].openingBottles=9;const raw=JSON.stringify(changed);
+ const good={name:'backup.json',size:raw.length,text:async()=>raw};
+ assert.equal(await h.choose(good),true);assert.equal(typeof h.pending,'function');h.cancel();
+ assert.equal(h.storage.get(legacyKey),before);
+ assert.equal(await h.choose(good),true);assert.equal(typeof h.pending,'function');await h.confirm();
+ assert.deepEqual(JSON.parse(h.storage.get(legacyKey)),changed);
+});

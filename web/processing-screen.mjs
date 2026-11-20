@@ -1,3 +1,4 @@
+import {allowReadingScroll} from './reading-scroll.mjs';
 let active=false;
 export const isProcessing=()=>active;
 const sendIcon = `<svg class="step-symbol" viewBox="0 0 32 32" shape-rendering="crispEdges" aria-hidden="true" focusable="false">
@@ -117,12 +118,16 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
   dialog.querySelector('#save-warning').textContent=receiptWarning?'已填的進貨數量會保留。返回核對後可重新預覽。':'本次輸入仍保留，尚未送出新的進貨。';
   for(const selector of ['.save-dots','.save-detail','.save-footer','.save-steps'])dialog.querySelector(selector).hidden=true;
  }
- const scrollStyle=doc.body.style,oldOverflow=scrollStyle?.overflow;if(scrollStyle)scrollStyle.overflow='hidden';
+ const scrollStyle=doc.body.style,oldOverflow=scrollStyle?.overflow;
+ const scrollWhileReading=reading&&!notice;
+ if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow='hidden';
+ // Keep modal input protection, but forward reading-overlay gestures to the page.
+ const stopReadingScroll=scrollWhileReading?allowReadingScroll(dialog,win):()=>{};
  const beforeUnload=e=>{e.preventDefault();e.returnValue='';};dialog.addEventListener('cancel',e=>e.preventDefault());doc.body.append(dialog);
- try{dialog.showModal();}catch(e){dialog.remove();if(scrollStyle)scrollStyle.overflow=oldOverflow;throw e;}
+ try{dialog.showModal();}catch(e){stopReadingScroll();dialog.remove();if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow=oldOverflow;throw e;}
  active=true;if(!catalogMessage)win.addEventListener('beforeunload',beforeUnload);
  const timer=notice?null:setTimeout(()=>{dialog.querySelector('.save-detail').textContent=catalogMessage?'Google 回應較慢，請稍候。':reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
- let closed=false;const handle={readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent='正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);dialog.close();dialog.remove();if(scrollStyle)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus();}};
+ let closed=false;const handle={readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent='正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);stopReadingScroll();dialog.close();dialog.remove();if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus({preventScroll:true});}};
  if(notice){
   const button=doc.createElement('button');button.type='button';button.textContent=receiptWarning?'返回核對':'查看待核對操作';button.style.cssText='white-space:normal;max-width:100%;margin-top:12px';
   button.onclick=()=>{handle.close();onReview?.();};dialog.querySelector('.save-frame').append(button);button.focus();

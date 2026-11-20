@@ -21,25 +21,47 @@
  }
  const tx=(id,action,quantity)=>({draft:{id,action,lines:[{...item,quantity}]}});
  const allocation=(kind,transactionId,quantity)=>({shortageId:id,kind,transactionId,sheet:item.sheet,code:item.code,quantity});
+ const isFixtureReceipt=l=>l.sheet===item.sheet&&l.code===item.code&&l.name===item.name;
+ const receiptEntries=()=>[...transactions.values()].filter(({draft})=>draft.kind==='tcm-cloud'&&['進貨','沖銷'].includes(draft.action));
+ const receiptDrafts=()=>receiptEntries().map(({draft})=>draft);
  const shortage=()=>{
   if(controls.failShortage)throw Error('fixture shortage offline');
   if(controls.shortageMode==='zero')return {records:[],substitutions:[],events:[],orders:[],receipts:[]};
   const order=tx('ERP-qa-ordered','訂貨',6),received=tx('ERP-qa-received','進貨',2);
-  const additions=[...transactions.values()].map(x=>x.draft).filter(x=>x.kind==='tcm-cloud'&&x.action==='進貨'&&x.shortageLinks?.length);
+  const additions=receiptDrafts();
   const other=controls.shortageMode==='many'?Array.from({length:33},(_,i)=>({...rec,id:'SH-22345678-1234-1234-1234-12345678'+String(i).padStart(4,'0'),code:'Q-'+i,name:'合成項 '+i})):[];
-  return {records:[rec,...other],substitutions:[],orders:[order],receipts:[received,...additions.map(draft=>({draft}))],events:[{allocation:allocation('order',order.draft.id,6)},{allocation:allocation('receipt',received.draft.id,2)}]};
+  return {records:[rec,...other],substitutions:[],orders:[order],receipts:[received,...additions.map(draft=>({draft}))],events:[{allocation:allocation('order',order.draft.id,6)},{allocation:allocation('receipt',received.draft.id,2)},...additions.flatMap(draft=>(draft.shortageLinks||[]).map(a=>({targetId:a.shortageId,kind:'allocation',actor:draft.actor,request:JSON.stringify(draft),allocation:{...a,kind:'receipt',transactionId:draft.id}})))]};
  };
+ const logHeader=['交易編號','交易JSON','日期','操作','經手人','備註','執行說明','狀態','時間'];
+ function readLog(log){
+  if(log==='orders'||log==='loss')return {values:[logHeader]};
+  if(log!=='inventory')throw Error('fixture unknown log');
+  return {values:[logHeader,...receiptEntries().map(({draft,result})=>[draft.id,JSON.stringify({draft,lines:result.lines,time:result.time}),draft.date,draft.action,draft.actor,draft.note,'合成隔離交易','已入帳',result.time])]};
+ }
  const catalog=date=>({sources:[tab],sheets:{[tab.name]:grid(date)}});
  function preview(d){
   const token=JSON.stringify(d);
-  if(d.kind==='tcm-cloud'&&d.action==='進貨'){
+  const prior=d.id&&transactions.get(d.id);
+  if(prior){
+   if(JSON.stringify(prior.draft)!==token)throw Error('fixture same ID with different payload');
+   return {token,lines:prior.result.lines,duplicate:true};
+  }
+  if(d.kind==='tcm-cloud'&&['進貨','沖銷'].includes(d.action)){
+   if(d.lines.length!==1||!isFixtureReceipt(d.lines[0]))throw Error('fixture only allows the synthetic QA receipt');
+   const reversing=d.action==='沖銷';
+   const original=reversing&&transactions.get(d.reverses)?.draft;
+   if(reversing&&(!original||original.action!=='進貨'||!String(d.note||'').trim()||d.lines[0].quantity!==original.lines[0].quantity||receiptDrafts().some(x=>x.action==='沖銷'&&x.reverses===d.reverses)))throw Error('fixture reversal has no valid original');
+   const reversedIds=new Set(receiptDrafts().filter(x=>x.action==='沖銷').map(x=>x.reverses));
+   const linked=receiptDrafts().filter(x=>x.action==='進貨'&&!reversedIds.has(x.id)).flatMap(x=>x.shortageLinks||[]).reduce((n,a)=>n+a.quantity,0);
    const lines=d.lines.map(l=>{
     const link=d.shortageLinks?.find(a=>a.sheet===l.sheet&&a.code===l.code);
-    if(link&&(link.quantity>l.quantity||link.quantity>4))throw Error('fixture invalid receipt link');
-    const before=stock.get(l.code);
-    return {...l,before,after:before+l.quantity,...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity})};
+    if(!Number.isInteger(l.quantity)||l.quantity<=0)throw Error('fixture invalid receipt quantity');
+    if(link&&(reversing||link.shortageId!==id||link.quantity<1||!Number.isInteger(link.quantity)||link.quantity>l.quantity||link.quantity>4-linked))throw Error('fixture invalid receipt link');
+    const before=stock.get(l.code),after=before+(reversing?-l.quantity:l.quantity);
+    if(after<0)throw Error('fixture cannot reverse below zero');
+    return {...l,before,after,...(l.unitPriceCents===undefined?{}:{amountCents:l.unitPriceCents*l.quantity})};
    });
-   return {token,lines,duplicate:transactions.has(d.id)};
+   return {token,lines,duplicate:false};
   }
   if(d.kind==='tcm-loss-cumulative'){
    return {token,lines:d.lines.map(l=>({...l,before:posted.get(l.code),delta:l.total-posted.get(l.code),stockAfter:stock.get(l.code)-(l.total-posted.get(l.code))}))};
@@ -55,6 +77,7 @@
    return {values:grid(arg.start)};
   }
   if(op==='readShortage')return shortage();
+  if(op==='readLog')return readLog(arg?.log);
   if(op==='readDailyLossGrid'||op==='readLossCatalog')return {...catalog(arg.date),date:arg.date,readAt:'fixture',loss:[item,normal].map((x,i)=>({...x,row:i+3,stock:stock.get(x.code),posted:posted.get(x.code)}))};
   if(op==='readLossDay')return {};
   if(op==='prepareLoss')return {};
@@ -62,8 +85,12 @@
   if(op==='commit'){
    if(token!==JSON.stringify(arg))throw Error('fixture preview token mismatch');
    const id=arg.id||'loss:'+token;
-   if(transactions.has(id))return transactions.get(id).result;
-   const result={...preview(arg),id,message:'fixture local commit only'};
+   const prior=transactions.get(id);
+   if(prior){
+    if(JSON.stringify(prior.draft)!==token)throw Error('fixture same ID with different payload');
+    return {...prior.result,duplicate:true,message:'隔離驗收：同 ID 已入帳，沒有重複寫入'};
+   }
+   const result={...preview(arg),id,time:new Date().toISOString(),message:'fixture local commit only'};
    for(const line of result.lines){
     stock.set(line.code,line.after??line.stockAfter);
     if(arg.kind==='tcm-loss-cumulative')posted.set(line.code,line.total);
@@ -76,7 +103,7 @@
  let qaStatus;
  function refreshControls(){
   if(!qaStatus)return;
-  qaStatus.textContent='訂藥：'+(controls.failPlanning?'模擬失敗':'正常')+'；缺藥：'+(controls.failShortage?'模擬失敗':controls.shortageMode)+'；QA 庫存 '+stock.get(item.code)+'；已入帳耗損 '+posted.get(item.code)+'；預覽 '+requests.filter(r=>r.op==='preview').length+' 次；僅記憶體確認 '+requests.filter(r=>r.op==='commit').length+' 次';
+  qaStatus.textContent='訂藥：'+(controls.failPlanning?'模擬失敗':'正常')+'；缺藥：'+(controls.failShortage?'模擬失敗':controls.shortageMode)+'；QA 庫存 '+stock.get(item.code)+'；已入帳耗損 '+posted.get(item.code)+'；預覽 '+requests.filter(r=>r.op==='preview').length+' 次；僅記憶體確認 '+requests.filter(r=>r.op==='commit').length+' 次；唯一交易 '+transactions.size+' 筆';
  }
  function fixtureControls(){
   const panel=document.createElement('section');
@@ -90,6 +117,10 @@
    ['缺藥：讀取失敗',()=>{controls.failShortage=true;}],
    ['缺藥：成功 34 項',()=>{controls.shortageMode='many';controls.failShortage=false;}],
    ['缺藥：單筆待到 4',()=>{controls.shortageMode='linked';controls.failShortage=false;}],
+   ['進貨：重送上筆測試 ID（僅記憶體）',()=>{
+    const last=receiptEntries().filter(e=>e.draft.action==='進貨').at(-1);
+    if(last)rpc('commit',last.draft,JSON.stringify(last.draft));
+   }],
   ]){
    const b=document.createElement('button');b.type='button';b.className='secondary';b.textContent=label;
    b.onclick=()=>{action();refreshControls();};panel.append(b);

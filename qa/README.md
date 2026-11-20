@@ -21,3 +21,7 @@ To avoid a fetch on the host, add --assets-stdin and feed a JSON object with bas
 2. Open /#shortage. On first load expect no fake zero; on successful empty read expect 0. Toggle fixture failure and use 重新讀取: expect 待讀取 and then 無法取得. Select 成功 34 項 and retry; verify 34 and 已訂 6 · 到貨 2 · 待到 4. On the exact QA row, 加入訂貨草稿 must show the exclusion message, not navigate.
 3. Open /#shortage fresh, select 單筆待到 4 and use 重新讀取. Click 登錄實際到貨 on the QA row. Reference 4 must be visible and actual blank disables preview. Enter 1 and select QA 操作員, then preview; actual 1/link 1. Change to 2 and press 重新核對數量; preview 2/link 2, no commit yet. A second confirmation in this fixture only raises simulated stock 4→6 and updates the fixture's local commit counter.
 4. Open /#loss fresh. The initial row is blank and shows posted 2. Blank submit does not preview; 0 without reason is blocked. Enter a synthetic correction note and preview 0, delta −2. Confirm only in this fixture to see simulated stock 4→6 and posted 2→0 after readback. Do not perform either confirmation on a non-loopback origin.
+
+### 進貨跨頁讀回與沖銷（只在 loopback）
+
+在同一個本機分頁上完成第三步後，回到缺藥頁重讀：已訂 6、到貨 4、待到 2。用「進貨：重送上筆測試 ID（僅記憶體）」重送，庫存仍是 6、唯一交易仍 1 筆。再到交易紀錄，切換「處理已隱藏的測試交易」，展開本筆進貨並按「沖銷這筆進貨」，填合成經手人與原因。預覽 6→4，確認後讀回；缺藥重新讀取應恢復已訂 6、到貨 2、待到 4。這個記憶體測試不代表正式帳本已執行重送或沖銷。

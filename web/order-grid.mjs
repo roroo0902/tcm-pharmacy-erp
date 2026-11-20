@@ -106,6 +106,23 @@ export function mountOrderGrid({esc,fmt,ask}){
  $('#og-page-size').onchange=e=>{pageSize=Number(e.target.value);resetPage();};
  function selectSource(){ $('#og-search').value='';$('#og-only').checked=false;resetPage();if(!busy&&!loadFailed)status(brand+category+'共 '+rows.filter(r=>r.brand===brand&&r.category===category).length+' 項，已保留訂量。');}
  const recoveryStatus=text=>{if(alive)$('#og-recovery-status').textContent=text;};
+ const pendingChanged='待核對的交易已變更，已保留目前待核對紀錄。';
+ const postedOwnershipLost='此筆已同步；另一筆待核對紀錄及本頁輸入已保留。請先核對，勿重複送出。';
+ const postedFormInputs=new Set();
+ const orderFormFingerprint=()=>JSON.stringify([$('#og-date').value,$('#og-actor').value,allLines().map(l=>JSON.stringify(l)).sort()]);
+ const savePendingIfCurrent=(expected,record)=>{
+  if(localStorage.getItem(KEY)!==expected)return false;
+  localStorage.setItem(KEY,JSON.stringify(record));
+  return true;
+ };
+ function completeOwnOrder(draft,submitted,input){
+  if(submitted==null||!savePendingIfCurrent(submitted,{...draft,verified:true})){
+   postedFormInputs.add(input);
+   return false;
+  }
+  clearShortage('order');quantities.clear();prices.clear();manualLines=[];
+  return true;
+ }
  let resumedChoice=null;
  async function recoverPrevious(action,continueOrder=false,selection=null){
   if(recoveringPrevious||isProcessing())return;
@@ -113,15 +130,28 @@ export function mountOrderGrid({esc,fmt,ask}){
   const button=$('#og-recover-previous');
   button.disabled=true;
   button.textContent='處理上一筆'+action;
-  const resume=()=>{if(alive){resumedChoice=selection;$('#order-grid-form').requestSubmit();}};
+  let resumeRaw=null,caution='';
+  const report=text=>recoveryStatus([text,caution].filter(Boolean).join('；'));
+  const resume=()=>{if(alive){
+   if(resumeRaw===null||resumeRaw!==localStorage.getItem(KEY)){showPending();recoveryStatus(pendingChanged);return;}
+   resumedChoice=selection;$('#order-grid-form').requestSubmit();
+  }};
   let autoResume=false;
   const completed=action==='進貨'?'上一筆進貨已入帳':'上一筆訂貨已同步';
   try{
    const outcome=await recoverPendingTransaction({
-    action,ask,status:recoveryStatus,
+    action,ask,status:report,
     isActive:()=>alive,onChange:showPending,receiptRows:()=>rows,returnLabel:'返回訂貨',completionLabel:continueOrder?'繼續預覽本次訂貨':undefined,onContinue:continueOrder?resume:undefined,
-    onResolved:async({alreadyPosted})=>{
+    onResolved:async({alreadyPosted,posted})=>{
+     const raw=localStorage.getItem(KEY);
+     let matches=false;
+     try{
+      const shown=JSON.parse(raw||'null');
+      matches=shown?.verified===true&&shown.id===posted.id&&JSON.stringify(cloudDraft(shown))===JSON.stringify(cloudDraft(posted));
+     }catch{}
      showPending();
+     if(!matches){caution=postedOwnershipLost;report('');return;}
+     resumeRaw=raw;
      if(alreadyPosted&&continueOrder){autoResume=true;return;}
      if(alreadyPosted){
       recoveryStatus(completed+'。');
@@ -138,29 +168,42 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(alive&&$('#og-recover-previous'))$('#og-recover-previous').disabled=false;
   }
  }
- function showPending(){let p;try{p=JSON.parse(localStorage.getItem(KEY)||'null');}catch{}
+ function showPending(){const expected=localStorage.getItem(KEY);let p;try{p=JSON.parse(expected||'null');}catch{}
   if(p&&!p.verified&&['進貨','訂貨'].includes(p.action)){
    const count=Array.isArray(p.lines)?p.lines.length:0;
    $('#og-pending').innerHTML=`<h3>${esc(p.date)} 有一筆${esc(p.action)}待確認，共 ${count} 項</h3><p>直接按「確認並預覽整批訂貨」，會先核對上一筆，再接續本次訂貨；已填數量與單價會保留。</p><button type="button" id="og-recover-previous">處理上一筆${esc(p.action)}</button>`;
    $('#og-recover-previous').onclick=()=>p.mergeOriginal?reviewPendingMerge(p,localStorage.getItem(KEY)).catch(e=>status(e.message)):recoverPrevious(p.action);
    return;
   }
-  const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;$('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+p.id)}</p></details><button type="button" id="og-check" class="secondary">重新確認同步結果</button>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id):''}`:'';if(!p)return;if(p.verified&&p.action==='訂貨')bindOrderPrint($('#og-pending'));$('#og-check').onclick=async()=>{try{const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(p.action)?'orders':'inventory')).text()).slice(1),cloudDraft(p));if(!found)throw Error('未找到交易；請沿用同一編號核對');const posted=JSON.parse(found[1]).draft;localStorage.setItem(KEY,JSON.stringify({...posted,verified:true}));showPending();await load();status('已確認工作表中的操作結果。');}catch(e){status(e.message);}};}
+  const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;$('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+p.id)}</p></details><button type="button" id="og-check" class="secondary">重新確認同步結果</button>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id):''}`:'';if(!p)return;if(p.verified&&p.action==='訂貨')bindOrderPrint($('#og-pending'));$('#og-check').onclick=async()=>{
+  if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
+  try{
+   const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(p.action)?'orders':'inventory')).text()).slice(1),cloudDraft(p));
+   if(!alive)return;
+   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
+   if(!found)throw Error('未找到交易；請沿用同一編號核對');
+   const verified=JSON.parse(found[1]).draft;
+   if(!savePendingIfCurrent(expected,{...verified,verified:true})){showPending();status(pendingChanged);return;}
+   showPending();await load();status('已確認工作表中的操作結果。');
+  }catch(e){status(e.message);}
+ };}
  function currentDraft(id){
   return cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id,action:'訂貨',date:$('#og-date').value,actor:$('#og-actor').value,note:'',lines:allLines(),shortageLinks:shortageLinks('order',orderLines(rows,quantities,prices))});
  }
  function reviewCombined(draft,saved,original,inputLines){
+  const input=orderFormFingerprint();let submitted,owned=false,caution='';
   return directReview(draft,ask,async()=>{
-   localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
-   clearShortage('order');quantities.clear();prices.clear();manualLines=[];
-   if(alive){showPending();await load();}
-  },status,{
-   autoMail:()=>alive,outputMergeIds:[],
+   owned=completeOwnOrder(draft,submitted,input);
+   if(!owned)caution=postedOwnershipLost;
+   if(alive){showPending();if(owned)await load();}
+  },text=>status([text,caution].filter(Boolean).join('；')),{
+   autoMail:()=>alive&&owned,outputMergeIds:[],
    reviewIntro:()=>'<h3>確認合併訂貨單</h3><p>以下為兩筆合併後的品項與數量。確認後一次同步，並開啟 PDF 核對。</p>',
    reviewLabel:'確認合併訂貨並同步',
    beforeCommit:()=>{
     if(saved!==localStorage.getItem(KEY))throw Error('訂單狀態已變更，請重新核對。');
-    localStorage.setItem(KEY,JSON.stringify({...draft,mergeOriginal:original,mergeInputLines:inputLines}));
+    submitted=JSON.stringify({...draft,mergeOriginal:original,mergeInputLines:inputLines});
+    localStorage.setItem(KEY,submitted);
     if(alive)showPending();
    }
   });
@@ -193,16 +236,29 @@ export function mountOrderGrid({esc,fmt,ask}){
   }finally{busy=false;summary();}
   if(alive)$('#order-grid-form').requestSubmit();
  }
- function send(d,outputMergeIds=null,reviewIntro){const saved=localStorage.getItem(KEY);return directReview(d,(...args)=>{recoveryStatus('');return ask(...args);},async()=>{clearShortage('order');localStorage.setItem(KEY,JSON.stringify({...d,verified:true}));quantities.clear();prices.clear();manualLines=[];if(alive){showPending();await load();}},recoveryStatus,{autoMail:()=>alive,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':undefined,orderRows:()=>rows,onOrderAdd:line=>{addLine(line);},onOrderDraft:next=>{d=cloudDraft(next);},beforeCommit:()=>{
-  if(saved!==localStorage.getItem(KEY))throw Error('訂單狀態已變更，請重新預覽。');
-  localStorage.setItem(KEY,JSON.stringify(d));showPending();
- }});}
+ function send(d,outputMergeIds=null,reviewIntro){
+  const saved=localStorage.getItem(KEY);let input=orderFormFingerprint(),submitted,owned=false,caution='';
+  return directReview(d,(...args)=>{if(!submitted)recoveryStatus('');return ask(...args);},async()=>{
+   owned=completeOwnOrder(d,submitted,input);
+   if(!owned)caution=postedOwnershipLost;
+   if(alive){showPending();if(owned)await load();}
+  },text=>recoveryStatus([text,caution].filter(Boolean).join('；')),{
+   autoMail:()=>alive&&owned,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':undefined,
+   orderRows:()=>rows,onOrderAdd:line=>{addLine(line);},onOrderDraft:next=>{d=cloudDraft(next);input=orderFormFingerprint();},
+   beforeCommit:()=>{
+    if(saved!==localStorage.getItem(KEY))throw Error('訂單狀態已變更，請重新預覽。');
+    submitted=JSON.stringify(d);localStorage.setItem(KEY,submitted);showPending();
+   }
+  });
+ }
  $('#order-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selectSource();}};$('#order-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selectSource();}};$('#og-search').oninput=resetPage;$('#og-only').onchange=resetPage;$('#og-date').onchange=draw;$('#og-refresh').onclick=()=>{if(!busy)load(true);};$('#og-clear').onclick=()=>{quantities.clear();prices.clear();manualLines=[];draw();};c.querySelectorAll('[data-og-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.ogSort;direction=sort===key&&direction==='asc'?'desc':'asc';sort=key;resetPage();});
  $('#order-grid-form').addEventListener('invalid',e=>{
   const field=e.target;
   recoveryStatus((field.getAttribute('aria-label')||field.closest('label')?.firstChild?.textContent||'訂貨欄位')+'：'+field.validationMessage);
  },true);
- $('#order-grid-form').onsubmit=async e=>{e.preventDefault();if(busy||loadFailed||recoveringPrevious||isProcessing()){recoveryStatus(loadFailed?'品項讀取失敗，請重新同步工作表。':'正在處理其他操作，請稍後再預覽。');return;}recoveryStatus('');try{let prior=JSON.parse(localStorage.getItem(KEY)||'null');if(prior&&!prior.verified&&['進貨','訂貨'].includes(prior.action)){
+ $('#order-grid-form').onsubmit=async e=>{e.preventDefault();if(busy||loadFailed||recoveringPrevious||isProcessing()){recoveryStatus(loadFailed?'品項讀取失敗，請重新同步工作表。':'正在處理其他操作，請稍後再預覽。');return;}recoveryStatus('');try{
+  if(postedFormInputs.has(orderFormFingerprint()))throw Error('這些輸入對應到剛完成的訂貨，請核對交易紀錄；請勿重複送出。');
+  const expected=localStorage.getItem(KEY);let prior=JSON.parse(expected||'null');if(prior&&!prior.verified&&['進貨','訂貨'].includes(prior.action)){
   const saved=localStorage.getItem(KEY);
   recoveryStatus('正在核對上一筆'+prior.action+'…');
   busy=true;summary();
@@ -226,6 +282,7 @@ export function mountOrderGrid({esc,fmt,ask}){
     try{
      const mode=await chooseOrderFollowup({...prior,pending:true,count:prior.lines.length},{date:$('#og-date').value,actor:$('#og-actor').value,lines:allLines()});
      if(!alive||!mode)return;
+     if(mode==='current'){recoveryStatus('上一筆尚未核對入帳，請先核對上一筆；本筆輸入已保留。');return;}
      if(saved!==localStorage.getItem(KEY))throw Error('上一筆狀態已更新，請重新預覽。');
      selection={id:prior.id,mode};
     }finally{busy=false;summary();}
@@ -237,7 +294,14 @@ export function mountOrderGrid({esc,fmt,ask}){
  }
  if(prior&&!prior.verified){
  busy=true;summary();const checking=beginProcessing({reading:true,compact:true,catalogMessage:'正在確認上一筆結果，已填訂量會保留…'});
- try{const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(prior.action)?'orders':'inventory')).text()).slice(1),cloudDraft(prior));if(!found)throw Error('尚未找到上一筆結果，已填訂量保留。請按「重新確認同步結果」查詢上一筆操作。');const posted=JSON.parse(found[1]).draft;localStorage.setItem(KEY,JSON.stringify({...posted,verified:true}));showPending();
+  try{
+   const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(prior.action)?'orders':'inventory')).text()).slice(1),cloudDraft(prior));
+   if(!alive)return;
+   if(localStorage.getItem(KEY)!==expected){showPending();throw Error(pendingChanged);}
+   if(!found)throw Error('尚未找到上一筆結果，已填訂量保留。請按「重新確認同步結果」查詢上一筆操作。');
+   const posted=JSON.parse(found[1]).draft;
+   if(!savePendingIfCurrent(expected,{...posted,verified:true})){showPending();throw Error(pendingChanged);}
+   showPending();
  }finally{checking.close();busy=false;summary();}
  }
  const selected=resumedChoice?.id===prior?.id?resumedChoice:null;resumedChoice=null;

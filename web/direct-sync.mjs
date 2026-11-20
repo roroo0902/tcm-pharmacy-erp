@@ -69,7 +69,12 @@ function priceChange(line){
  return `<li>${escape(line.sheet)} ${escape(line.name)}：${escape(oldPrice||'未提供')} → ${priceMoney(line.unitPriceCents)}</li>`;
 }
 function priceTotal(lines,order=false){const missing=lines.filter(l=>l.unitPriceCents===undefined).length,total=lines.reduce((n,l)=>n+(l.unitPriceCents??0)*l.quantity,0);return `<p class="price-total">${missing?'已填單價小計':order?'訂貨金額合計':'進貨金額合計'}：${priceMoney(total)}${missing?'（'+missing+' 項未提供單價）':''}</p>`;}
-export function revisedReceipt(draft,previewLines,values){
+const matchingReceiptLink=(draft,line)=>draft.shortageLinks?.find(a=>a.sheet===line.sheet&&a.code===line.code);
+const receiptLinkKey=a=>JSON.stringify([a.shortageId,a.sheet,a.code]);
+function partialReceiptLinkKeys(draft){
+ return new Set((draft.shortageLinks||[]).filter(a=>draft.lines.some(l=>l.sheet===a.sheet&&l.code===a.code&&a.quantity<l.quantity)).map(receiptLinkKey));
+}
+export function revisedReceipt(draft,previewLines,values,partialLinks=partialReceiptLinkKeys(draft)){
  if(draft.kind!=='tcm-cloud'||draft.action!=='進貨')throw Error('僅支援進貨數量修改');
  if(values.length!==previewLines.length||values.length!==draft.lines.length)throw Error('品項數量不一致，請重新核對');
  const next=JSON.parse(JSON.stringify(draft)),seen=new Set();
@@ -77,19 +82,21 @@ export function revisedReceipt(draft,previewLines,values){
   const n=Number(values[i]);if(String(values[i]).trim()===''||!Number.isInteger(n)||n<1||n>1000000)throw Error('進貨數量須為 1 到 1000000 的整數');
   const matches=next.lines.filter(l=>l.sheet===line.sheet&&l.code===line.code&&l.name===line.name);
   if(matches.length!==1||seen.has(matches[0]))throw Error('品項不一致，請重新核對');
-  seen.add(matches[0]);matches[0].quantity=n;
+  const item=matches[0],link=matchingReceiptLink(next,item);
+  if(link)link.quantity=!partialLinks.has(receiptLinkKey(link))&&link.quantity===item.quantity?n:Math.min(link.quantity,n);
+  seen.add(item);item.quantity=n;
  });return next;
 }
-function receiptEditor(reviewed,preview,onChange){
+function receiptEditor(reviewed,preview,onChange,partialLinks){
  const root=document.querySelector('#confirm-detail'),inputs=[...root.querySelectorAll('[data-review-qty]')],commit=document.querySelector('#commit');
- const read=()=>revisedReceipt(reviewed,preview.lines,inputs.map(el=>el.value));
+ const read=()=>revisedReceipt(reviewed,preview.lines,inputs.map(el=>el.value),partialLinks);
  const update=()=>{
   try{
    const next=read(),changed=next.lines.some((l,i)=>l.quantity!==reviewed.lines[i].quantity);
-   inputs.forEach((input,i)=>{const row=input.closest('tr'),l=preview.lines[i],n=Number(input.value);row.querySelector('[data-label="入帳後庫存"]').textContent=String(l.before+n);if(l.unitPriceCents!==undefined)row.querySelector('[data-label="小計（元）"]').textContent=priceMoney(l.unitPriceCents*n);});
+   inputs.forEach((input,i)=>{const row=input.closest('tr'),l=preview.lines[i],n=Number(input.value);row.querySelector('[data-label="入帳後庫存"]').textContent=String(l.before+n);if(l.unitPriceCents!==undefined)row.querySelector('[data-label="小計（元）"]').textContent=priceMoney(l.unitPriceCents*n);const link=matchingReceiptLink(next,l),label=row.querySelector('[data-receipt-link]');if(link&&label)label.textContent='缺藥關聯 '+link.quantity+' 瓶';});
    root.querySelector('.price-total').outerHTML=priceTotal(preview.lines.map((l,i)=>({...l,quantity:Number(inputs[i].value)})));
    commit.textContent=changed?'重新核對數量':'確認入帳';
-   root.querySelector('[data-review-note]').textContent=changed?'數量已修改；請重新核對最新庫存後再確認入帳。':'可直接加減數量；修改後需要重新核對，尚未入帳。';
+   root.querySelector('[data-review-note]').textContent=(changed?'數量已修改；請重新核對最新庫存後再確認入帳。':'可直接加減數量；修改後需要重新核對，尚未入帳。')+(next.shortageLinks?.length?' 請一併核對本次實收與缺藥關聯量。':'');
    onChange(next);
   }catch(e){commit.textContent='重新核對數量';root.querySelector('[data-review-note]').textContent=e.message;}
  };
@@ -111,8 +118,11 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
   readingScreen.close();readingScreen=null;
   const order=['訂貨','取消訂貨'].includes(reviewed.action),priced=reviewed.kind==='tcm-cloud'&&['進貨','沖銷','訂貨','取消訂貨'].includes(reviewed.action),priceHead=priced?'<th>單價（元／瓶）</th><th>'+(order?'訂貨小計（元）':'小計（元）')+'</th>':'';
   const loss=reviewed.kind==='tcm-loss-cumulative',editable=reviewed.kind==='tcm-cloud'&&reviewed.action==='進貨'&&typeof options.onDraftChange==='function';let readEdited;
+  // Keep originally partial allocations partial throughout this review; never persist review metadata.
+  if(editable&&!options.receiptLinkBasis)options={...options,receiptLinkBasis:partialReceiptLinkKeys(reviewed)};
   const quantityCell=(l,i)=>editable?`<div class="review-quantity"><button type="button" data-review-step="-1" data-review-index="${i}" aria-label="${escape(l.code)} 減少一瓶">−</button><input data-review-qty type="number" min="1" max="1000000" step="1" required inputmode="numeric" aria-label="${escape(l.sheet+' '+l.code+' '+l.name)} 確認進貨數量" value="${escape(l.quantity)}"><button type="button" data-review-step="1" data-review-index="${i}" aria-label="${escape(l.code)} 增加一瓶">＋</button></div>`:escape(l.quantity??l.total);
-  const lines=preview.lines.map((l,i)=>`<tr><td data-label="藥品">${escape(l.sheet)} ${escape(l.code)} ${escape(l.name)}${l.create?'<br><small>新建檔・期初 0 瓶</small>':l.manual?'<br><small>手動新增・僅訂貨，不異動庫存</small>':''}</td><td data-label="${loss?'新累計':'數量'}">${quantityCell(l,i)}</td><td data-label="${loss?'原累計':'原庫存'}">${escape(l.before)}</td><td data-label="入帳後庫存">${escape(l.after??l.stockAfter)}</td>${priced?priceCells(l,order):''}</tr>`).join('');
+  const linkedQuantity=l=>{const a=reviewed.action==='進貨'&&matchingReceiptLink(reviewed,l);return a?'<small class="muted" data-receipt-link>缺藥關聯 '+escape(a.quantity)+' 瓶</small>':'';};
+  const lines=preview.lines.map((l,i)=>`<tr><td data-label="藥品">${escape(l.sheet)} ${escape(l.code)} ${escape(l.name)}${l.create?'<br><small>新建檔・期初 0 瓶</small>':l.manual?'<br><small>手動新增・僅訂貨，不異動庫存</small>':''}</td><td data-label="${loss?'新累計':reviewed.action==='進貨'?'本次實收':'數量'}">${quantityCell(l,i)}${linkedQuantity(l)}</td><td data-label="${loss?'原累計':'原庫存'}">${escape(l.before)}</td><td data-label="入帳後庫存">${escape(l.after??l.stockAfter)}</td>${priced?priceCells(l,order):''}</tr>`).join('');
   const weeklyChanges=preview.lines.filter(line=>line.orderAfter!==undefined).map(line=>{
    const before=String(line.orderBefore??'').trim();
    const after=String(line.orderAfter??'').trim();
@@ -128,7 +138,7 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
    if(line.updateDateAfter!==undefined)fields.push('更新日期 '+date(line.updateDateBefore)+' → '+date(line.updateDateAfter));
    return fields.length?'<li>'+escape(line.sheet+' '+line.code+' '+line.name+'：'+fields.join('、'))+'</li>':'';
   }).join(''):'';
-  ask(`${options.reviewIntro?.(reviewed)??''}${editable?'<style>#confirm .review-quantity{display:flex;align-items:center;justify-content:center;gap:6px;min-width:142px}#confirm .review-quantity button{min-width:32px;width:32px;height:36px;min-height:36px;padding:0;font-size:20px}#confirm .review-quantity input{width:66px;min-width:0;height:36px;min-height:36px;margin:0;padding:4px;text-align:center;font-size:16px;color:#172c48;background:#fff}#confirm .direct-review-table td{vertical-align:middle}#confirm .review-add-disclosure{margin-top:24px;border:1px solid #d6b568;border-radius:6px}#confirm .review-add-disclosure>summary{display:flex;align-items:center;gap:10px;min-height:48px;padding:12px 16px;cursor:pointer;list-style:none;color:#fff4d7}#confirm .review-add-disclosure>summary::-webkit-details-marker{display:none}#confirm .review-add-disclosure>summary::after{content:"⌄";margin-left:auto}#confirm .review-add-disclosure[open]>summary::after{content:"⌃"}#confirm .review-add-symbol::before{content:"＋"}#confirm .review-add-disclosure[open] .review-add-symbol::before{content:"−"}#confirm .review-add-disclosure>summary:focus-visible{outline:2px solid #e0c389;outline-offset:3px}#confirm .review-add{margin:0;border:0;border-top:1px solid #d6b568;padding:16px;min-width:0}#confirm .review-add label{display:block;margin-bottom:12px}#confirm .review-add input,#confirm .review-add select{box-sizing:border-box;width:100%;min-width:0}#confirm .review-add-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}#confirm .review-add button{white-space:normal;max-width:100%}#confirm .review-add p{overflow-wrap:anywhere}#confirm .review-add-unit{display:flex;align-items:center;gap:8px}#confirm .review-add-unit input{flex:1;width:0}#confirm .review-add-unit>span{flex:none}@media(max-width:600px){#confirm .review-quantity button{min-height:44px;height:44px}#confirm .review-quantity input{height:44px}}</style><form id="receipt-review-form"><p data-review-note role="status">可直接加減數量；修改後需要重新核對，尚未入帳。</p>':''}<p>${escape(reviewed.date)} · ${escape(reviewed.actor)}</p><p>${loss?'當日累計以差額入帳；原值欄為已登錄累計。':'請核對數量與庫存。訂貨不增加庫存。'}</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>藥品</th><th>${loss?'新累計':'數量'}</th><th>${loss?'原累計':'原庫存'}</th><th>入帳後庫存</th>${priceHead}</tr></thead><tbody>${lines}</tbody></table></div>${weeklyChanges?'<p>尚未儲存；確認後同步各廠商分頁：</p><ul>'+weeklyChanges+'</ul>':''}${priced?priceTotal(preview.lines,order):''}${priceChanges?'<p>確認入帳後同步更新原表價格：</p><ul>'+priceChanges+'</ul>':''}${reviewed.action==='沖銷'?'<p>上述金額為原進貨金額；本筆將沖銷原進貨，可核對的原單價與更新日期會一併還原；缺少原值或已有後續更新的欄位會保留目前內容。</p>'+(reversalChanges?'<ul>'+reversalChanges+'</ul>':''):''}${lossCompletionPreview(reviewed,preview.completion)}${loss?'<p>'+preview.lines.map(l=>escape(l.code)+'：本次差額 '+escape(l.delta)+' 瓶').join('；')+'</p>':''}${editable&&options.receiptRows?receiptAddMarkup:''}${editable?'</form>':''}${reviewed.action==='訂貨'&&options.orderRows?orderAddMarkup:''}`,
+  ask(`${options.reviewIntro?.(reviewed)??''}${editable?'<style>#confirm .review-quantity{display:flex;align-items:center;justify-content:center;gap:6px;min-width:142px}#confirm .review-quantity button{min-width:32px;width:32px;height:36px;min-height:36px;padding:0;font-size:20px}#confirm .review-quantity input{width:66px;min-width:0;height:36px;min-height:36px;margin:0;padding:4px;text-align:center;font-size:16px;color:#172c48;background:#fff}#confirm .direct-review-table td{vertical-align:middle}#confirm .review-add-disclosure{margin-top:24px;border:1px solid #d6b568;border-radius:6px}#confirm .review-add-disclosure>summary{display:flex;align-items:center;gap:10px;min-height:48px;padding:12px 16px;cursor:pointer;list-style:none;color:#fff4d7}#confirm .review-add-disclosure>summary::-webkit-details-marker{display:none}#confirm .review-add-disclosure>summary::after{content:"⌄";margin-left:auto}#confirm .review-add-disclosure[open]>summary::after{content:"⌃"}#confirm .review-add-symbol::before{content:"＋"}#confirm .review-add-disclosure[open] .review-add-symbol::before{content:"−"}#confirm .review-add-disclosure>summary:focus-visible{outline:2px solid #e0c389;outline-offset:3px}#confirm .review-add{margin:0;border:0;border-top:1px solid #d6b568;padding:16px;min-width:0}#confirm .review-add label{display:block;margin-bottom:12px}#confirm .review-add input,#confirm .review-add select{box-sizing:border-box;width:100%;min-width:0}#confirm .review-add-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}#confirm .review-add button{white-space:normal;max-width:100%}#confirm .review-add p{overflow-wrap:anywhere}#confirm .review-add-unit{display:flex;align-items:center;gap:8px}#confirm .review-add-unit input{flex:1;width:0}#confirm .review-add-unit>span{flex:none}@media(max-width:600px){#confirm .review-quantity button{min-height:44px;height:44px}#confirm .review-quantity input{height:44px}}</style><form id="receipt-review-form"><p data-review-note role="status">可直接加減數量；修改後需要重新核對，尚未入帳。'+(reviewed.shortageLinks?.length?' 請一併核對本次實收與缺藥關聯量。':'')+'</p>':''}<p>${escape(reviewed.date)} · ${escape(reviewed.actor)}</p><p>${loss?'當日累計以差額入帳；原值欄為已登錄累計。':'請核對數量與庫存。訂貨不增加庫存。'}</p><div class="tablewrap"><table class="direct-review-table"><thead><tr><th>藥品</th><th>${loss?'新累計':reviewed.action==='進貨'?'本次實收':'數量'}</th><th>${loss?'原累計':'原庫存'}</th><th>入帳後庫存</th>${priceHead}</tr></thead><tbody>${lines}</tbody></table></div>${weeklyChanges?'<p>尚未儲存；確認後同步各廠商分頁：</p><ul>'+weeklyChanges+'</ul>':''}${priced?priceTotal(preview.lines,order):''}${priceChanges?'<p>確認入帳後同步更新原表價格：</p><ul>'+priceChanges+'</ul>':''}${reviewed.action==='沖銷'?'<p>上述金額為原進貨金額；本筆將沖銷原進貨，可核對的原單價與更新日期會一併還原；缺少原值或已有後續更新的欄位會保留目前內容。</p>'+(reversalChanges?'<ul>'+reversalChanges+'</ul>':''):''}${lossCompletionPreview(reviewed,preview.completion)}${loss?'<p>'+preview.lines.map(l=>escape(l.code)+'：本次差額 '+escape(l.delta)+' 瓶').join('；')+'</p>':''}${editable&&options.receiptRows?receiptAddMarkup:''}${editable?'</form>':''}${reviewed.action==='訂貨'&&options.orderRows?orderAddMarkup:''}`,
    async()=>{if(writing)return;
     if(editable){let next;try{next=readEdited();}catch(e){status(e.message);options.onPreviewError?.(e.message);return;}if(next.lines.some((l,i)=>l.quantity!==reviewed.lines[i].quantity)){options.onDraftChange(next);return directReview(next,ask,onSuccess,status,options);}}
     writing=true;const controls=[...document.querySelectorAll('#content input,#content select,#content button')].map(el=>[el,el.disabled]);controls.forEach(([el])=>el.disabled=true);status('正在入帳與讀回核對，請勿重複送出…');let screen;try{screen=beginProcessing();
@@ -153,7 +163,7 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
    const next={...reviewed,lines:[...reviewed.lines,line]};options.onOrderAdd(line);options.onOrderDraft(next);document.querySelector('#confirm').close();await directReview(next,ask,onSuccess,status,options);
   });
   if(editable){
-   readEdited=receiptEditor(reviewed,preview,options.onDraftChange);
+   readEdited=receiptEditor(reviewed,preview,options.onDraftChange,options.receiptLinkBasis);
    if(options.receiptRows)bindReceiptAdd(document.querySelector('#confirm-detail'),options.receiptRows(),readEdited,async next=>{
     options.onDraftChange(next);
     document.querySelector('#confirm').close();

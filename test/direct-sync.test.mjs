@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {pathToFileURL} from 'node:url';
+import {cloudDraft} from "../src/cloud-transaction.mjs";
 
 function server(email='owner@example.com',allowed='owner@example.com'){
  const calls=[];
@@ -194,4 +195,68 @@ test('isolated order and receipt review only requests previews before confirmati
   dialog=null;
  }
  assert.deepEqual(requests,['preview','preview']);
+});
+
+const receiptLinkItem={sheet:'科達單方',code:'QA-LINK',name:'合成關聯品項'};
+const receiptLinkId='SH-12345678-1234-1234-1234-123456789abc';
+const receiptLink=(quantity)=>({shortageId:receiptLinkId,sheet:receiptLinkItem.sheet,code:receiptLinkItem.code,quantity});
+const linkedReceipt=(quantity,link)=>({kind:'tcm-cloud',version:1,action:'進貨',id:'ERP-preview-fixture',date:'2026-11-20',actor:'QA',note:'',lines:[{...receiptLinkItem,quantity}],...(link===undefined?{}:{shortageLinks:[receiptLink(link)]})});
+
+test('receipt review revises full links, clamps explicit partial links, and never creates links',async t=>{
+ const m=await client(t);
+ for(const [before,link,after,expected] of [[4,4,1,1],[1,1,2,2],[4,2,5,2],[4,2,1,1],[4,undefined,1,undefined]]){
+  const d=linkedReceipt(before,link),original=structuredClone(d);
+  const result=m.revisedReceipt(d,d.lines,[String(after)]);
+  assert.equal(result.lines[0].quantity,after);
+  assert.equal(result.shortageLinks?.[0]?.quantity,expected);
+  assert.deepEqual(d,original);
+  assert.equal(cloudDraft(result).shortageLinks?.[0]?.quantity,expected);
+ }
+ const d=linkedReceipt(4,4);
+ for(const v of ['',0,-1,'0.5',1000001])assert.throws(()=>m.revisedReceipt(d,d.lines,[v]),/進貨數量須為/);
+ assert.throws(()=>m.revisedReceipt({...d,action:'訂貨'},d.lines,[1]),/僅支援進貨/);
+});
+
+test('receipt partial-link intent stays conservative over fresh preview and adding a separate item',async t=>{
+ const m=await client(t);
+ const savedOption=globalThis.Option;globalThis.Option=class {constructor(text,value){this.text=text;this.value=value;}};
+ t.after(()=>{if(savedOption===undefined)delete globalThis.Option;else globalThis.Option=savedOption;});
+ const nodes=new Map(), calls=[], labels=[];let inputs=[],confirm;
+ const node=s=>{
+  if(!nodes.has(s))nodes.set(s,{value:'',textContent:'',add(){},replaceChildren(){},append(){},addEventListener(){},close(){},querySelector:node});
+  return nodes.get(s);
+ };
+ const root={querySelectorAll:s=>s==='[data-review-qty]'?inputs:[],querySelector:node};
+ globalThis.document.querySelector=s=>s==='#confirm-detail'?root:node(s);
+ globalThis.fetch=async(_u,init)=>{
+  const [op,payload]=JSON.parse(init.body).parameters;
+  assert.equal(op,'preview');
+  assert.equal(Object.hasOwn(payload,'receiptLinkBasis'),false);
+  const canonical=cloudDraft(payload);
+  calls.push(canonical);
+  return response({token:'p'+calls.length,lines:canonical.lines.map(l=>({...l,before:0,after:l.quantity}))});
+ };
+ const ordinary={name:'科達單方',brand:'科達',category:'單方',drug:'合成無關聯',code:'QA-UNLINKED',bottles:0};
+ const d=linkedReceipt(4,2),original=structuredClone(d);
+ const ask=(html,fn)=>{
+  confirm=fn;
+  labels.push(html);
+  inputs=calls.at(-1).lines.map(l=>({value:String(l.quantity),addEventListener(){}}));
+ };
+ await m.directReview(d,ask,()=>assert.fail('preview only'),s=>{}, {onDraftChange:()=>{},receiptRows:()=>[ordinary]});
+ assert.match(labels.at(-1),/本次實收/);
+ assert.match(labels.at(-1),/缺藥關聯 2 瓶/);
+ assert.match(labels.at(-1),/修改後需要重新核對/);
+ inputs[0].value='1';
+ await confirm();
+ assert.deepEqual([calls[1].lines[0].quantity,calls[1].shortageLinks[0].quantity],[1,1]);
+ node('[data-add-brand]').value=ordinary.brand;node('[data-add-category]').value=ordinary.category;
+ node('[data-add-name]').value=ordinary.drug;node('[data-add-code]').value=ordinary.code;node('[data-add-qty]').value='1';
+ await node('[data-add-submit]').onclick();
+ assert.equal(calls[2].lines.length,2);assert.equal(calls[2].shortageLinks.length,1);
+ inputs[0].value='3';
+ await confirm();
+ assert.deepEqual([calls[3].lines[0].quantity,calls[3].shortageLinks[0].quantity],[3,1]);
+ assert.match(labels.at(-1),/缺藥關聯 1 瓶/);
+ assert.deepEqual(d,original);
 });

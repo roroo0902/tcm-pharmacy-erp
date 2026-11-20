@@ -1,4 +1,4 @@
-import {filterHistoryEntries} from './history-display.mjs';
+import {filterHistoryEntries} from './history-display.mjs?v=release20261120r1';
 import {createXlsx} from './xlsx-export.mjs';
 function dateCell(value){const m=String(value??'').match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);if(!m)return value;const iso=m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'),d=new Date(iso+'T00:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===iso?d:value;}
 export function historyWorkbook(entries,filters,now=new Date()){

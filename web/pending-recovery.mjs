@@ -1,5 +1,5 @@
 import {cloudDraft} from '../src/cloud-transaction.mjs?v=compact20261030';
-import {directLog,directReview} from './direct-sync.mjs?v=compact20261030';
+import {directLog,directReview} from './direct-sync.mjs?v=release20261120r1';
 import {csvRows} from './sheets-data.mjs?v=compact20261030';
 
 const KEY='tcm-cloud-pending-v1';

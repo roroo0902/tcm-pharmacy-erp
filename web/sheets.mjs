@@ -1,7 +1,7 @@
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {exportInventory,filterInventory,selectInventory} from './inventory-export.mjs';
 import {money} from './receipt-pricing.mjs';
-import {directEnabled,runDirect,directPollMs} from './direct-sync.mjs?v=compact20261030';
+import {directEnabled,runDirect,directPollMs} from './direct-sync.mjs?v=release20261120r1';
 import {sortSheetRows} from './sheets-sort.mjs';
 import {SOURCES,parseSheet,sheetUrl,exportUrl} from './sheets-data.mjs?v=stockread20261119';
 export function mountSheets({esc,fmt}){

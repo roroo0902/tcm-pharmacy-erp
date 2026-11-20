@@ -1,17 +1,18 @@
+import {mountReleasePolish} from './release-polish.mjs?v=release20261120r1';
 import {isProcessing} from './processing-screen.mjs';
 import {pageScope,allowLeave} from './page-safety.mjs';
-import {mountShortage} from './shortage.mjs?v=lossrevision20261120';
-import {mountOrderGrid} from './order-grid.mjs?v=orderread20261119';
+import {mountShortage} from './shortage.mjs?v=release20261120r1';
+import {mountOrderGrid} from './order-grid.mjs?v=release20261120r1';
 import {installStaffSelectors} from './staff.mjs?v=allstaff20261030';
-import {setupDirect} from './direct-sync.mjs?v=compact20261030';
+import {setupDirect} from './direct-sync.mjs?v=release20261120r1';
 import {mountGoogleEntry,restoreGooglePage} from './google-entry.mjs?v=compact20261030';
-import {mountReceiptGrid} from './receive-grid.mjs?v=receiptread20261119';
-import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=googlesync20261114';
+import {mountReceiptGrid} from './receive-grid.mjs?v=release20261120r1';
+import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=release20261120r1';
 import {mountPhotoReceive} from './photo-receive.mjs?v=receiptweight20261120';
 import {updateQuestTheme} from './quest-theme.mjs?v=ryan20261103';
-import {mountLoss} from './loss.mjs?v=lossrevision20261120';
+import {mountLoss} from './loss.mjs?v=release20261120r1';
 import {mountReceive} from './receive.mjs?v=compact20261030';
-import {mountOrders} from './orders.mjs?v=calendartags20261103';
+import {mountOrders} from './orders.mjs?v=release20261120r1';
 import {mountSheets} from './sheets.mjs?v=stockread20261119';
 import {mountCatalog} from './catalog.mjs?v=potions2';
 import {today,empty,validate,addItem,addEntry,loadLegacy} from './store.mjs?v=20261027';
@@ -56,6 +57,6 @@ function render(){scope.invalidate();pending=null;if($('#confirm').open)$('#conf
 function showAsk(html,action,label='確認入帳',cancelLabel='返回修改'){$('#commit').textContent=label;$('#cancel').hidden=!cancelLabel;$('#cancel').textContent=cancelLabel||'';pending=action;$('#confirm-detail').innerHTML=html;const form=$('#confirm form');if(form)form.onsubmit=e=>e.preventDefault();$('#confirm').showModal();}
 $('#cancel').onclick=()=>$('#confirm').close();$('#commit').onclick=async()=>{const form=$('#confirm form');if(form&&!form.reportValidity())return;const action=pending;pending=null;$('#confirm').close();if(action)await action();};
 window.addEventListener('hashchange',()=>{if(ready){if(isProcessing()){history.replaceState(null,'',location.pathname+location.search+renderedHash);return;}if(!allowLeave(cloudCleanup,window.confirm.bind(window))){history.replaceState(null,'',location.pathname+location.search+renderedHash);return;}message('');render();}});window.addEventListener('beforeunload',e=>{if(cloudCleanup.hasUnsavedChanges?.()){e.preventDefault();e.returnValue='';}});window.addEventListener('storage',e=>{if(e.key===KEY&&ready&&!isProcessing()){try{read();render();message('已載入其他分頁的最新資料');}catch(err){message(err.message,true);}}});
-async function start(){await restoreGooglePage(globalThis.google,location);setupDirect();mountGoogleEntry();installStaffSelectors();const loaded=loadLegacy(()=>localStorage,KEY);data=loaded.data;ledger=loaded.ledger;ready=true;render();if(loaded.error)message('舊本機資料無法讀取，已保留原資料；雲端功能仍可使用。請由備份頁保留原始資料後再處理。',true);}
+async function start(){mountReleasePolish();await restoreGooglePage(globalThis.google,location);setupDirect();mountGoogleEntry();installStaffSelectors();const loaded=loadLegacy(()=>localStorage,KEY);data=loaded.data;ledger=loaded.ledger;ready=true;render();if(loaded.error)message('舊本機資料無法讀取，已保留原資料；雲端功能仍可使用。請由備份頁保留原始資料後再處理。',true);}
 start().catch(e=>message(e.message,true));
 

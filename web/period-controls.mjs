@@ -1,4 +1,4 @@
-import {runDirect} from './direct-sync.mjs?v=compact20261030';
+import {runDirect} from './direct-sync.mjs?v=release20261120r1';
 import {lossPeriod} from '../src/loss-period.mjs';
 import {today} from './store.mjs';
 export const periodControls=`<style>

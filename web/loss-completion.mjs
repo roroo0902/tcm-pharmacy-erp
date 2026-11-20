@@ -1,4 +1,4 @@
-import {runDirect} from './direct-sync.mjs?v=compact20261030';
+import {runDirect} from './direct-sync.mjs?v=release20261120r1';
 export const lossCompletionMarkup='<div class="loss-completion"><span id="loss-completion-state" role="status">正在核對本分類的耗損登錄狀態。</span></div>';
 export function mountLossCompletion(root,{context,esc}){
  let disposed=false,ticket=0;

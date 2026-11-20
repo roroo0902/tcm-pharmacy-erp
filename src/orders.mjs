@@ -14,6 +14,7 @@ export function headerDate(value,days){
  if(md){const matches=days.filter(d=>Number(d.slice(5,7))===Number(md[1])&&Number(d.slice(8))===Number(md[2]));return matches.length===1?matches[0]:null;}return null;
 }
 export function numberOrNull(v){const s=String(v??'').trim();return /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(s)&&Number.isFinite(Number(s))?Number(s):null;}
+export const isOperationalOrderQa=(sheet,code)=>sheet==='科達單方'&&code==='QA20261120A';
 export function calculateOrderRows(grid,source,options){
  const days=periodDays(options.start,options.end,options.ignore||[]);
  const target=Number(options.targetDays),shipping=Number(options.shippingDays),holiday=Number(options.holidayDays);
@@ -30,6 +31,7 @@ export function calculateOrderRows(grid,source,options){
   for(const c of dates.values()){const raw=String(r[c]??'').trim(),n=numberOrNull(raw);if(raw===''){blank++;continue;}if(n===null||n<0){invalid++;continue;}total+=n;}
   if(!code)warnings.push('缺編號');if(counts.get(code)>1)warnings.push('同廠牌編號重複');if(missing.length)warnings.push('缺 '+missing.length+' 天日期欄');if(blank&&!options.blankAsZero)warnings.push(blank+' 天未填耗損');if(invalid)warnings.push('耗損有非數字或負數');if(stock===null||stock<0)warnings.push('庫存待核對');
   const complete=!missing.length&&!invalid&&(!blank||options.blankAsZero),average=complete?total/days.length:null;
+  if(isOperationalOrderQa(source.name,code))warnings.push('驗收專用：排除營運訂貨');
   const suggested=complete&&!warnings.length?Math.max(0,Math.ceil((average*(target+shipping+holiday)-stock)-1e-9)):null;
   rows.push({id:source.name+':'+(code||'row'+(i+1))+':'+(i+1),sourceRow:i+1,brand:source.brand,category:source.category,sheet:source.name,code,name,stock,stockDate:String(r[5]??''),usage:Math.round(total*100)/100,days:days.length,observedDays:dates.size,blankDays:blank,average,suggested,status:String(r[10]??''),shortage:String(r[11]??''),warnings});
  }
@@ -37,7 +39,7 @@ export function calculateOrderRows(grid,source,options){
 }
 export function makeOrder(snapshot,quantities,actor,confirmed,id,createdAt){
  if(!snapshot?.rows?.length)throw Error('請先計算耗損');if(!String(actor).trim())throw Error('請填經手人');if(!confirmed)throw Error('請確認已核對庫存、缺漏資料與訂量');
- const lines=[];for(const r of snapshot.rows){const raw=quantities[r.id];if(raw===undefined||raw==='')continue;const n=numberOrNull(raw);if(n===null||n<0||!Number.isInteger(n)||n>100000)throw Error(r.name+' 訂量須為非負整瓶數');if(n>0)lines.push({...r,quantity:n});}
+ const lines=[];for(const r of snapshot.rows){const raw=quantities[r.id];if(raw===undefined||raw==='')continue;const n=numberOrNull(raw);if(n===null||n<0||!Number.isInteger(n)||n>100000)throw Error(r.name+' 訂量須為非負整瓶數');if(n>0){if(isOperationalOrderQa(r.sheet,r.code))throw Error(r.code+' 為驗收專用，請清除營運訂量');lines.push({...r,quantity:n});}}
  if(!lines.length)throw Error('至少填寫一項大於0的訂貨量');
  return {kind:'tcm-purchase-order',version:2,id,createdAt,actor:String(actor).trim(),status:'已確認草稿・未送出',options:snapshot.options,lines};
 }

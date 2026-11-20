@@ -1,7 +1,7 @@
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
 import {chooseOrderFollowup,orderMergeTable} from './order-followup.mjs';
 import {orderPrintControl,bindOrderPrint,orderRpc,openExistingOrderMail} from './order-print.mjs';
-import {lossOrderEntries} from './loss-order-fill.mjs';
+import {lossOrderEntries} from './loss-order-fill.mjs?v=workflowqa20261120';
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {alignOrderWord} from './order-word-axis.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
@@ -11,7 +11,7 @@ import {mergeUnpostedOrders} from './order-merge-draft.mjs';
 import {recoverPendingTransaction,lookupPostedTransaction} from './pending-recovery.mjs';
 import {selectOrderExport,exportOrder} from './order-export.mjs';
 import {periodControls,mountPeriodControls} from './period-controls.mjs?v=googlesync20261114';
-import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs';
+import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs?v=workflowqa20261120';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
 import {createSupplierLoader,loadOrderGridCatalog,supplierSelection} from './supplier-catalog.mjs?v=orderread20261119';

@@ -1,0 +1,101 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import * as orders from '../src/orders.mjs';
+import {lossOrderEntries} from '../web/loss-order-fill.mjs';
+import * as sort from '../web/order-sort.mjs';
+
+const code='QA20261120A', date='2026-01-19';
+const source={name:'科達單方',brand:'科達',category:'單方'};
+const options={start:date,end:date,ignore:[],targetDays:7,shippingDays:0,holidayDays:0,blankAsZero:false};
+function grid(loss='1'){
+ const h=Array(14).fill(''),b=[...h];
+ h[1]='編號';h[3]='藥品名稱';h[13]='1/19';b[6]='未拆封';b[13]='一';
+ return [h,b,...[[code,'ERP驗收專用・非藥品'],['NORMAL','普通品項'],['KEEP','人工保留']].map(([c,n])=>{
+  const r=Array(14).fill('');r[1]=c;r[3]=n;r[6]='0';r[13]=loss;return r;
+ })];
+}
+test('exact QA item is searchable but has no batch suggestion or operational draft; other supplier stays normal',()=>{
+ const snapshot=orders.calculateOrderRows(grid(),source,options),[qa,regular]=snapshot.rows;
+ assert.deepEqual([qa.code,qa.suggested,regular.suggested],[code,null,7]);
+ assert.match(qa.warnings.join(),/驗收專用/);
+ assert.throws(()=>orders.makeOrder(snapshot,{[qa.id]:'1',[regular.id]:'1'},'QA',true,'QA','now'),/請清除營運訂量/);
+ assert.equal(orders.makeOrder(snapshot,{[qa.id]:'0',[regular.id]:'1'},'QA',true,'QA','now').lines.length,1);
+ assert.equal(orders.calculateOrderRows(grid(),{...source,name:'天明單方'},options).rows[0].suggested,7);
+});
+test('automatic loss fill excludes only exact QA supplier and SKU',()=>{
+ const base={...source,drug:'測試',code,periodLoss:4};
+ const normal={...base,code:'NORMAL',periodLoss:2};
+ const crossSupplier={...base,name:'天明單方',brand:'天明',periodLoss:3};
+ assert.deepEqual(lossOrderEntries([base,normal,crossSupplier],'科達','單方').map(x=>x[1]),['2']);
+ assert.deepEqual(lossOrderEntries([base,normal,crossSupplier],'天明','單方').map(x=>x[1]),['3']);
+});
+
+const codeBody=(await readFile(new URL('../web/orders.mjs',import.meta.url),'utf8')).replace(/^import .+\n/gm,'').replace(/^export /gm,'');
+function mountHarness({historical=[]}={}){
+ const nodes=new Map(),store=new Map(),modals=[];
+ const values={'#order-start':date,'#order-end':date,'#order-days':'7','#order-shipping':'0','#order-holiday':'0','#order-actor':'QA'};
+ const $=(selector)=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',value:values[selector]??'',checked:false,listeners:{},addEventListener(ev,cb){this.listeners[ev]=cb;}});return nodes.get(selector);};
+ store.set('tcm-purchase-v2',JSON.stringify({drafts:{},orders:historical}));
+ const host=$('#content'),baseGrid=grid();let reply=async()=>({values:baseGrid});
+ host.querySelector=$;
+ host.querySelectorAll=(selector)=>{
+  if(selector==='[data-send]')return historical.map(o=>{const b=$('send:'+o.id);b.dataset={send:o.id};return b;});
+  if(selector!=='[data-qty]')return [];
+  return [...$('#order-table').innerHTML.matchAll(/data-qty="([^"]+)"[^>]*value="([^"]*)"/g)].map(m=>{
+   const node=$('qty:'+m[1]);node.dataset={qty:m[1]};node.value=m[2];return node;
+  });
+ };
+ const deps={...orders,...sort,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
+  SOURCES:[source],ORDER_ENDPOINT:'fixture-disabled',today:()=>date,SHEET_ID:'other',directEnabled:()=>false,
+  fetch:async()=>({ok:true,headers:{get:()=> 'text/csv'},text:async()=>''}),csvRows:()=>[['','編號']],
+  runDirect:(name)=>{assert.equal(name,'readLossPlanning');return reply();}};
+ const mount=new Function(...Object.keys(deps),codeBody+'\nreturn mountOrders;')(...Object.values(deps));
+ const unmount=mount({esc:String,fmt:String,ask:(html,run)=>modals.push({html,run})});
+ return {$,modals,unmount,reply:f=>{reply=f;}};
+}
+test('real planning handlers block stale apply/confirmation, retain manual entry and re-enable after success',async()=>{
+ const h=mountHarness(),{$}=h;
+ const id=c=>orders.calculateOrderRows(grid(),source,options).rows.find(r=>r.code===c).id;
+ try{
+  assert.equal($('#order-suggest').disabled,true);
+  await $('#order-load').onclick();
+  assert.equal($('#order-suggest').disabled,false);
+  assert.equal($('#order-confirm').disabled,false);
+  assert.match($('#order-table').innerHTML,/驗收專用・不帶入/);
+  const manual=$('qty:'+id('KEEP'));manual.value='3';manual.oninput();
+  $('#order-reviewed').checked=true;
+  let reject;h.reply(()=>new Promise((_resolve,fail)=>{reject=fail;}));
+  const loading=$('#order-load').onclick();
+  assert.equal($('#order-suggest').disabled,true);
+  assert.equal($('#order-confirm').disabled,true);
+  assert.equal($('#order-reviewed').checked,false);
+  $('#order-suggest').onclick();
+  reject(Error('fixture offline'));await loading;
+  assert.match($('#order-state').textContent,/fixture offline/);
+  assert.match($('#order-table').innerHTML,/舊值・僅供參考/);
+  assert.equal($('#order-suggest').disabled,true);
+  assert.equal($('qty:'+id('KEEP')).value,'3');
+  assert.equal($('qty:'+id('NORMAL')).value,'');
+  $('#order-suggest').onclick();
+  assert.equal($('qty:'+id('NORMAL')).value,'');
+  h.reply(async()=>({values:grid('2')}));
+  await $('#order-load').onclick();
+  assert.equal($('#order-suggest').disabled,false);
+  $('#order-suggest').onclick();
+  assert.equal($('qty:'+id('KEEP')).value,'3');
+  assert.equal($('qty:'+id('NORMAL')).value,'14');
+  assert.equal($('qty:'+id(code)).value,'');
+ }finally{h.unmount();}
+});
+
+test('existing local QA draft stays in history but cannot reach Google sync',()=>{
+ const date='2026-01-19', snapshot=orders.calculateOrderRows(grid(),source,options), qa=snapshot.rows[0];
+ const historical=[{kind:'tcm-purchase-order',version:2,id:'PO-old-qa',createdAt:date,actor:'QA',status:'已確認草稿・未送出',options,lines:[{...qa,quantity:1}]}];
+ const h=mountHarness({historical});
+ try{
+  assert.match(h.$('#order-history').innerHTML,/PO-old-qa/);
+  h.$('send:PO-old-qa').onclick();
+  assert.match(h.$('#order-state').textContent,/歷史草稿含驗收專用品項/);
+ }finally{h.unmount();}
+});

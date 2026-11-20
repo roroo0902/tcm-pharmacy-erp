@@ -26,6 +26,9 @@ test('substitutions distinguish loading, empty, filtered, populated and failed r
  }}};
  try{
   const close=mountShortage({esc:s=>String(s??''),ask:()=>{throw Error('unexpected dialog');}});
+  assert.equal((content.innerHTML.match(/data-filter="[^"]+" disabled>/g)||[]).length,4);
+  assert.equal((content.innerHTML.match(/<strong>待讀取<\/strong>/g)||[]).length,4);
+  assert.doesNotMatch(content.innerHTML,/<strong>0<\/strong>項/);
   tabs[1].onclick();
   assert.match(node('#sh-list').innerHTML,/正在讀取/);
   await new Promise(setImmediate);
@@ -41,6 +44,18 @@ test('substitutions distinguish loading, empty, filtered, populated and failed r
   assert.doesNotMatch(node('#sh-list').innerHTML,/尚無替代設定/);
   assert.equal(node('#sh-new').disabled,true);
   assert.equal(node('#sh-reload').disabled,false);
+  tabs[0].onclick();
+  assert.equal((content.innerHTML.match(/<strong>無法取得<\/strong>/g)||[]).length,4);
+  assert.doesNotMatch(content.innerHTML,/<strong>0<\/strong>項/);
+  next=empty;
+  const reload=node('#sh-reload').onclick();
+  assert.equal((content.innerHTML.match(/<strong>待讀取<\/strong>/g)||[]).length,4);
+  await reload;
+  assert.equal((content.innerHTML.match(/<strong>0<\/strong>項/g)||[]).length,4);
+  assert.doesNotMatch(content.innerHTML,/data-filter="[^"]+" disabled>/);
+  next={...empty,records:[{id:'SH-12345678-1234-1234-1234-123456789abc',sheet:'QA',code:'QA-A',name:'QA 品項',revision:0,need:1,threshold:0,priority:'normal',status:'pending',supply:'unknown',eta:'',note:'',actor:'QA'}]};
+  await node('#sh-reload').onclick();
+  assert.match(content.innerHTML,/待確認缺藥<strong>1<\/strong>項/);
   close();
  }finally{Object.assign(globalThis,original);}
 });

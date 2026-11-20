@@ -23,7 +23,7 @@ async function fixture({initial}={}){
  const dom=new Map(),dialogs=[],warnings=[],writes=[],links=[];
  const $=sel=>{
   if(!dom.has(sel))dom.set(sel,{innerHTML:'',textContent:'',dataset:{},value:({'#receipt-date':'2026-01-19','#receipt-actor':'QA'})[sel]||'',
-   addEventListener(){},insertAdjacentHTML(){},querySelector(){return {insertAdjacentHTML(){}}}});
+   events:new Map(),addEventListener(type,fn){this.events.set(type,fn);},insertAdjacentHTML(){},querySelector(){return {insertAdjacentHTML(){}}}});
   return dom.get(sel);
  };
  const qty=$('qty'),price=$('price'),key=receiptKey(row);
@@ -125,4 +125,34 @@ test('normal-preview edit tracks its authorized backfill; failed recovery does n
  await f.recover();await f.dialogs[1].post(null,{fail:true});assert.equal(f.close.hasUnsavedChanges(),true);
  await f.recover();await f.dialogs[2].post(draft(normalId,3));
  assert.equal(f.stock(),7);assert.equal(f.close.hasUnsavedChanges(),false);
+});
+
+test('manual clear and identical re-entry keep the newer receipt when recovering the old one',async()=>{
+ for(const [label,edit] of [
+  ['row clear',f=>{f.qty('');f.qty('1');}],
+  ['clear all',f=>{f.$('#receipt-clear').onclick();f.qty('1');}],
+  ['same-value user input',f=>f.qty('1')],
+  ['price restored',f=>{f.price('4.5');f.price('3');}],
+  ['date restored',f=>{
+   const field=f.$('#receipt-date');field.value='2026-01-20';field.events.get('input')?.();
+   field.value='2026-01-19';field.events.get('change')?.();
+  }],
+  ['actor restored',f=>{
+   const field=f.$('#receipt-actor');field.value='Other QA';field.events.get('input')?.();
+   field.value='QA';field.events.get('change')?.();
+  }]
+ ]){
+  const f=await fixture();f.qty('1');if(label==='price restored')f.price('3');
+  await f.submit();const pending=JSON.parse(f.storage.get(KEY));edit(f);
+  assert.deepEqual(JSON.parse(f.storage.get(KEY)),pending,label);
+  await f.recover();
+  const next=structuredClone(f.dialogs[1].initial);next.lines[0].quantity=2;
+  await f.dialogs[1].post(cloudDraft(next));
+  assert.equal(f.writes.length,1,label);assert.equal(f.stock(),6,label);
+  assert.equal(JSON.parse(f.storage.get(KEY)).lines[0].quantity,2,label);
+  assert.match(f.$('#receipt-summary').textContent,/已填 1 項.*1 瓶/,label);
+  assert.equal(f.$('#receipt-submit').disabled,false,label);
+  assert.equal(f.close.hasUnsavedChanges(),true,label);
+  assert.match(f.$('#receipt-pending-status').textContent,/目前輸入已保留.*避免重複入帳/,label);
+ }
 });

@@ -171,3 +171,27 @@ test('edited receipt cannot commit old preview and needs a second confirmation w
  inputs[0].value='4';await confirm();assert.equal(previews,2);assert.equal(commits,0);assert.equal(updated.lines[0].quantity,4);
  await confirm();assert.equal(commits,1);
 });
+
+test('isolated order and receipt review only requests previews before confirmation',async t=>{
+ const m=await client(t);
+ const item={sheet:'科達單方',code:'QA20261120A',name:'ERP驗收專用・非藥品',quantity:1};
+ const stock=0,requests=[];
+ globalThis.fetch=async(_,init)=>{
+  const [op,draft]=JSON.parse(init.body).parameters;
+  requests.push(op);
+  assert.equal(op,'preview');
+  const order=draft.action==='訂貨';
+  return response({token:'fixture',lines:[{...item,before:stock,after:order?stock:stock+1,...(order?{orderBefore:'',orderAfter:1}:{})}]});
+ };
+ for(const action of ['訂貨','進貨']){
+  let dialog;
+  await m.directReview({kind:'tcm-cloud',version:2,id:'ERP-QA-preview',action,actor:'黃泰祥',lines:[item]},
+   (markup,confirm)=>{dialog={markup,confirm};},
+   ()=>assert.fail('a cancelled preview must not report success'),
+   ()=>{},{returnLabel:'返回修改'});
+  assert.match(dialog.markup,/QA20261120A/);
+  assert.match(dialog.markup,action==='訂貨'?/本周訂貨量：原為空白/:/未提供/);
+  dialog=null;
+ }
+ assert.deepEqual(requests,['preview','preview']);
+});

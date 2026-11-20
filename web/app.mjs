@@ -1,6 +1,6 @@
 import {isProcessing} from './processing-screen.mjs';
 import {pageScope,allowLeave} from './page-safety.mjs';
-import {mountShortage} from './shortage.mjs?v=googlesync20261114';
+import {mountShortage} from './shortage.mjs?v=lossrevision20261120';
 import {mountOrderGrid} from './order-grid.mjs?v=orderread20261119';
 import {installStaffSelectors} from './staff.mjs?v=allstaff20261030';
 import {setupDirect} from './direct-sync.mjs?v=compact20261030';
@@ -9,7 +9,7 @@ import {mountReceiptGrid} from './receive-grid.mjs?v=receiptread20261119';
 import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=googlesync20261114';
 import {mountPhotoReceive} from './photo-receive.mjs?v=receiptweight20261120';
 import {updateQuestTheme} from './quest-theme.mjs?v=ryan20261103';
-import {mountLoss} from './loss.mjs?v=dailylossread20261119b';
+import {mountLoss} from './loss.mjs?v=lossrevision20261120';
 import {mountReceive} from './receive.mjs?v=compact20261030';
 import {mountOrders} from './orders.mjs?v=calendartags20261103';
 import {mountSheets} from './sheets.mjs?v=stockread20261119';

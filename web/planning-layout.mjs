@@ -7,7 +7,7 @@ export const planningLayout = `<style>
 #content #order-table .order-grid th,#content #order-table .order-grid td{text-align:center!important;vertical-align:middle!important;padding:16px 10px;line-height:1.5;overflow-wrap:anywhere}
 #content #order-table .order-grid th{height:88px;font-size:14px;font-weight:500;border-right:1px solid #ffffff25;border-bottom:2px solid #c9a952}
 #content #order-table .order-grid th:first-child{width:16%}
-#content #order-table .order-grid th:nth-child(3){width:11%;min-width:0}
+#content #order-table .order-grid th:nth-child(5){width:11%;min-width:0}
 #content #order-table .order-grid th:nth-child(6),#content #order-table .order-grid th:nth-child(8){width:11%}
 #content #order-table .order-sort{display:flex;align-items:center;justify-content:center;gap:4px;min-height:28px;line-height:1.5;width:100%;font-size:14px;white-space:nowrap}
 #content #order-table .planning-subtitle{display:block;line-height:1.5;margin-top:4px;font-size:13px}
@@ -40,11 +40,11 @@ export const planningLayout = `<style>
  #content #order-table td:first-child b{font-size:18px;line-height:1.5}
  #content #order-table td:first-child small{font-size:12px;color:#637985}
  #content #order-table .order-grid td:first-child::before{left:0;top:8px;transform:none;width:32px;height:38px}
- #content #order-table .order-grid td:nth-child(3){grid-column:1/-1;grid-row:2;flex-direction:row;align-items:center;justify-content:space-between;background:#eef3ed;border-radius:6px;margin:12px 0 4px;padding:10px}
- #content #order-table td:nth-child(3)::before{font-size:14px;color:#203d56}
- #content #order-table .order-grid td input[data-qty]{width:94px;min-width:0;max-width:94px;margin:0;text-align:center;font-size:16px;height:44px}
- #content #order-table td:nth-child(4){grid-row:3;grid-column:2}
- #content #order-table td:nth-child(7){grid-row:3;grid-column:1}
+ #content #order-table .order-grid.planning-columns td:nth-child(3),
+ #content #order-table .order-grid.planning-columns td:nth-child(4),
+ #content #order-table .order-grid.planning-columns td:nth-child(7){grid-area:auto}
+ #content #order-table .order-grid.planning-columns td:nth-child(3){flex-direction:column;align-items:flex-start;justify-content:center;background:transparent;margin:0;padding:10px 0}
+ #content #order-table .order-grid.planning-columns td input[data-qty]{width:94px;min-width:0;max-width:100%;margin:0;text-align:center;font-size:16px;height:44px}
  #content #order-table td:last-child{grid-column:1/-1;flex-direction:row;flex-wrap:wrap;justify-content:space-between;align-items:center;border-top:1px solid #e3dfd0;padding-top:12px;margin-top:4px;font-size:13px}
  #content #order-table td:last-child .pill{white-space:normal;max-width:100%;text-align:left}
  #content #order-table td .muted{font-size:12px}

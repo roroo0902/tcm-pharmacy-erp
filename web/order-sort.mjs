@@ -1,5 +1,9 @@
 const collator=new Intl.Collator('zh-TW',{numeric:true,sensitivity:'base'});
-export const ORDER_COLUMNS=[['code','藥品／編號'],['legacy','原表訂量<br>僅對照'],['quantity','確認訂貨量'],['suggested','新建議量'],['usage','期間耗損<br>已填合計'],['average','每日平均耗損<br>瓶／日'],['stock','未拆封瓶數'],['stockDate','原表更新欄'],['shortage','缺藥／缺藥率']];
+export const ORDER_COLUMNS=[
+ ['code','藥品／編號'],['stock','未拆封庫存'],['usage','期間耗損<br>已填合計'],
+ ['suggested','建議訂貨量'],['quantity','本次訂貨量'],['average','每日平均耗損<br>瓶／日'],
+ ['stockDate','原表更新欄'],['shortage','缺藥／缺藥率']
+];
 function numeric(v){if(v===null||v===undefined)return null;const s=String(v).trim().replaceAll(',','');return /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(s)&&Number.isFinite(Number(s))?Number(s):null;}
 export function orderDateKey(v,referenceDate){
  const m=String(v??'').trim().match(/^(?:(\d{4})[\/.-])?(\d{1,2})[\/.-](\d{1,2})$/);if(!m)return null;

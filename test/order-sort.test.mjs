@@ -15,7 +15,7 @@ test('all numeric columns sort by number with blanks last in both directions',()
  assert.deepEqual(sortOrderRows(rows,key,'asc',opts).map(r=>r.id),['b','a','c']);
  assert.deepEqual(sortOrderRows(rows,key,'desc',opts).map(r=>r.id),['a','b','c']);
  }
- assert.equal(ORDER_COLUMNS.length,9);
+ assert.deepEqual(ORDER_COLUMNS.map(([key])=>key),['code','stock','usage','suggested','quantity','average','stockDate','shortage']);
 });
 test('dates respect full years and explicit reference year, reject invalid dates',()=>{
  assert.ok(orderDateKey('2025-12-31')<orderDateKey('2026-01-01'));

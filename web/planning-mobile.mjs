@@ -2,7 +2,7 @@
 export function installPlanningMobile(root){
  if(root.dataset.planningMobileInstalled)return;
  root.dataset.planningMobileInstalled='true';
- const names={code:'藥品編號',name:'藥品名稱',legacy:'原表訂量',quantity:'確認訂貨量',suggested:'新建議量',usage:'期間耗損',average:'每日平均耗損',stock:'未拆封瓶數',stockDate:'原表更新日期',shortage:'缺藥／缺藥率'};
+ const names={code:'藥品編號',name:'藥品名稱',stock:'未拆封庫存',usage:'期間耗損',suggested:'建議訂貨量',quantity:'本次訂貨量',average:'每日平均耗損',stockDate:'原表更新欄',shortage:'缺藥／缺藥率'};
  function update(){
   const table=root.querySelector('#order-table');if(!table)return;
   let bar=root.querySelector('.planning-mobile-sort');

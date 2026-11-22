@@ -7,7 +7,7 @@ const source=fs.readFileSync(new URL('../web/photo-receive.mjs',import.meta.url)
 async function fixture(){
  let detached=false,resolveAuth,rejectAuth,calls=0;
  const elements=new Map();
- const root={querySelector(s){if(detached)return null;if(!elements.has(s))elements.set(s,{innerHTML:'',value:'',files:[],disabled:false,querySelector:()=>null});return elements.get(s)},querySelectorAll(){return []}};
+ const root={insertAdjacentHTML(){},querySelector(s){if(detached)return null;if(!elements.has(s))elements.set(s,{innerHTML:'',value:'',files:[],showModal(){this.open=true},close(){this.open=false},disabled:false,querySelector:()=>null});return elements.get(s)},querySelectorAll(){return []}};
  const context={document:{querySelector:()=>root},window:{addEventListener(){},removeEventListener(){}},localStorage:{getItem:()=>null},loadReceiptCatalog:async()=>({sources:[{brand:'QA'},{brand:'QB'},{brand:'QA'}],rows:[{brand:'QA',id:'1'}]}),quantitySteppers(){},directEnabled:()=>true,authorize:()=>new Promise((resolve,reject)=>{resolveAuth=resolve;rejectAuth=reject}),runDirect(){calls++;throw Error('unexpected external call')},protectDraft,Date,console};
  vm.createContext(context);vm.runInContext(source+'\nthis.mount=mountPhotoReceive;',context);
  const cleanup=context.mount({esc:String,fmt:String,ask(){}});await new Promise(r=>setImmediate(r));

@@ -71,17 +71,51 @@ export function mountPhotoReceive({esc,fmt,ask}){
   '<div class="grid ai-entry-grid"><div class="full ai-suppliers"><span id="ai-source-label">廠商</span><div id="ai-source" class="order-tabs" role="group" aria-labelledby="ai-source-label"></div></div><label>進貨日期<input type="date" id="ai-date" max="'+todayTaipei()+'" value="'+todayTaipei()+'"></label><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">單據或備註（選填）<select id="ai-note"><option value="">不填寫備註</option><option>依送貨單進貨</option><option>補填入送到貨單</option><option>無附進貨單直接入庫</option><option>換貨補回</option><option>其他</option></select></label><label class="full" id="ai-note-other-field" hidden>其他說明（選填）<input type="text" id="ai-note-other" maxlength="490" placeholder="請填寫補充內容"></label><label class="full">拍照或選擇照片<input id="ai-image" type="file" accept="image/*" capture="environment"><small id="ai-image-hint" role="status">也可選取此欄位後貼上圖片。</small></label></div>'+
   '<div class="actions"><button type="button" id="ai-scan">AI 解析照片</button><button type="button" class="secondary" id="ai-reload">更新現有藥品</button></div><p id="ai-status" role="status"></p>'+
   '<div id="ai-result"></div><div class="actions"><button type="button" id="ai-add" disabled>核對後加入進貨清單</button></div><h3>本次進貨清單（尚未入庫）</h3><div id="ai-basket"></div><div class="actions"><button type="button" id="ai-preview" disabled>預覽庫存變化並確認同步</button></div><section id="ai-pending"></section></section>';
+ root.insertAdjacentHTML('beforeend', `
+ <style>
+ #ai-catalog-dialog{box-sizing:border-box;width:min(640px,94vw);max-height:90dvh;overflow:auto;padding:22px;color:#182f49;background:#fff7e5;border:5px double #9d772f;border-radius:4px;box-shadow:0 0 0 2px #193451,0 12px 40px #16263b55;text-align:center}
+ #ai-catalog-dialog::backdrop{background:#13263b66;backdrop-filter:blur(2px)}
+ .ai-dialog-content{display:grid;grid-template-columns:clamp(65px,19vw,135px) 1fr;align-items:center;gap:14px}
+ .ai-dialog-content img{width:100%;image-rendering:pixelated}
+ .ai-dialog-content h3{font-size:clamp(17px,3vw,24px);margin:0}
+ .ai-dialog-footer{border-top:1px solid #bb913e;padding-top:10px;line-height:1.65;font-size:14px}
+ .ai-dialog-dots{display:flex;gap:10px;justify-content:center;margin:16px}
+ .ai-dialog-dots i{width:8px;height:8px;background:#bb8828;animation:ai-catalog-pulse 1s steps(2,end) infinite}
+ .ai-dialog-dots i:nth-child(2){animation-delay:.2s}.ai-dialog-dots i:nth-child(3){animation-delay:.4s}
+ @keyframes ai-catalog-pulse{50%{opacity:.3}}@media(prefers-reduced-motion:reduce){.ai-dialog-dots i{animation:none}}
+ #ai-catalog-dialog [hidden]{display:none}
+ </style>
+ <dialog id="ai-catalog-dialog" aria-labelledby="ai-catalog-title"><div class="ai-dialog-content">
+ <img src="./web/assets/photo-wizard.png" alt=""><div>
+ <h3 id="ai-catalog-title">正在讀取已啟用廠商與藥品名冊</h3>
+ <div class="ai-dialog-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+ <div class="ai-dialog-footer">讀取完成後自動關閉，已填內容會保留。<br>僅讀取資料，不會入帳或變更庫存。</div>
+ <div id="ai-catalog-error" hidden><p role="alert"></p><button type="button">重新讀取</button> <button class="secondary" type="button">關閉</button></div>
+ </div></div></dialog>`);
  const $=sel=>root.querySelector(sel);
  $('#ai-note').onchange=()=>{$('#ai-note-other-field').hidden=$('#ai-note').value!=='其他';};
  const noteValue=()=>$('#ai-note').value==='其他'?['其他',$('#ai-note-other').value.trim()].filter(Boolean).join('：'):$('#ai-note').value.trim();
  const status=text=>{if(alive)$('#ai-status').textContent=text;};
  const lockBusy=busy=>{loading=busy;if(!alive)return;$('#ai-scan').disabled=busy;$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!recognized.some(x=>!x.removed);};
  function currentRows(){return rows.filter(r=>r.brand===selected);}
+ const catalogDialog=$('#ai-catalog-dialog');
+ const catalogTitle=$('#ai-catalog-title');
+ const catalogError=$('#ai-catalog-error');
+ function showCatalogState(message=null){
+  catalogTitle.textContent=message===null?'正在讀取已啟用廠商與藥品名冊':'名冊讀取失敗';
+  catalogError.hidden=message===null;
+  $('.ai-dialog-dots').hidden=message!==null;
+  $('.ai-dialog-footer').hidden=message!==null;
+  if(message!==null)$('#ai-catalog-error p').textContent=message;
+  if(!catalogDialog.open)catalogDialog.showModal();
+ }
+ $('#ai-catalog-error button').onclick=()=>load();
+ $('#ai-catalog-error .secondary').onclick=()=>catalogDialog.close();
  async function load(){
   if(!alive)return;
   const seq=++run;catalogReady=false;rows=[];
   recognized.forEach(line=>{line.reviewed=false;});drawResult();
-  status('正在讀取已啟用廠商與藥品名冊…');
+  showCatalogState();
   try{
    const catalog=await loadReceiptCatalog();
    if(seq!==run||!alive)return;
@@ -90,9 +124,9 @@ export function mountPhotoReceive({esc,fmt,ask}){
    selected=brands.includes(selected)?selected:brands[0];
    if(previous&&previous!==selected)recognized=[];
    $('#ai-source').innerHTML=brands.map(brand=>'<button type="button" class="secondary '+(brand===selected?'selected':'')+'" data-ai-brand="'+esc(brand)+'" aria-pressed="'+(brand===selected)+'">'+esc(brand)+'</button>').join('');
-   rows=catalog.rows;catalogReady=true;drawResult();drawBasket();
+   rows=catalog.rows;catalogReady=true;drawResult();drawBasket();catalogDialog.close();
    status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');
-  }catch(error){if(seq===run&&alive){rows=[];catalogReady=false;drawResult();status(error.message);}}
+  }catch(error){if(seq===run&&alive){rows=[];catalogReady=false;drawResult();status(error.message);showCatalogState(error.message);}}
  }
 
  const matchLine=(line)=>matchRecognized(line,currentRows());
@@ -203,5 +237,5 @@ export function mountPhotoReceive({esc,fmt,ask}){
  };
  window.addEventListener('erp-synced',load);
  drawResult();drawBasket();showPending();load();
- return protectDraft(()=>{alive=false;run++;window.removeEventListener('erp-synced',load);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
+ return protectDraft(()=>{alive=false;run++;if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',load);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
 }

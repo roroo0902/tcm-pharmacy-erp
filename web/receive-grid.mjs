@@ -248,6 +248,8 @@ export function mountReceiptGrid({esc,fmt,ask}){
   return true;
  }
  function send(d,plan){
+  const priorRecord=localStorage.getItem(KEY),separateRecord=localStorage.getItem(SEPARATE);
+  const currentOnly=!plan||(plan.input&&!plan.merge);
   if(directEnabled()){
    const key=plan?.key||KEY;
    let submitted;
@@ -265,21 +267,26 @@ export function mountReceiptGrid({esc,fmt,ask}){
     submitted=JSON.stringify({...reviewed,...(plan.input?{receiptInput:plan.input}:{}),...(plan.merge?{receiptMerge:true}:{})});
     localStorage.setItem(key,submitted);
     showPending();
+   }:reviewed=>{
+    if(!alive||localStorage.getItem(KEY)!==priorRecord||localStorage.getItem(SEPARATE)!==separateRecord)throw Error('待核對進貨已變動，請重新預覽。');
+    const owned={id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(reviewed)};
+    localStorage.setItem(KEY,owned.pending);
+    ownedNormalReceipt=owned;
+    showPending();
+   },onDiscard:currentOnly?()=>{
+    ask('<h3>確定放棄本次進貨草稿？</h3><p>放棄後會清除這次填寫的實收內容。</p>',()=>{
+     if(!alive)return;
+     clearCurrent();rows=rows.filter(r=>!r.pendingCreate);draw();status('已放棄本次進貨草稿。');
+    },'確認放棄','保留並返回修改');
    }:undefined,onDraftChange:next=>{
-    if(plan){Object.assign(d,next);return;}
-    const owned=ownedNormalReceipt,current=savedTransaction(KEY);
-    let track=false;
-    try{track=alive&&matchesOwnedNormal(d.id,owned)&&!current?.verified&&current?.id===d.id&&JSON.stringify(cloudDraft(current))===owned.pending;}catch{}
-    if(owned?.id===d.id)ownedNormalReceipt=null;
+    if(!currentOnly){Object.assign(d,next);return;}
     for(const l of next.lines.filter(l=>l.create)){if(!rows.some(r=>r.name===l.sheet&&r.code===l.code)){const s=sources.find(s=>s.name===l.sheet);if(s)rows.push({...s,code:l.code,drug:l.name,bottles:0,pendingCreate:true,unitPriceCents:l.unitPriceCents});}}
     Object.assign(d,next);
-    if(current?.id===d.id&&!current.verified)localStorage.setItem(KEY,JSON.stringify(d));
     for(const l of d.lines){
      const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});
      quantities.set(key,String(l.quantity));
      prices.set(key,l.unitPriceCents===undefined?'':String(l.unitPriceCents/100));
     }
-    if(track)try{ownedNormalReceipt={id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(cloudDraft(d))};}catch{}
     if(alive){draw();showPending();}
    }});
   }
@@ -365,10 +372,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
    }
    const d=currentDraft();
    pendingStatus('');
-   const owned={id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(d)};
-   localStorage.setItem(KEY,owned.pending);
-   ownedNormalReceipt=owned;
-   showPending();
+   if(!directEnabled()){localStorage.setItem(KEY,JSON.stringify(d));showPending();}
    send(d);
   }catch(e){status(e.message);warnPreview(e.message);}
  };

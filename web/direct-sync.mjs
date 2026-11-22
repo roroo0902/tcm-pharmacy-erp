@@ -166,6 +166,12 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
   if(reviewed.action==='訂貨'&&options.orderRows)bindOrderAdd(document.querySelector('#confirm-detail'),options.orderRows,()=>reviewed.lines,async line=>{
    const next={...reviewed,lines:[...reviewed.lines,line]};options.onOrderAdd(line);options.onOrderDraft(next);document.querySelector('#confirm').close();await directReview(next,ask,onSuccess,status,options);
   });
+  if(options.onDiscard){
+   const discard=document.createElement('button');
+   discard.type='button';discard.className='secondary';discard.id='receipt-review-discard';discard.textContent='取消這次訂單';
+   document.querySelector('#commit').before(discard);
+   discard.onclick=()=>{document.querySelector('#confirm').close();options.onDiscard();};
+  }
   if(editable){
    readEdited=receiptEditor(reviewed,preview,options.onDraftChange,options.receiptLinkBasis);
    if(options.receiptRows)bindReceiptAdd(document.querySelector('#confirm-detail'),options.receiptRows(),readEdited,async next=>{

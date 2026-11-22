@@ -115,3 +115,18 @@ test('order planning detects unsaved edits including zero and clears them only o
   assert.equal(h.unmount.hasUnsavedChanges(),true);
  }finally{h.unmount();}
 });
+
+test('filled filter intersects search and preserves quantities when switched off',async()=>{
+ const h=mountHarness(),{$}=h;
+ try{
+  await $('#order-load').onclick();
+  for(const row of orders.calculateOrderRows(grid(),source,options).rows.filter(r=>r.code!==code)){
+   const input=$('qty:'+row.id);input.value=row.code==='KEEP'?'3':'0';input.oninput();
+  }
+  const filter=$('#order-only-filled');filter.checked=true;filter.onchange();
+  const table=$('#order-table');
+  assert.match(table.innerHTML,/KEEP/);assert.doesNotMatch(table.innerHTML,/NORMAL|QA20261120A/);
+  $('#order-search').value='NORMAL';$('#order-search').oninput();assert.doesNotMatch(table.innerHTML,/data-qty=/);
+  filter.checked=false;filter.onchange();assert.match(table.innerHTML,/NORMAL/);assert.match(table.innerHTML,/value="0"/);
+ }finally{h.unmount();}
+});

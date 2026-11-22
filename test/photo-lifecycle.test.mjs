@@ -35,3 +35,15 @@ test('pasted image reaches authorization gate without a file selection, then unm
  const pending=f.elements.get('#ai-scan').onclick();assert.equal(f.elements.get('#ai-status').textContent,'正在壓縮照片、辨識藥名與數量…');
  f.unmount();f.resolveAuth();await assert.doesNotReject(pending);assert.equal(f.calls(),0);
 });
+
+
+test('optional note dropdown reveals other text and preserves edits when switching',async()=>{
+ const f=await fixture(),note=f.elements.get('#ai-note');
+ note.value='其他';note.onchange();
+ assert.equal(f.elements.get('#ai-note-other-field').hidden,false);
+ const other=f.elements.get('#ai-note-other')||{value:''};f.elements.set('#ai-note-other',other);other.value='補充內容';
+ note.value='換貨補回';note.onchange();assert.equal(f.elements.get('#ai-note-other-field').hidden,true);
+ assert.equal(other.value,'補充內容');
+ note.value='';note.onchange();assert.equal(f.cleanup.hasUnsavedChanges(),true);
+ other.value='';assert.equal(f.cleanup.hasUnsavedChanges(),false);assert.equal(f.calls(),0);
+});

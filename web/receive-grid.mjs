@@ -1,3 +1,4 @@
+import {receiptEntryDialog} from './receipt-entry-dialog.mjs';
 import {beginProcessing,isProcessing,showReceiptReviewWarning} from './processing-screen.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
 import {supplyLayout} from './supply-layout.mjs';
@@ -126,6 +127,30 @@ export function mountReceiptGrid({esc,fmt,ask}){
   if(!pending)return;
   if($('#receipt-hide'))$('#receipt-hide').onclick=()=>{localStorage.setItem(HIDDEN_RESULT,pending.id);showPending();};
   if($('#receipt-check'))$('#receipt-check').onclick=()=>checkPending();
+ }
+ let closeEntry=null;
+ function openEntry(){
+  showPending();if(!alive||pending?.action!=='進貨'||pending.verified)return;
+  closeEntry?.();closeEntry=receiptEntryDialog(pending,{esc,onCheck:()=>checkPending(true),onCancel:cancelPending});
+ }
+ async function cancelPending(){
+  if(checkingPending||isProcessing())return;
+  const key=pendingKey,saved=localStorage.getItem(key);
+  ask('<h3>取消該筆進貨？</h3><p>僅取消本機待處理草稿，不會取消廠商訂單。確認前請確定其他視窗或裝置沒有正在送出這筆進貨。</p><p>系統將重新查詢；已入帳或查詢失敗時不會取消。</p>',async()=>{
+   checkingPending=true;processButton.disabled=true;
+   try{
+    const current=JSON.parse(saved||'null'),d=cloudDraft(current);
+    const event=await lookupPostedTransaction(d);
+    if(!alive)return;
+    if(localStorage.getItem(key)!==saved)throw Error('待處理交易已變動，請重新核對。');
+    if(event)throw Error('這筆進貨已入帳，請到交易紀錄執行沖銷。');
+    // Retain the original ID and full draft for audit/recovery; never delete server records.
+    localStorage.setItem('tcm-receipt-cancelled-'+d.id,JSON.stringify({...current,cancelledAt:new Date().toISOString()}));
+    localStorage.removeItem(key);showPending();summary();
+    pendingStatus('已取消本機進貨草稿，原交易資料已保留；未修改庫存。');
+   }catch(e){pendingStatus(e.message);warnPreview(e.message);}
+   finally{checkingPending=false;if(alive)processButton.disabled=false;}
+  },'確認取消本機草稿','返回');
  }
  processButton.onclick=()=>checkPending(true);
  async function checkPending(recovering=false){
@@ -347,5 +372,5 @@ export function mountReceiptGrid({esc,fmt,ask}){
    send(d);
   }catch(e){status(e.message);warnPreview(e.message);}
  };
- const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);load(false,{showDialog:true});return protectDraft(()=>{alive=false;closeCatalogScreen();stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0);
+ const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);load(false,{showDialog:true}).then(()=>{if(alive)openEntry();});return protectDraft(()=>{alive=false;closeEntry?.();closeCatalogScreen();stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0);
 }

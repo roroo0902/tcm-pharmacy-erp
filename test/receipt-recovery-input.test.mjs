@@ -47,7 +47,7 @@ async function fixture({initial}={}){
  };
  const deps={cloudDraft,localStorage,directLog,directReview,csvRows:JSON.parse};
  const recover=new Function(...Object.keys(deps),sourceOf('pending-recovery.mjs')+'\nreturn {lookupPostedTransaction,recoverPendingTransaction}')( ...Object.values(deps));
- const mountDeps={...deps,...recover,receiptKey,receiptLines,sortReceiptRows,receiptPrice,priceCents,money,pricingTotal,
+ const mountDeps={receiptEntryDialog:()=>()=>{},...deps,...recover,receiptKey,receiptLines,sortReceiptRows,receiptPrice,priceCents,money,pricingTotal,
   document:{querySelector:()=>host},window:{addEventListener(){},removeEventListener(){}},crypto:{randomUUID:()=>normalId.slice(4)},
   createSupplierLoader:()=>async()=>({sources:[source],rows:[{...row,bottles:stock}]}),loadReceiptCatalog:()=>{},watchSupplierCatalog:()=>()=>{},
   supplierSelection:()=>({source,brand:source.brand,category:source.category,brands:[source.brand],categories:[source.category]}),

@@ -59,7 +59,7 @@ export function mountSheets({esc,fmt}){
  $('#cloud-sources').innerHTML=sources.map(s=>`<p><a href="${sheetUrl(s)}" target="_blank" rel="noopener">${s.name} ↗</a>　<span class="muted">${snapshots.has(s.gid)?snapshots.get(s.gid).rows.length+' 筆 · '+time(snapshots.get(s.gid).time):'尚未讀取'}</span>${errors.has(s.gid)?` <span class="pill out">${esc(errors.get(s.gid))}</span>`:''}</p>`).join('');
  }
  let loadingScreen;
- async function sync({showDialog=false}={}){if(busy||!alive)return;busy=true;$('#cloud-export').disabled=true;$('#cloud-export-status').textContent='正在同步，完成後即可匯出。';$('#cloud-refresh').disabled=true;$('#cloud-status').textContent='正在向 Google 讀取最新內容…';try{if(showDialog&&!isProcessing())loadingScreen=beginProcessing({reading:true,compact:true,readOnly:true,catalogMessage:'正在向 Google 讀取最新庫存與品項…'});const snapshot=directEnabled()?await runDirect('readOrderCatalog',{receipt:true}):null;
+ async function sync({showDialog=false}={}){if(busy||!alive)return;busy=true;$('#cloud-export').disabled=true;$('#cloud-export-status').textContent='正在同步，完成後即可匯出。';$('#cloud-refresh').disabled=true;$('#cloud-status').textContent='正在向 Google 讀取最新內容…';try{if(showDialog&&!isProcessing())loadingScreen=beginProcessing({reading:true,compact:true,readOnly:true,inventorySync:true,catalogMessage:'正在從 Google Sheets 讀取最新庫存。'});const snapshot=directEnabled()?await runDirect('readOrderCatalog',{receipt:true}):null;
  if(snapshot){parseSupplierCatalog(snapshot);sources=snapshot.sources;}else sources=SOURCES;
  for(const gid of snapshots.keys())if(!sources.some(s=>s.gid===gid))snapshots.delete(gid);
  errors.clear();

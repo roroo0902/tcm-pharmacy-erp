@@ -73,6 +73,8 @@ const css=`
 #erp-processing[data-receipt-warning=true] .save-frame > p{font-weight:700;overflow-wrap:anywhere}
 #erp-processing[data-receipt-warning=true] .save-warning{overflow-wrap:anywhere}
 #erp-processing[data-receipt-warning=true] button{background:#203b55;color:#fff4d7;border:1px solid #d6b568}
+#erp-processing[data-inventory-sync=true]{width:min(532px,calc(100vw - 20px));overflow:auto}
+#erp-processing[data-inventory-sync=true] .save-frame{box-sizing:border-box;aspect-ratio:520/250;align-content:center}
 @media(max-width:420px){#erp-processing[data-compact=true] .save-frame{grid-template-columns:64px minmax(0,1fr);gap:0 12px;padding:24px 18px}#erp-processing[data-compact=true] .save-frame > .save-companion{width:64px;height:76px}#erp-processing[data-compact=true] h2{font-size:20px;gap:6px}#erp-processing[data-compact=true] h2::before{width:24px;height:32px}}
 @keyframes save-bob{50%{transform:translateY(-5px)}}@keyframes save-pulse{50%{opacity:.25}}
 @media(max-width:600px){#erp-processing .save-frame{padding:22px 16px 20px}#erp-processing .save-banner{font-size:19px;padding:7px 20px}#erp-processing .save-warning{font-size:16px;padding:12px 10px;margin:18px 0}#erp-processing .save-steps[hidden]{display:none}
@@ -82,7 +84,7 @@ const css=`
 export function showReceiptReviewWarning(message,onReview){
  return beginProcessing({reading:true,compact:true,notice:true,catalogMessage:message,receiptWarning:true,onReview});
 }
-export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false,notice=false,receiptWarning=false,onReview}={}){
+export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false,inventorySync=false,notice=false,receiptWarning=false,onReview}={}){
  if(active)throw Error('上一筆仍在入帳，請稍候');
  // Non-DOM callers can exercise the transaction logic independently.
  if(!globalThis.document?.createElement)return {readback(){},close(){}};
@@ -109,6 +111,14 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
    dialog.querySelector('#save-warning').textContent=readOnly?'僅讀取資料，不會變更庫存。':'已填數量會保留，不會扣除庫存。';
    dialog.querySelector('.save-detail').textContent='讀取完成後，視窗會自動關閉。';
   }
+ }
+ if(inventorySync){
+  dialog.dataset.inventorySync='true';
+  dialog.querySelector('#save-heading').textContent='同步化中';
+  dialog.querySelector('.save-detail').textContent='同步完成後，視窗會自動關閉。';
+  dialog.querySelector('#save-warning').hidden=true;
+  dialog.setAttribute('aria-describedby','inventory-sync-description');
+  dialog.querySelector('.save-frame > p').id='inventory-sync-description';
  }
  if(notice){
   dialog.dataset.notice='true';

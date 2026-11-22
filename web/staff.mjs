@@ -22,11 +22,11 @@ export function installStaffSelectors(){
    let sequence=0;
    async function update(){
     const current=++sequence,previous=el.value;el.disabled=true;el.value='';refresh.disabled=true;
-    status.textContent='正在讀取員工名冊…';
+    controls.hidden=false;status.textContent='正在讀取員工名冊…';
     try{
      const names=await load();if(!el.isConnected||current!==sequence)return;
      el.replaceChildren(new Option('請選擇經手人',''),...names.map(n=>new Option(n,n)));
-     el.value=names.includes(previous)?previous:'';el.disabled=false;status.textContent='來源：員工名冊 B 欄';
+     el.value=names.includes(previous)?previous:'';el.disabled=false;status.textContent='來源：員工名冊 B 欄';controls.hidden=el.hasAttribute('data-staff-compact');
     }catch(e){if(el.isConnected&&current===sequence){el.replaceChildren(new Option('員工名冊尚未載入',''));status.textContent=e.message.includes('不支援的操作')?'線上同步版本尚未更新，請重新整理後再試。':e.message;}}
     finally{if(el.isConnected&&current===sequence)refresh.disabled=false;}
    }

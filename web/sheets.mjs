@@ -18,19 +18,35 @@ export function mountSheets({esc,fmt}){
 #cloud-cards button.card[aria-pressed="true"]{border-color:#315e81;box-shadow:inset 0 0 0 2px #315e81,0 3px 0 #d8dccf}
 #cloud-cards button.card:focus-visible{outline:3px solid #315e81;outline-offset:4px}
 #cloud-cards .card-hint{display:block;font-size:12px;margin-top:8px;color:#405c73}
+
+#cloud-brands .cloud-all-wrap,#cloud-categories .cloud-all-wrap{display:inline-flex;padding-right:14px;margin-right:6px;border-right:1px solid #b49a60}
+#cloud-brands .cloud-all,#cloud-categories .cloud-all{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:108px;min-height:44px;background:#f3e4b7;color:#183b56;border:1px solid #b39448;box-shadow:0 3px 0 #b6a16b;font-weight:600}
+#cloud-brands .cloud-all::before,#cloud-categories .cloud-all::before{content:none}
+#cloud-brands .cloud-all[aria-pressed="true"],#cloud-categories .cloud-all[aria-pressed="true"]{background:linear-gradient(135deg,#ead18a,#d5b45d);border-color:#96732d;box-shadow:inset 0 0 0 2px #f4e4ac,0 3px 0 #88703c;color:#173b56}
+#cloud-brands .cloud-all:hover,#cloud-categories .cloud-all:hover{background:#e8cc80}
+#cloud-brands .cloud-all:focus-visible,#cloud-categories .cloud-all:focus-visible{outline:3px solid #315e81;outline-offset:4px}
+.cloud-all-icon{display:inline-grid;grid-template-columns:repeat(2,6px);gap:2px;flex:none}.cloud-all-icon i{width:6px;height:6px;background:currentColor;border-radius:1px}
+.cloud-all-check{width:14px;height:14px;visibility:hidden;flex:none}.cloud-all[aria-pressed="true"] .cloud-all-check{visibility:visible}
 .cloud-selector-label{display:block;margin-top:14px;margin-bottom:6px}
 #cloud-details{scroll-margin-top:16px}#cloud-detail-title:focus{outline:2px solid #315e81;outline-offset:4px}
 </style><section class="panel"><div class="panelhead"><div><h2>Google Sheets 藥庫總表</h2><p class="muted">依廠牌與單複方分類 · 僅查詢，不寫入試算表</p></div><button id="cloud-refresh">立即同步 ↻</button></div><div id="cloud-status" role="status" aria-live="polite">正在讀取 Google Sheets…</div><p class="muted">開啟此頁時讀取，停留頁面每 ${directEnabled()?directPollMs()/1000:60} 秒重新讀取。原表更新欄僅有月／日者照原樣顯示；同步時間不代表實際盤點時間。單價取自原表 E 欄；庫存以原表 G 欄「未拆封」瓶數為準。</p><div class="toolbar cloud-filters"><input id="cloud-search" aria-label="搜尋雲端藥品" placeholder="搜尋藥名或編號"></div><span class="cloud-selector-label">廠商</span><div id="cloud-brands" class="order-tabs" role="group" aria-label="廠商"></div><span class="cloud-selector-label">類別</span><div id="cloud-categories" class="order-tabs" role="group" aria-label="類別"></div></section><div class="cards" id="cloud-cards"></div><section class="panel" id="cloud-details"><div class="panelhead"><h2 id="cloud-detail-title" tabindex="-1"></h2><button id="cloud-export" class="secondary" disabled>匯出目前篩選結果</button></div><p id="cloud-export-status" role="status"></p><p class="muted">點選上方統計卡可切換明細，保留搜尋、廠牌與單複方條件。點選欄位標題可切換升冪／降冪；完整日期依年月日排序；只有月／日者以今年（${sortYear} 年）排序。空白或無效值固定置底。</p><div id="cloud-table"></div><div class="actions"><button class="secondary" id="cloud-prev">上一頁</button><span class="muted" id="cloud-page"></span><button class="secondary" id="cloud-next">下一頁</button></div></section><section class="panel"><h2>來源與同步狀態</h2><div id="cloud-sources"></div><p class="muted">查詢內容直接從 Google 讀取，不寫入公開 GitHub 程式庫或單機帳本。${directEnabled()?'請先登入獲准使用藥庫的 Google 帳號。':'若原表停止公開分享，此查詢會停止，需另設登入授權。'}</p></section>`;
  const $=s=>content.querySelector(s),time=t=>new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false});
  function heading(key,label,second){return `<th aria-sort="${(sortKey===key||sortKey===second?.[0])?(sortDirection==='asc'?'ascending':'descending'):'none'}"><button class="sort-heading" data-sort="${key}" aria-label="依${label}排序">${label} ${sortKey===key?(sortDirection==='asc'?'↑':'↓'):'↕'}</button>${second?'<br><button class="sort-heading" data-sort="'+second[0]+'" aria-label="依'+second[1]+'排序">'+second[1]+' '+(sortKey===second[0]?(sortDirection==='asc'?'↑':'↓'):'↕')+'</button>':''}</th>`;}
+ function filterButton(value,selected,key){
+ const all=value==='';
+ const icon='<span class="cloud-all-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>';
+ const check='<svg class="cloud-all-check" aria-hidden="true" viewBox="0 0 16 16"><path d="M2 8l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+ const button=`<button type="button" class="secondary ${all?'cloud-all ':''}${value===selected?'selected':''}" data-${key}="${esc(value)}" aria-pressed="${value===selected}">${all?icon:''}${esc(value||'全部')}${all?check:''}</button>`;
+ return all?'<span class="cloud-all-wrap">'+button+'</span>':button;
+ }
  function draw(){if(!alive)return;
  const brands=[...new Set(sources.map(s=>s.brand))];
  if(brand&&!brands.includes(brand))brand='';
  const categories=[...new Set(sources.filter(s=>!brand||s.brand===brand).map(s=>s.category))];
  if(category&&!categories.includes(category))category='';
  const selection={brands:['',...brands],categories:['',...categories]};
- $('#cloud-brands').innerHTML=selection.brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b||'全部')}</button>`).join('');
- $('#cloud-categories').innerHTML=selection.categories.map(c=>`<button type="button" class="secondary ${c===category?'selected':''}" data-category="${esc(c)}" aria-pressed="${c===category}">${esc(c||'全部')}</button>`).join('');
+ $('#cloud-brands').innerHTML=selection.brands.map(b=>filterButton(b,brand,'brand')).join('');
+ $('#cloud-categories').innerHTML=selection.categories.map(c=>filterButton(c,category,'category')).join('');
  const all=sources.flatMap(s=>snapshots.get(s.gid)?.rows??[]);const q=$('#cloud-search').value.toLowerCase();const filters={q,brand,category,status:statusFilter,sortKey,sortDirection,sortYear};const matching=filterInventory(all,filters),list=selectInventory(all,filters);const exportReady=!busy&&!errors.size&&snapshots.size===sources.length&&list.length>0;$('#cloud-export').disabled=!exportReady;$('#cloud-export-status').textContent=busy?'正在同步，完成後即可匯出。':errors.size||snapshots.size!==sources.length?'來源尚未完整同步，請同步成功後再匯出。':!list.length?'目前沒有符合條件的品項。':'匯出目前條件的全部品項（含其他頁），依目前排序排列。';$('#cloud-export').onclick=()=>{if(!exportReady||busy)return;try{const file=exportInventory(all,filters,[...snapshots].map(([gid,v])=>({name:sources.find(s=>s.gid===gid).name,time:v.time})));const url=URL.createObjectURL(new Blob([file.bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})),a=document.createElement('a');a.href=url;a.download=file.filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);$('#cloud-export-status').textContent='已產生 '+file.count+' 筆品項的 Excel，請確認瀏覽器下載完成。';}catch(e){$('#cloud-export-status').textContent=e.message;}};const pages=Math.max(1,Math.ceil(list.length/50));page=Math.min(page,pages-1);$('#cloud-prev').disabled=page===0;$('#cloud-next').disabled=page===pages-1;$('#cloud-page').textContent=`第 ${page+1} / ${pages} 頁 · ${list.length} 筆`;
  const labels={all:'符合品項',zero:'零庫存',warning:'待核對'};
  $('#cloud-detail-title').textContent=labels[statusFilter]+'明細 · '+list.length+' 筆';

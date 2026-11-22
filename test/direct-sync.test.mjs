@@ -85,7 +85,8 @@ test('order review describes same, updated and blank weekly quantities',async t=
   let markup;
   const action=orderAfter===''?'取消訂貨':'訂貨';
   await m.directReview({kind:'tcm-cloud',version:2,action,lines:[item]},html=>markup=html,async()=>{},()=>{});
-  assert.ok(markup?.includes('<strong>科達單方｜牡蠣</strong><br>本周訂貨量：'+description));
+  assert.ok(markup?.includes('<strong>科達單方｜牡蠣</strong><br>'+ (action==='訂貨'?'本周訂貨：2 瓶｜到貨後預計庫存：2 瓶':'本周訂貨量：'+description)));
+  assert.ok(markup.includes(action==='訂貨'?'入帳後預計庫存':'入帳後庫存'));
  }
 });
 test('client needs login, uses authenticated API deployment, and coalesces six sheet reads',async t=>{
@@ -191,7 +192,7 @@ test('isolated order and receipt review only requests previews before confirmati
    ()=>assert.fail('a cancelled preview must not report success'),
    ()=>{},{returnLabel:'返回修改'});
   assert.match(dialog.markup,/QA20261120A/);
-  assert.match(dialog.markup,action==='訂貨'?/本周訂貨量：原為空白/:/未提供/);
+  assert.match(dialog.markup,action==='訂貨'?/本周訂貨：1 瓶｜到貨後預計庫存：1 瓶/:/未提供/);
   dialog=null;
  }
  assert.deepEqual(requests,['preview','preview']);
@@ -259,4 +260,17 @@ test('receipt partial-link intent stays conservative over fresh preview and addi
  assert.deepEqual([calls[3].lines[0].quantity,calls[3].shortageLinks[0].quantity],[3,1]);
  assert.match(labels.at(-1),/缺藥關聯 1 瓶/);
  assert.deepEqual(d,original);
+});
+
+test('order forecast adds quantity without changing actual backend stock',async t=>{
+ const m=await client(t);
+ for(const before of [5,0,'未建檔']){
+  const item={sheet:'天明單方',code:'A001',name:'大黃濃縮錠',quantity:5};
+  const line={...item,before,after:before,orderAfter:5};
+  globalThis.fetch=async()=>response({token:'p',lines:[line]});
+  let html;
+  await m.directReview({kind:'tcm-cloud',version:2,action:'訂貨',lines:[item]},s=>html=s,async()=>{},()=>{});
+  assert.ok(html.includes('data-label="入帳後預計庫存">'+(before===5?10:before===0?5:'待核對')));
+  assert.equal(line.after,before);
+ }
 });

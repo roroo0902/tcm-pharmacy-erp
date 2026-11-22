@@ -1,4 +1,4 @@
-import {supplierSelection,parseSupplierCatalog} from './supplier-catalog.mjs';
+import {parseSupplierCatalog} from './supplier-catalog.mjs';
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {exportInventory,filterInventory,selectInventory} from './inventory-export.mjs';
 import {money} from './receipt-pricing.mjs';
@@ -24,9 +24,13 @@ export function mountSheets({esc,fmt}){
  const $=s=>content.querySelector(s),time=t=>new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false});
  function heading(key,label,second){return `<th aria-sort="${(sortKey===key||sortKey===second?.[0])?(sortDirection==='asc'?'ascending':'descending'):'none'}"><button class="sort-heading" data-sort="${key}" aria-label="依${label}排序">${label} ${sortKey===key?(sortDirection==='asc'?'↑':'↓'):'↕'}</button>${second?'<br><button class="sort-heading" data-sort="'+second[0]+'" aria-label="依'+second[1]+'排序">'+second[1]+' '+(sortKey===second[0]?(sortDirection==='asc'?'↑':'↓'):'↕')+'</button>':''}</th>`;}
  function draw(){if(!alive)return;
- const selection=supplierSelection(sources,brand,category);({brand,category}=selection);
- $('#cloud-brands').innerHTML=selection.brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b)}</button>`).join('');
- $('#cloud-categories').innerHTML=selection.categories.map(c=>`<button type="button" class="secondary ${c===category?'selected':''}" data-category="${esc(c)}" aria-pressed="${c===category}">${esc(c)}</button>`).join('');
+ const brands=[...new Set(sources.map(s=>s.brand))];
+ if(brand&&!brands.includes(brand))brand='';
+ const categories=[...new Set(sources.filter(s=>!brand||s.brand===brand).map(s=>s.category))];
+ if(category&&!categories.includes(category))category='';
+ const selection={brands:['',...brands],categories:['',...categories]};
+ $('#cloud-brands').innerHTML=selection.brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b||'全部')}</button>`).join('');
+ $('#cloud-categories').innerHTML=selection.categories.map(c=>`<button type="button" class="secondary ${c===category?'selected':''}" data-category="${esc(c)}" aria-pressed="${c===category}">${esc(c||'全部')}</button>`).join('');
  const all=sources.flatMap(s=>snapshots.get(s.gid)?.rows??[]);const q=$('#cloud-search').value.toLowerCase();const filters={q,brand,category,status:statusFilter,sortKey,sortDirection,sortYear};const matching=filterInventory(all,filters),list=selectInventory(all,filters);const exportReady=!busy&&!errors.size&&snapshots.size===sources.length&&list.length>0;$('#cloud-export').disabled=!exportReady;$('#cloud-export-status').textContent=busy?'正在同步，完成後即可匯出。':errors.size||snapshots.size!==sources.length?'來源尚未完整同步，請同步成功後再匯出。':!list.length?'目前沒有符合條件的品項。':'匯出目前條件的全部品項（含其他頁），依目前排序排列。';$('#cloud-export').onclick=()=>{if(!exportReady||busy)return;try{const file=exportInventory(all,filters,[...snapshots].map(([gid,v])=>({name:sources.find(s=>s.gid===gid).name,time:v.time})));const url=URL.createObjectURL(new Blob([file.bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})),a=document.createElement('a');a.href=url;a.download=file.filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);$('#cloud-export-status').textContent='已產生 '+file.count+' 筆品項的 Excel，請確認瀏覽器下載完成。';}catch(e){$('#cloud-export-status').textContent=e.message;}};const pages=Math.max(1,Math.ceil(list.length/50));page=Math.min(page,pages-1);$('#cloud-prev').disabled=page===0;$('#cloud-next').disabled=page===pages-1;$('#cloud-page').textContent=`第 ${page+1} / ${pages} 頁 · ${list.length} 筆`;
  const labels={all:'符合品項',zero:'零庫存',warning:'待核對'};
  $('#cloud-detail-title').textContent=labels[statusFilter]+'明細 · '+list.length+' 筆';

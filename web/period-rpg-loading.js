@@ -17,6 +17,8 @@
  :is(#period-rpg-loading,#loss-actor-warning) i{display:block;width:9px;height:9px;background:#c3932c;animation:period-rpg-pulse 1.2s infinite}
  :is(#period-rpg-loading,#loss-actor-warning) i:nth-child(2){animation-delay:.2s}
  :is(#period-rpg-loading,#loss-actor-warning) i:nth-child(3){animation-delay:.4s}
+ #period-rpg-loading .period-slime{display:block;flex:0 0 96px;width:96px;mix-blend-mode:multiply}
+ #period-rpg-loading .period-slime img{display:block;width:96px;height:96px;filter:none}
  @keyframes period-rpg-pulse{50%{opacity:.25;transform:translateY(-3px)}}
  @media(prefers-reduced-motion:reduce){:is(#period-rpg-loading,#loss-actor-warning) i{animation:none}}
  @media(max-width:380px){:is(#period-rpg-loading,#loss-actor-warning){padding:26px 22px}:is(#period-rpg-loading,#loss-actor-warning) img{width:58px;height:58px}:is(#period-rpg-loading,#loss-actor-warning) h2{font-size:22px}}
@@ -38,7 +40,7 @@
   dialog.setAttribute('aria-labelledby','period-rpg-title');
   dialog.setAttribute('aria-describedby','period-rpg-description');
   dialog.setAttribute('aria-busy','true');
-  dialog.innerHTML='<div class="period-rpg-body"><img src="https://roroo0902.github.io/tcm-pharmacy-erp/web/assets/slime-king.svg" alt=""><div><h2 id="period-rpg-title">更新中…</h2><p id="period-rpg-description" role="status">正在讀取每日耗損</p><div class="period-rpg-dots" aria-hidden="true"><i></i><i></i><i></i></div></div></div>';
+  dialog.innerHTML='<div class="period-rpg-body"><picture class="period-slime"><source media="(prefers-reduced-motion: no-preference)" srcset="https://roroo0902.github.io/tcm-pharmacy-erp/web/assets/crowned-slime-loading.gif"><img src="https://roroo0902.github.io/tcm-pharmacy-erp/web/assets/slime-king.svg" alt=""></picture><div><h2 id="period-rpg-title">更新中…</h2><p id="period-rpg-description" role="status">正在讀取每日耗損</p><div class="period-rpg-dots" aria-hidden="true"><i></i><i></i><i></i></div></div></div>';
   dialog.addEventListener('cancel',event=>event.preventDefault());
   document.body.append(dialog);dialog.showModal();
  }

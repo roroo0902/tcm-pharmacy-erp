@@ -1,3 +1,4 @@
+import {restoreNavigationIcons} from './navigation-icons.mjs';
 import {mountReleasePolish} from './release-polish.mjs?v=release20261120r1';
 import {isProcessing} from './processing-screen.mjs';
 import {pageScope,allowLeave} from './page-safety.mjs';
@@ -29,6 +30,7 @@ const shortageNav=document.querySelector('nav a[href="#shortage"]');if(shortageN
 if (shortageNav) {
  shortageNav.insertAdjacentHTML('afterend', '<a href="https://docs.google.com/spreadsheets/d/1Q0yW2aFRC-Vmhd6EVqNbcsOwHLDwVwT8f1hzmm_cRuo/edit" target="_blank" rel="noopener noreferrer"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 8h18v13H3zM2 3h20v5H2zM9 12h6"/></svg><span>庫存專區</span></a>');
 }
+restoreNavigationIcons();
 const route=()=>Object.hasOwn(titles,location.hash.slice(1))?location.hash.slice(1):'overview';
 function message(text,error=false){$('#message').textContent=text;$('#message').className=error?'error':'';}
 function read(){const raw=localStorage.getItem(KEY);data=raw?JSON.parse(raw):empty();ledger=validate(data);}

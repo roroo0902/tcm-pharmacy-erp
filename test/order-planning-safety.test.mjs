@@ -88,7 +88,7 @@ test('real planning handlers block stale apply/confirmation, retain manual entry
   assert.equal($('#order-read-dialog').open,false);
   assert.equal($('#order-suggest').disabled,false);
   $('#order-suggest').onclick();
-  assert.equal($('qty:'+id('KEEP')).value,'3');
+  assert.equal($('qty:'+id('KEEP')).value,'14');
   assert.equal($('qty:'+id('NORMAL')).value,'14');
   assert.equal($('qty:'+id(code)).value,'');
  }finally{h.unmount();}

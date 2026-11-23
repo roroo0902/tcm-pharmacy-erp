@@ -130,3 +130,17 @@ test('filled filter intersects search and preserves quantities when switched off
   filter.checked=false;filter.onchange();assert.match(table.innerHTML,/NORMAL/);assert.match(table.innerHTML,/value="0"/);
  }finally{h.unmount();}
 });
+
+test('planning settings show the live coverage and formula after changing holiday days',()=>{
+ const h=mountHarness(),{$}=h;
+ try{
+  $('#order-days').value='3';$('#order-shipping').value='0.5';
+  const holiday=$('#order-holiday');
+  for(const [value,total] of [['0','3.5'],['1','4.5']]){
+   holiday.value=value;holiday.listeners.input();
+   const summary=$('#plan-days-summary').textContent;
+   assert.ok(summary.includes('合計備貨 '+total+' 天'));
+   assert.ok(summary.includes('每日平均耗損 × '+total+' 天'));
+  }
+ }finally{h.unmount();}
+});

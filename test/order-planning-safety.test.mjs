@@ -36,7 +36,7 @@ const codeBody=(await readFile(new URL('../web/orders.mjs',import.meta.url),'utf
 function mountHarness({historical=[]}={}){
  const nodes=new Map(),store=new Map(),modals=[];
  const values={'#order-start':date,'#order-end':date,'#order-days':'7','#order-shipping':'0','#order-holiday':'0','#order-actor':'QA'};
- const $=(selector)=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',value:values[selector]??'',checked:false,listeners:{},addEventListener(ev,cb){this.listeners[ev]=cb;}});return nodes.get(selector);};
+ const $=(selector)=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',value:values[selector]??'',checked:false,showModal(){this.open=true;},close(){this.open=false;},listeners:{},addEventListener(ev,cb){this.listeners[ev]=cb;}});return nodes.get(selector);};
  store.set('tcm-purchase-v2',JSON.stringify({drafts:{},orders:historical}));
  const host=$('#content'),baseGrid=grid();let reply=async()=>({values:baseGrid});
  host.querySelector=$;
@@ -60,7 +60,9 @@ test('real planning handlers block stale apply/confirmation, retain manual entry
  const id=c=>orders.calculateOrderRows(grid(),source,options).rows.find(r=>r.code===c).id;
  try{
   assert.equal($('#order-suggest').disabled,true);
-  await $('#order-load').onclick();
+  assert.equal($('#order-read-dialog').open,true);
+  await new Promise(setImmediate);
+  assert.equal($('#order-read-dialog').open,false);
   assert.equal($('#order-suggest').disabled,false);
   assert.equal($('#order-confirm').disabled,false);
   assert.match($('#order-table').innerHTML,/驗收專用・不帶入/);
@@ -80,8 +82,10 @@ test('real planning handlers block stale apply/confirmation, retain manual entry
   assert.equal($('qty:'+id('NORMAL')).value,'');
   $('#order-suggest').onclick();
   assert.equal($('qty:'+id('NORMAL')).value,'');
+  assert.equal($('#order-read-title').textContent,'讀取失敗');
   h.reply(async()=>({values:grid('2')}));
-  await $('#order-load').onclick();
+  await $('#order-read-retry').onclick();
+  assert.equal($('#order-read-dialog').open,false);
   assert.equal($('#order-suggest').disabled,false);
   $('#order-suggest').onclick();
   assert.equal($('qty:'+id('KEEP')).value,'3');
@@ -105,7 +109,7 @@ test('order planning detects unsaved edits including zero and clears them only o
  const h=mountHarness(),{$}=h,normal=orders.calculateOrderRows(grid(),source,options).rows[1];
  try{
   assert.equal(h.unmount.hasUnsavedChanges(),false);
-  await $('#order-load').onclick();
+  await new Promise(setImmediate);
   assert.equal(h.unmount.hasUnsavedChanges(),false);
   const input=$('qty:'+normal.id);input.value='0';input.oninput();
   assert.equal(h.unmount.hasUnsavedChanges(),true);
@@ -119,7 +123,7 @@ test('order planning detects unsaved edits including zero and clears them only o
 test('filled filter intersects search and preserves quantities when switched off',async()=>{
  const h=mountHarness(),{$}=h;
  try{
-  await $('#order-load').onclick();
+  await new Promise(setImmediate);
   for(const row of orders.calculateOrderRows(grid(),source,options).rows.filter(r=>r.code!==code)){
    const input=$('qty:'+row.id);input.value=row.code==='KEEP'?'3':'0';input.oninput();
   }

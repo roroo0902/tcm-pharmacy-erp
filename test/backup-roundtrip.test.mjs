@@ -23,7 +23,7 @@ function fixture(kind,storage=new Map()){
  }else{
   const src=fs.readFileSync('web/orders.mjs','utf8').split(/\r?\n/);vm.runInContext(src.filter(x=>x.includes('const stored=')||x.includes('const download=')||x.includes("$('#order-backup').onclick=")||x.includes("$('#order-restore').onchange=")).join('\n'),c);
  }
- async function choose(file){const input=el('#restore'),path='C:/fakepath/'+file.name;if(input.value===path)return false;input.value=path;input.files=[file];pending=null;await input.onchange({target:input});return true;}
+ async function choose(file){const input=el(kind==='legacy'?'#restore':'#order-restore'),path='C:/fakepath/'+file.name;if(input.value===path)return false;if(!Object.hasOwn(input,'value')){let selected='';Object.defineProperty(input,'value',{get:()=>selected,set:v=>{selected=v;if(v==='')input.files=[];}});}input.value=path;input.files=[file];pending=null;await input.onchange({target:input});return true;}
  return {choose,storage,downloads,key,export:()=>el(kind==='legacy'?'#export':'#order-backup').onclick(),async restore(raw){pending=null;await el(kind==='legacy'?'#restore':'#order-restore').onchange({target:{files:[{size:raw.length,text:async()=>raw}]}})},cancel(){pending=null},async confirm(){assert.equal(typeof pending,'function');await pending();pending=null},get pending(){return pending},get notice(){return notice},reopen(){return kind==='legacy'?validate(JSON.parse(storage.get(key))):validateOrderStore(JSON.parse(storage.get(key)))},get rendered(){return rendered}};
 }
 for(const kind of ['legacy','orders']){
@@ -45,4 +45,21 @@ test('legacy: the same file can be reselected after invalid JSON or cancellation
  assert.equal(h.storage.get(legacyKey),before);
  assert.equal(await h.choose(good),true);assert.equal(typeof h.pending,'function');await h.confirm();
  assert.deepEqual(JSON.parse(h.storage.get(legacyKey)),changed);
+});
+
+test('orders: same-file picker retries after invalid JSON without touching saved orders',async()=>{
+ const h=fixture('orders',new Map([[orderKey,JSON.stringify(orders)]])),before=h.storage.get(orderKey);let reads=0;
+ const bad={name:'orders.json',size:7,text:async()=>{reads++;return '{broken';}};
+ assert.equal(await h.choose(bad),true);assert.equal(await h.choose(bad),true);assert.equal(reads,2);
+ assert.equal(h.pending,null);assert.equal(h.storage.get(orderKey),before);
+});
+
+test('orders: cancelling valid restore allows same-file reselect and explicit confirmation',async()=>{
+ const h=fixture('orders',new Map([[orderKey,JSON.stringify(orders)]])),before=h.storage.get(orderKey);
+ const changed=structuredClone(orders);changed.drafts.科達單方.quantities.QA='9';
+ const raw=JSON.stringify({kind:'tcm-purchase-backup',version:2,...changed}),good={name:'orders.json',size:raw.length,text:async()=>raw};
+ assert.equal(await h.choose(good),true);assert.equal(typeof h.pending,'function');h.cancel();
+ assert.equal(h.storage.get(orderKey),before);
+ assert.equal(await h.choose(good),true);assert.equal(typeof h.pending,'function');assert.equal(h.storage.get(orderKey),before);
+ await h.confirm();assert.equal(h.reopen().drafts.科達單方.quantities.QA,'9');
 });

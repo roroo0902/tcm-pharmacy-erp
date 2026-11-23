@@ -9,7 +9,7 @@ export function historyEntries(result){
   const loss=s.title==='耗損',d=event?.draft,action=loss?'耗損':d?.action||r[3],type=action==='建檔'?'建帳':action==='沖銷'||action==='取消訂貨'?'沖銷':['訂貨','進貨','耗損'].includes(action)?action:'其他';
   const lines=loss?[{sheet:r[3],code:r[4],name:r[5]}]:(Array.isArray(d?.lines)?d.lines:[]);
   const note=loss?r[10]:d?.note||r[5],actor=loss?r[11]:d?.actor||r[4];
-  const marked=lines.some(l=>isOperationalOrderQa(l.sheet,l.code)||/^QA[-_]/i.test(l.code||'')||/^QA[-_]/i.test(l.name||''))||[note,actor,r[0]].some(v=>/(?:^|[\s:：·｜])QA[-_]|測試|驗收/i.test(v||''));
+  const marked=lines.some(l=>isOperationalOrderQa(l.sheet,l.code)||(l.name==='ERP驗收專用・非藥品'&&/^QA[0-9]{8}[A-Z]$/i.test(l.code||''))||/^QA[-_]/i.test(l.code||'')||/^QA[-_]/i.test(l.name||''))||[note,actor,r[0]].some(v=>/(?:^|[\s:：·｜])QA[-_]|測試|驗收/i.test(v||''));
   return {id:r[0],date:r[2],time:loss?r[13]:r[8],actor,note,action,type,lines,marked,reverses:d?.reverses||'',rawStatus:loss?'':r[7],source:s,index,valid:loss?!!event:!!d,event,
    before:loss?number(r[6]):null,total:loss?number(r[7]):null,delta:loss?number(r[8]):null,stock:loss?number(r[9]):null,fallback:loss?[r[3],r[4],r[5]].join(' '):r[6]};
  }));

@@ -5,3 +5,10 @@ test('Excel export uses exactly the shared filter and preserves all matched tran
 test('all/test/none and invalid bounds are enforced before export',()=>{assert.equal(historyWorkbook(entries,{...filters,test:'全部'}).count,2);assert.equal(historyWorkbook(entries,{...filters,test:'測試'}).count,1);assert.throws(()=>historyWorkbook(entries,{...filters,drug:'不存在'}),/沒有符合/);assert.throws(()=>historyWorkbook(entries,{...filters,from:'2026-11-04'}),/開始日期/);});
 test('export is a real XLSX ZIP and handles literals without formulas',()=>{const f=exportHistory(entries,filters,new Date('2026-11-03T12:00:00Z'));assert.equal(new DataView(f.bytes.buffer).getUint32(0,true),0x04034b50);const text=new TextDecoder().decode(f.bytes);assert.ok(text.includes('t="inlineStr"'));assert.ok(text.includes('=1+1'));assert.ok(!text.includes('<f>'));assert.ok(text.includes('&amp; &lt;測&gt;'));assert.ok(f.filename.endsWith('.xlsx'));});
 test('oversized cell is rejected instead of silently truncating original contents',()=>{assert.throws(()=>createXlsx([{name:'測試',rows:[['欄位'],['x'.repeat(32768)]]}]),/上限/);});
+test('normal XLSX excludes designated ERP acceptance receipts even with no note',()=>{
+ const source={title:'建檔／進貨',id:'sheet',gid:1}, qa={sheet:'科達單方',code:'QA20261124B',name:'ERP驗收專用・非藥品',quantity:1};
+ const mk=(id,line)=>{const r=row(id), e=JSON.parse(r[1]); e.draft.note='';e.draft.lines=[line];r[1]=JSON.stringify(e);return r;};
+ const all=historyEntries([{s:source,rows:[mk('ordinary',{...qa,name:'正式品項'}),mk('acceptance',qa)]}]);
+ const exportedIds=test=>historyWorkbook(all,{test}).sheets[0].rows.slice(1).map(r=>r[11]);
+ assert.deepEqual(exportedIds('非測試'),['ordinary']); assert.deepEqual(exportedIds('測試'),['acceptance']);
+});

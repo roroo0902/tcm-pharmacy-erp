@@ -33,3 +33,11 @@ test('legacy receipt history never fabricates before or after stock',()=>{
  assert.match(h,/>未記錄<\/td><td>未記錄<\/td>/);
  assert.match(h,/入庫前庫存：未記錄 → 入庫後庫存：未記錄/);
 });
+test('designated ERP acceptance item moves note-free receipts and their reversals to test history only',()=>{
+ const qa={sheet:'科達單方',code:'QA20261124B',name:'ERP驗收專用・非藥品',quantity:1}, real={sheet:'科達單方',code:'A001',name:'正常藥品',quantity:2};
+ const input=[{s,rows:[row('r-231','建檔',{note:'驗收',lines:[qa]}),row('r-232','進貨',{lines:[qa]}),row('r-233','沖銷',{lines:[real],reverses:'r-232'}),row('code-only','進貨',{lines:[{...qa,name:real.name}]}),row('name-only','進貨',{lines:[{...qa,code:real.code}]}),row('similar-name','進貨',{lines:[{...qa,name:qa.name+'（正式）'}]}),row('extra-suffix','進貨',{lines:[{...qa,code:qa.code+'0'}]}),row('mixed','進貨',{lines:[qa,real]})]}];
+ const before=JSON.stringify(input), entries=historyEntries(input), ids=x=>entries.filter(e=>e.marked===x).map(e=>e.id).sort();
+ assert.deepEqual(ids(true),['mixed','r-231','r-232','r-233']); assert.deepEqual(ids(false),['code-only','extra-suffix','name-only','similar-name']);
+ assert.match(renderHistory(entries,{test:'測試',drug:qa.code}),/顯示 3 筆/); assert.match(renderHistory(entries,{test:'非測試',drug:qa.code}),/顯示 3 筆/);
+ assert.equal(JSON.stringify(input),before);
+});

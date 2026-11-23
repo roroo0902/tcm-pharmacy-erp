@@ -243,7 +243,14 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(!owned)caution=postedOwnershipLost;
    if(alive){showPending();if(owned)await load();}
   },text=>recoveryStatus([text,caution].filter(Boolean).join('；')),{
-   autoMail:()=>alive&&owned,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':undefined,
+   autoMail:()=>alive&&owned,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':'確認入帳',
+   onDiscard:()=>ask('<h3>確定取消這次訂單？</h3><p>確認後會清除本次填寫的訂貨品項、數量與單價。</p>',()=>{
+    if(!alive||submitted)return;
+    if(input!==orderFormFingerprint()){recoveryStatus('訂貨內容已變更，請重新預覽。');return;}
+    clearShortage('order');
+    quantities.clear();prices.clear();manualLines=[];
+    draw();recoveryStatus('已取消這次訂單。');
+   },'確認取消這次訂單','返回修改'),
    orderRows:()=>rows,onOrderAdd:line=>{addLine(line);},onOrderDraft:next=>{d=cloudDraft(next);input=orderFormFingerprint();},
    beforeCommit:()=>{
     if(saved!==localStorage.getItem(KEY))throw Error('訂單狀態已變更，請重新預覽。');

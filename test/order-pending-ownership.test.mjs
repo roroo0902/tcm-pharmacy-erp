@@ -13,7 +13,7 @@ function fixture(initial=old){
  const $=id=>{if(!nodes.has(id))nodes.set(id,{value:id==='#og-date'?'2026-11-20':id==='#og-actor'?'QA':'',requestSubmit(){submissions++;}});return nodes.get(id);};
  const cloudDraft=({verified,receiptEvent,mergeOriginal,mergeInputLines,...d})=>d;
  const deps={KEY,localStorage:{getItem:()=>raw,setItem:(_k,value)=>{raw=value;writes.push(JSON.parse(value));}},$,quantities:qty,prices,manualLines,
-  ask(){},esc:String,orderPrintControl:()=>'',bindOrderPrint(){rendered++;},status:m=>{last=m;},load:async()=>{loads++;},busy:false,loadFailed:false,alive:true,
+  ask:(...args)=>{request.prompt=args;},draw(){},esc:String,orderPrintControl:()=>'',bindOrderPrint(){rendered++;},status:m=>{last=m;},load:async()=>{loads++;},busy:false,loadFailed:false,alive:true,
   isProcessing:()=>false,checkingPending:false,recoveringPrevious:false,rows:[],clearShortage:()=>{handoffs++;},
   directReview:(d,ask,success,status,opts)=>{request={d,ask,success,status,opts};},
   recoverPendingTransaction:async args=>recover?.(args),allLines:()=>({length:qty.size,map:f=>[...qty].map(([k,v])=>f({code:k,quantity:Number(v)}))}),
@@ -107,4 +107,12 @@ test('stale or impossible current-only selection after a pending lookup miss doe
  await f.click();
  assert.equal(recovering,0);assert.equal(f.writes.length,0);assert.equal(f.request(),undefined);
  assert.match(f.$('#og-recovery-status').textContent,/尚未核對入帳/);
+});
+
+test('discarding a batch order requires confirmation and preserves previous records',()=>{
+ const f=fixture();f.api.send(incoming);
+ const review=f.request();assert.equal(review.opts.reviewLabel,'確認入帳');
+ review.opts.onDiscard();assert.equal(f.qty.size,1);
+ review.prompt[1]();assert.equal(f.qty.size,0);assert.equal(f.prices.size,0);
+ assert.deepEqual(f.raw(),old);assert.equal(f.writes.length,0);assert.equal(f.statistics().mail,0);
 });

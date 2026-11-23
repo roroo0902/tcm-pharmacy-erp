@@ -59,7 +59,15 @@ export function mountSheets({esc,fmt}){
  $('#cloud-sources').innerHTML=sources.map(s=>`<p><a href="${sheetUrl(s)}" target="_blank" rel="noopener">${s.name} ↗</a>　<span class="muted">${snapshots.has(s.gid)?snapshots.get(s.gid).rows.length+' 筆 · '+time(snapshots.get(s.gid).time):'尚未讀取'}</span>${errors.has(s.gid)?` <span class="pill out">${esc(errors.get(s.gid))}</span>`:''}</p>`).join('');
  }
  let loadingScreen;
- async function sync({showDialog=false}={}){if(busy||!alive)return;busy=true;$('#cloud-export').disabled=true;$('#cloud-export-status').textContent='正在同步，完成後即可匯出。';$('#cloud-refresh').disabled=true;$('#cloud-status').textContent='正在向 Google 讀取最新內容…';try{if(showDialog&&!isProcessing())loadingScreen=beginProcessing({reading:true,compact:true,readOnly:true,inventorySync:true,catalogMessage:'正在從 Google Sheets 讀取最新庫存。'});const snapshot=directEnabled()?await runDirect('readOrderCatalog',{receipt:true}):null;
+ function showSyncDialog(){
+  if(!loadingScreen&&!isProcessing())loadingScreen=beginProcessing({reading:true,compact:true,readOnly:true,inventorySync:true,catalogMessage:'正在從 Google Sheets 讀取最新庫存。'});
+ }
+ function onSynced(event){
+  if(!event.detail?.connected) return sync();
+  if(busy) return showSyncDialog();
+  return sync({showDialog:true});
+ }
+ async function sync({showDialog=false}={}){if(busy||!alive)return;busy=true;$('#cloud-export').disabled=true;$('#cloud-export-status').textContent='正在同步，完成後即可匯出。';$('#cloud-refresh').disabled=true;$('#cloud-status').textContent='正在向 Google 讀取最新內容…';try{if(showDialog)showSyncDialog();const snapshot=directEnabled()?await runDirect('readOrderCatalog',{receipt:true}):null;
  if(snapshot){parseSupplierCatalog(snapshot);sources=snapshot.sources;}else sources=SOURCES;
  for(const gid of snapshots.keys())if(!sources.some(s=>s.gid===gid))snapshots.delete(gid);
  errors.clear();
@@ -79,6 +87,6 @@ export function mountSheets({esc,fmt}){
  $('#cloud-search').oninput=()=>{page=0;draw();};
  $('#cloud-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;page=0;draw();}};
  $('#cloud-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;page=0;draw();}};$('#cloud-prev').onclick=()=>{page--;draw();};$('#cloud-next').onclick=()=>{page++;draw();};$('#cloud-refresh').onclick=()=>sync({showDialog:true});
- const onVisible=()=>{if(!document.hidden)sync();};document.addEventListener('visibilitychange',onVisible);const timer=setInterval(()=>{if(!document.hidden)sync();},directEnabled()?directPollMs():60000);window.addEventListener('erp-synced',sync);draw();sync({showDialog:true});return()=>{alive=false;loadingScreen?.close();loadingScreen=null;window.removeEventListener('erp-synced',sync);controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',onVisible);};
+ const onVisible=()=>{if(!document.hidden)sync();};document.addEventListener('visibilitychange',onVisible);const timer=setInterval(()=>{if(!document.hidden)sync();},directEnabled()?directPollMs():60000);window.addEventListener('erp-synced',onSynced);draw();sync({showDialog:true});return()=>{alive=false;loadingScreen?.close();loadingScreen=null;window.removeEventListener('erp-synced',onSynced);controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',onVisible);};
 }
 

@@ -22,7 +22,7 @@ export function setupDirect(){
  const button=document.createElement('button');button.id='google-connect';button.textContent='登入 Google 同步';
  const notice=document.querySelector('.notice');notice.textContent='Google Sheets 為唯一正式庫存；在站內核對後按「確認入帳」直接同步。訂貨不增加庫存。';notice.append(button);
  const foot=document.querySelector('.sidefoot small');if(foot)foot.textContent='正式帳務儲存於 Google Sheets；站內核對後直接同步';
- button.onclick=()=>authorize().then(()=>{button.textContent='Google 已連線';window.dispatchEvent(new Event('erp-synced'));}).catch(e=>{button.textContent=e.message;});
+ button.onclick=()=>authorize().then(()=>{button.textContent='Google 已連線';window.dispatchEvent(new CustomEvent('erp-synced',{detail:{connected:true}}));}).catch(e=>{button.textContent=e.message;});
 }
 export function authorize(){
  if(hostedEnabled())return Promise.resolve();

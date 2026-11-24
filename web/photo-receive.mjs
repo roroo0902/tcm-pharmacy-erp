@@ -50,7 +50,8 @@ function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMes
    '<td>'+esc(line.unit||'單位不明')+'／'+esc(line.sourceQuantity||'數量不明')+
    '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
    '<td><div class="ai-review-match"><select class="ai-review-state" style="width:auto;flex:0 0 auto" data-receipt-category="'+id+'" aria-label="'+name+' 庫存類別"><option value="">全部</option>'+categoryOptions+'</select>'+
-   '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select></div>'+
+   '<div data-picker><input type="search" data-drug-search="'+id+'" aria-label="'+name+' 搜尋編號或藥名" placeholder="輸入編號或藥名" autocomplete="off">'+
+   '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select></div></div>'+
    '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)+'</small></td>'+
    '<td><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
    '<td><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已逐項核對藥名、編號、單位與瓶數" '+(line.reviewed?'checked':'')+'></td>'+
@@ -156,6 +157,38 @@ export function mountPhotoReceive({esc,fmt,ask}){
    review.querySelector('[data-receipt-category="'+line.id+'"]')?.focus({preventScroll:true});
   });
   root.querySelectorAll('[data-select]').forEach(el=>{const line=recognized.find(x=>x.id===el.dataset.select);el.value=line.selected;el.onchange=()=>{line.selected=el.value;line.manualSelection=true;line.reviewed=false;drawResult();root.querySelector('[data-select="'+line.id+'"]')?.focus({preventScroll:true});};});
+  root.querySelectorAll('[data-drug-search]').forEach(input=>{
+   const picker=input.closest('[data-picker]');
+   const select=picker.querySelector('select');
+   const original=Array.from(select.options);
+   const committed=select.value;
+   function filter(){
+    const term=input.value.normalize('NFKC').trim().toLowerCase();
+    const matches=original.slice(1).filter(option=>{
+     const fields=option.textContent.split('｜').slice(1);
+     return fields.some(field=>field.normalize('NFKC').toLowerCase().includes(term));
+    });
+    original[0].textContent=matches.length?'請選擇相符藥品':'查無符合的藥品';
+    select.replaceChildren(original[0],...matches);
+    select.value=matches.some(option=>option.value===committed)?committed:'';
+    select.size=Math.max(2,Math.min(6,matches.length+1));
+   }
+   function close(){
+    input.value='';
+    original[0].textContent='請選擇相符藥品';
+    select.replaceChildren(...original);
+    select.value=committed;
+    select.size=1;
+   }
+   input.onfocus=filter;
+   input.oninput=filter;
+   picker.onfocusout=event=>{if(!picker.contains(event.relatedTarget))close();};
+   input.onkeydown=event=>{
+    if(event.isComposing)return;
+    if(event.key==='Escape'){close();input.blur();}
+    if(event.key==='ArrowDown'){event.preventDefault();select.focus();}
+   };
+  });
   root.querySelectorAll('[data-qty]').forEach(el=>el.oninput=()=>{const line=recognized.find(x=>x.id===el.dataset.qty);line.quantity=el.value;line.reviewed=false;root.querySelector('[data-reviewed="'+line.id+'"]').checked=false;updatePhotoReviewCount(root,recognized);});
   root.querySelectorAll('[data-reviewed]').forEach(el=>el.onchange=()=>{recognized.find(x=>x.id===el.dataset.reviewed).reviewed=el.checked;updatePhotoReviewCount(root,recognized);});
   root.querySelectorAll('[data-remove]').forEach(el=>el.onclick=()=>{recognized.find(x=>x.id===el.dataset.remove).removed=true;drawResult();});

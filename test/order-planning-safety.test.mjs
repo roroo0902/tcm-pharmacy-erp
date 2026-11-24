@@ -91,6 +91,8 @@ test('real planning handlers block stale apply/confirmation, retain manual entry
   $('#order-suggest').onclick();
   assert.equal($('qty:'+id('KEEP')).value,'14');
   assert.equal($('qty:'+id('NORMAL')).value,'14');
+  $('#order-usage').onclick();
+  assert.equal($('qty:'+id('NORMAL')).value,'2');
   assert.equal($('qty:'+id(code)).value,'');
  }finally{h.unmount();}
 });
@@ -159,6 +161,8 @@ test('confirmed blanks recalculate and apply while invalid losses stay blocked',
   h.reply(async()=>({values}));
   await $('#order-load').onclick();
   assert.equal($('#order-confirm-blanks').hidden,false);
+  $('#order-usage').onclick();
+  assert.equal($('qty:科達單方:NORMAL:4').value,'');
   $('#order-suggest').onclick();
   assert.match($('#order-state').textContent,/沒有可帶入/);
   await $('#order-confirm-blanks').onclick();

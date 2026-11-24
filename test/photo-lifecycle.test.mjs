@@ -58,3 +58,14 @@ test('supplier buttons follow catalog brands, deduplicate and switch selection',
  assert.match(buttons.innerHTML,/data-ai-brand="QA" aria-pressed="false"/);
  assert.equal(f.calls(),0);
 });
+
+test('other note returns to previous selection repeatedly without clearing text or issuing requests',async()=>{
+ const f=await fixture(),note=f.elements.get('#ai-note');
+ const back=f.elements.get('#ai-note-back');
+ note.value='依送貨單進貨';note.onchange();note.value='其他';note.onchange();
+ const other=f.elements.get('#ai-note-other')||{value:''};f.elements.set('#ai-note-other',other);other.value='保留補充';
+ back.onclick();assert.equal(note.value,'依送貨單進貨');assert.equal(f.elements.get('#ai-note-other-field').hidden,true);
+ note.value='其他';note.onchange();assert.equal(other.value,'保留補充');
+ note.value='換貨補回';note.onchange();note.value='其他';note.onchange();back.onclick();assert.equal(note.value,'換貨補回');
+ note.value='';note.onchange();note.value='其他';note.onchange();back.onclick();assert.equal(note.value,'');assert.equal(f.calls(),0);
+});

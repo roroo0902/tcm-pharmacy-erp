@@ -27,7 +27,7 @@ async function jpegData(file){
  }finally{URL.revokeObjectURL(url);}
 }
 
-function renderPhotoReview(lines,{esc,candidatesFor,matchLine,unitMessage}){
+function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMessage}){
  const list=lines.filter(line=>!line.removed);
  if(!list.length)return '<p class="muted">辨識後，這裡會顯示每一筆藥名、數量及配對結果。</p>';
  const rows=list.map(line=>{
@@ -37,7 +37,11 @@ function renderPhotoReview(lines,{esc,candidatesFor,matchLine,unitMessage}){
    if(selection!==line.selected)line.reviewed=false;
    line.selected=selection;
   }
-  const candidates=candidatesFor(line);
+  const available=candidatesFor(line);
+  const selectedRow=available.find(row=>String(row.id)===line.selected);
+  const category=line.categoryFilter??selectedRow?.category??'';
+  const candidates=category?available.filter(row=>row.category===category):available;
+  const categoryOptions=categories.map(value=>'<option value="'+esc(value)+'" '+(value===category?'selected':'')+'>'+esc(value)+'</option>').join('');
   const found=candidates.find(row=>String(row.id)===line.selected);
   const options=candidates.map(row=>'<option value="'+esc(String(row.id))+'">'+esc(row.category+'｜'+row.code+'｜'+row.drug)+'</option>').join('');
   const name=esc(line.name||'未讀出藥名'),id=esc(line.id);
@@ -45,9 +49,9 @@ function renderPhotoReview(lines,{esc,candidatesFor,matchLine,unitMessage}){
   return '<tr><td><strong>'+name+'</strong><small>原始編號 '+esc(line.code||'未讀出')+'</small></td>'+
    '<td>'+esc(line.unit||'單位不明')+'／'+esc(line.sourceQuantity||'數量不明')+
    '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
-   '<td><div class="ai-review-match"><span class="ai-review-state"'+(found?' data-matched':'')+'>'+esc(found?.category||'待配對')+'</span>'+
+   '<td><div class="ai-review-match"><select class="ai-review-state" style="width:auto;flex:0 0 auto" data-receipt-category="'+id+'" aria-label="'+name+' 庫存類別"><option value="">全部</option>'+categoryOptions+'</select>'+
    '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select></div>'+
-   '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):match.reason)+'</small></td>'+
+   '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)+'</small></td>'+
    '<td><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
    '<td><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已逐項核對藥名、編號、單位與瓶數" '+(line.reviewed?'checked':'')+'></td>'+
    '<td><button type="button" data-remove="'+id+'" aria-label="排除 '+name+'" class="secondary small">排除</button></td></tr>';
@@ -65,7 +69,7 @@ function updatePhotoReviewCount(root,lines){
 
 export function mountPhotoReceive({esc,fmt,ask}){
  const root=document.querySelector('#content');
- let alive=true,run=0,rows=[],recognized=[],basket=[],pastedImage=null,loading=false,selected='',pending=null,catalogReady=false;
+ let alive=true,run=0,rows=[],sources=[],recognized=[],basket=[],pastedImage=null,loading=false,selected='',pending=null,catalogReady=false;
  root.innerHTML="<style>#photo-receive-panel{text-align:center}#photo-receive-panel label,#photo-receive-panel input,#photo-receive-panel select{text-align:center}#photo-receive-panel select{text-align-last:center}#photo-receive-panel .panelhead,#photo-receive-panel .actions,#photo-receive-panel .staff-controls{justify-content:center}#photo-receive-panel th,#photo-receive-panel td,body:has(#photo-receive-panel) .direct-review-table th,body:has(#photo-receive-panel) .direct-review-table td{text-align:center;vertical-align:middle}\nbody:has(#photo-receive-panel) aside{background:#102641}\nbody:has(#photo-receive-panel) aside nav a.active{border-color:#cda653;border-radius:0;box-shadow:inset 0 0 0 2px #182b45, inset 0 0 0 3px #b78e43;background:#203957}\n#photo-receive-panel .ai-review-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 18px;margin:18px 0 6px;text-align:left}\n#photo-receive-panel .ai-review-head h3{margin:0}\n#photo-receive-panel .ai-review-note{text-align:left;margin:0 0 10px}\n#photo-receive-panel .ai-review-wrap{overflow:auto;max-height:36rem;border:2px solid #755030;background:#f7e6c1;box-shadow:inset 0 0 0 2px #c4985b}\n#photo-receive-panel table.ai-review-table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;color:#3d2a1b}\n#photo-receive-panel .ai-review-table :is(th,td){padding:6px 9px;border-right:1px solid #c4a27366;border-bottom:1px solid #c4a27366;line-height:1.25}\n#photo-receive-panel .ai-review-table th{position:sticky;top:0;z-index:2;background:#e7c993;color:#392313;text-align:left;white-space:nowrap}\n#photo-receive-panel .ai-review-table td{background:linear-gradient(110deg,#fff8e6,#f5e2bc);text-align:left}\n#photo-receive-panel .ai-review-table tr:nth-child(even) td{background:linear-gradient(110deg,#fcf0d3,#f0d9ac)}\n#photo-receive-panel .ai-review-table :is(th,td):nth-child(n+4){text-align:center}\n#photo-receive-panel .ai-review-table small{display:block;font-size:12px;color:#614a35;margin-top:3px}\n#photo-receive-panel .ai-review-table details{font-size:12px;max-width:220px;margin-top:3px}\n#photo-receive-panel .ai-review-table summary{cursor:pointer}\n#photo-receive-panel .ai-review-table select{max-width:100%;width:100%;min-height:32px;margin:0;font-size:14px;text-align:left;text-align-last:left}\n#photo-receive-panel .ai-review-match{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:6px}\n#photo-receive-panel .ai-review-state{padding:3px 6px;white-space:nowrap;background:#efd194;color:#65400f;border:1px solid #b98536;font-size:12px}\n#photo-receive-panel .ai-review-state[data-matched]{background:#dce8c0;border-color:#859a57;color:#314421}\n#photo-receive-panel .ai-review-table .quantity-stepper{width:138px;grid-template-columns:30px minmax(50px,1fr) 30px;gap:4px;margin:auto}\n#photo-receive-panel .ai-review-table .quantity-stepper input{min-height:32px;font-size:14px}\n#photo-receive-panel .ai-review-table .quantity-stepper .quantity-clear{display:none}\n#photo-receive-panel .ai-review-table input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#285331}\n#photo-receive-panel :is(#ai-scan,#ai-reload,#ai-add,#ai-preview,[data-remove],.ai-review-table .quantity-adjust){background:linear-gradient(#f7db93,#d6a74b);color:#35220e;border:2px solid #805722;border-radius:3px;box-shadow:inset 0 0 0 1px #ffedb1,0 2px 0 #60401b}\n#photo-receive-panel .ai-review-table :is([data-remove],.quantity-adjust){min-height:32px;font-size:14px}\n#photo-receive-panel .ai-review-table .quantity-adjust{min-width:30px}\n#photo-receive-panel .ai-review-table [data-remove]{white-space:nowrap;padding:4px 8px}\n #photo-receive-panel .ai-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#photo-receive-panel .ai-entry-grid>label{min-width:0}#photo-receive-panel [hidden]{display:none!important}#photo-receive-panel .ai-wizard{width:112px;height:140px;object-fit:contain;image-rendering:pixelated;flex-shrink:0}#photo-receive-panel .ai-wizard-heading{gap:18px}@media(max-width:480px){#photo-receive-panel .ai-wizard{width:80px;height:100px}#photo-receive-panel .ai-wizard-heading{gap:8px}#photo-receive-panel .ai-wizard-heading h2{font-size:20px}} #photo-receive-panel .ai-wizard-heading{display:grid;grid-template-columns:112px minmax(0,1fr) 112px;align-items:center;gap:18px}#photo-receive-panel .ai-wizard-heading>div{text-align:center}#photo-receive-panel .ai-suppliers{text-align:left;grid-column:1/-1}#photo-receive-panel .ai-entry-grid>.full{grid-column:1/-1}@media(max-width:600px){#photo-receive-panel .ai-wizard-heading{grid-template-columns:1fr;justify-items:center;gap:8px}} </style>"+'<section class="panel" id="photo-receive-panel"><div class="panelhead ai-wizard-heading"><img class="ai-wizard" src="./web/assets/photo-wizard.png" alt="手持發光法杖的藥庫魔法師" width="112" height="140"><div><h2>AI 拍照進貨</h2><span class="muted">選廠商 → 拍照 → AI 解析 → 人工核對 → 預覽 → 確認入庫</span></div></div>'+
   '<p class="notice">AI 辨識結果只是草稿。必須選到現有藥品並逐項核對，最後會再次讀取 Google 即時庫存；未確認不會修改庫存。</p>'+
   '<div class="grid ai-entry-grid"><div class="full ai-suppliers"><span id="ai-source-label">廠商</span><div id="ai-source" class="order-tabs" role="group" aria-labelledby="ai-source-label"></div></div><label>進貨日期<input type="date" id="ai-date" max="'+todayTaipei()+'" value="'+todayTaipei()+'"></label><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">單據或備註（選填）<select id="ai-note"><option value="">不填寫備註</option><option>依送貨單進貨</option><option>補填入送到貨單</option><option>無附進貨單直接入庫</option><option>換貨補回</option><option>其他</option></select></label><div class="full" id="ai-note-other-field" hidden><label for="ai-note-other">其他說明（選填）</label><input type="text" id="ai-note-other" maxlength="490" placeholder="請填寫補充內容"><div class="actions"><button type="button" class="secondary" id="ai-note-back">返回上一個選項</button></div></div><label class="full">拍照或選擇照片<input id="ai-image" type="file" accept="image/*" capture="environment"><small id="ai-image-hint" role="status">也可選取此欄位後貼上圖片。</small></label></div>'+
@@ -127,7 +131,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
    selected=brands.includes(selected)?selected:brands[0];
    if(previous&&previous!==selected)recognized=[];
    $('#ai-source').innerHTML=brands.map(brand=>'<button type="button" class="secondary '+(brand===selected?'selected':'')+'" data-ai-brand="'+esc(brand)+'" aria-pressed="'+(brand===selected)+'">'+esc(brand)+'</button>').join('');
-   rows=catalog.rows;catalogReady=true;drawResult();drawBasket();catalogDialog.close();
+   sources=catalog.sources;rows=catalog.rows;catalogReady=true;drawResult();drawBasket();catalogDialog.close();
    status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');
   }catch(error){if(seq===run&&alive){rows=[];catalogReady=false;drawResult();status(error.message);showCatalogState(error.message);}}
  }
@@ -139,9 +143,18 @@ export function mountPhotoReceive({esc,fmt,ask}){
   const review=$('#ai-result');
   const scroll=review.querySelector('.ai-review-wrap');
   const left=scroll?.scrollLeft??0, top=scroll?.scrollTop??0;
-  review.innerHTML=renderPhotoReview(recognized,{esc,candidatesFor:line=>receiptCandidates(line,currentRows()),matchLine,unitMessage});
+  review.innerHTML=renderPhotoReview(recognized,{esc,categories:[...new Set(sources.filter(source=>source.brand===selected).map(source=>source.category))],candidatesFor:line=>receiptCandidates(line,currentRows()),matchLine,unitMessage});
   review.querySelector('.ai-review-wrap')?.scrollTo(left,top);
   updatePhotoReviewCount(root,recognized);
+  root.querySelectorAll('[data-receipt-category]').forEach(el=>el.onchange=()=>{
+   const line=recognized.find(item=>item.id===el.dataset.receiptCategory);
+   line.categoryFilter=el.value;
+   line.manualSelection=true;
+   line.reviewed=false;
+   if(el.value&&!currentRows().some(row=>String(row.id)===line.selected&&row.category===el.value))line.selected='';
+   drawResult();
+   review.querySelector('[data-receipt-category="'+line.id+'"]')?.focus({preventScroll:true});
+  });
   root.querySelectorAll('[data-select]').forEach(el=>{const line=recognized.find(x=>x.id===el.dataset.select);el.value=line.selected;el.onchange=()=>{line.selected=el.value;line.manualSelection=true;line.reviewed=false;drawResult();root.querySelector('[data-select="'+line.id+'"]')?.focus({preventScroll:true});};});
   root.querySelectorAll('[data-qty]').forEach(el=>el.oninput=()=>{const line=recognized.find(x=>x.id===el.dataset.qty);line.quantity=el.value;line.reviewed=false;root.querySelector('[data-reviewed="'+line.id+'"]').checked=false;updatePhotoReviewCount(root,recognized);});
   root.querySelectorAll('[data-reviewed]').forEach(el=>el.onchange=()=>{recognized.find(x=>x.id===el.dataset.reviewed).reviewed=el.checked;updatePhotoReviewCount(root,recognized);});

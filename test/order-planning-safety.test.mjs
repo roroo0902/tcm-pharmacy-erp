@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import * as pricing from '../web/receipt-pricing.mjs';
 import * as orders from '../src/orders.mjs';
 import {lossOrderEntries} from '../web/loss-order-fill.mjs';
 import * as sort from '../web/order-sort.mjs';
@@ -47,7 +48,7 @@ function mountHarness({historical=[]}={}){
    const node=$('qty:'+m[1]);node.dataset={qty:m[1]};node.value=m[2];return node;
   });
  };
- const deps={...orders,...sort,protectDraft,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
+ const deps={...pricing,...orders,...sort,protectDraft,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
   SOURCES:[source],ORDER_ENDPOINT:'fixture-disabled',today:()=>date,SHEET_ID:'other',directEnabled:()=>false,
   fetch:async()=>({ok:true,headers:{get:()=> 'text/csv'},text:async()=>''}),csvRows:()=>[['','編號']],
   runDirect:(name)=>{assert.equal(name,'readLossPlanning');return reply();}};
@@ -165,5 +166,31 @@ test('confirmed blanks recalculate and apply while invalid losses stay blocked',
   $('#order-suggest').onclick();
   assert.equal($('qty:科達單方:NORMAL:4').value,'0');
   assert.equal($('qty:科達單方:KEEP:5').value,'');
+ }finally{h.unmount();}
+});
+
+test('planning pager retains quantities and prices across pages and clears the whole category',async()=>{
+ const h=mountHarness(),{$}=h;
+ try{
+  await new Promise(setImmediate);
+  const [header,weekday,,sample]=grid();
+  const values=[header,weekday,...Array.from({length:33},(_,i)=>{
+   const row=[...sample];row[1]='N'+String(i).padStart(2,'0');row[4]='12.50';return row;
+  })];
+  h.reply(async()=>({values}));await $('#order-load').onclick();
+  const enter=(id,n)=>{const input=$('qty:'+id);input.value=n;input.oninput();};
+  assert.match($('#order-page').textContent,/1–10/);
+  enter('科達單方:N00:3','2');
+  $('#order-next').onclick();enter('科達單方:N10:13','4');
+  for(const size of [20,30]){
+   $('#order-page-size').value=String(size);$('#order-page-size').onchange();
+   assert.match($('#order-page').textContent,new RegExp('1–'+size));
+   $('#order-next').onclick();assert.match($('#order-page').textContent,/–33/);
+  }
+  assert.equal($('#order-total').textContent,'已填 2 項（含其他分頁） · 6 瓶 · 訂貨合計：NT$ 75');
+  $('#order-reviewed').checked=true;$('#order-confirm').onclick();
+  assert.match(h.modals.at(-1).html,/N00.*N10.*NT\$ 75/);
+  $('#order-clear').onclick();h.modals.at(-1).run();
+  assert.equal($('#order-total').textContent,'已填 0 項（含其他分頁） · 0 瓶 · 訂貨合計：NT$ 0');
  }finally{h.unmount();}
 });

@@ -148,3 +148,22 @@ test('planning settings show the live coverage and formula after changing holida
   }
  }finally{h.unmount();}
 });
+
+test('confirmed blanks recalculate and apply while invalid losses stay blocked',async()=>{
+ const h=mountHarness(),{$}=h;
+ try{
+  await new Promise(setImmediate);
+  const values=grid('');
+  values[4][13]='待核對';
+  h.reply(async()=>({values}));
+  await $('#order-load').onclick();
+  assert.equal($('#order-confirm-blanks').hidden,false);
+  $('#order-suggest').onclick();
+  assert.match($('#order-state').textContent,/沒有可帶入/);
+  await $('#order-confirm-blanks').onclick();
+  assert.equal($('#order-confirm-blanks').hidden,true);
+  $('#order-suggest').onclick();
+  assert.equal($('qty:科達單方:NORMAL:4').value,'0');
+  assert.equal($('qty:科達單方:KEEP:5').value,'');
+ }finally{h.unmount();}
+});

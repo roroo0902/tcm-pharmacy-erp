@@ -22,7 +22,7 @@ export function receiptCandidates(line, candidates) {
 export function matchRecognized(line, candidates) {
   const code = normalizeDrug(line.code), name = canonicalDrugName(line.name);
   const valid = receiptCandidates(line, candidates).filter(row => row.code && row.drug);
-  const byCode = code ? valid.filter(row => normalizeDrug(row.code) === code) : [];
+  const byCode = code ? valid.filter(row => normalizeDrug(row.code) === code || normalizeDrug(row.vendorCode) === code) : [];
   if (byCode.length === 1) {
     const nameDiffers = !!name && canonicalDrugName(byCode[0].drug) !== name;
     return nameDiffers ? {row:null,reason:'品號與藥名衝突，請人工選擇',warning:true} : {row:byCode[0],reason:'已依品號配對',warning:false};

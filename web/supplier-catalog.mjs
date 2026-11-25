@@ -1,5 +1,5 @@
 import {runDirect} from './direct-sync.mjs?v=release20261120r1';
-import {parseSheet} from './sheets-data.mjs';
+import {SHEET_ID,parseSheet} from './sheets-data.mjs';
 
 // Registration, receipt, order and daily loss screens use the server's enabled supplier registry.
 export function parseSupplierCatalog(data){
@@ -11,12 +11,21 @@ export function parseSupplierCatalog(data){
   ids.add(source.gid);groups.add(group);
   const grid=data.sheets?.[source.name];if(!Array.isArray(grid))throw Error('來源缺少 '+source.name);
   const values=grid.map(row=>row.map(value=>String(value??'')));
-  return parseSheet(values,source).map(row=>({...row,weekly:data.weekly?.[source.name]?.[row.code]??null}));
+  const manual=values[0]?.indexOf('廠商品號（補登）')??-1;
+  const initial=values[0]?.indexOf('建檔廠商品號')??-1;
+  let column='';
+  for(let n=manual+1;n>0;n=Math.floor((n-1)/26))column=String.fromCharCode(65+(n-1)%26)+column;
+  return parseSheet(values,source).map(row=>{
+   const fields=values[row.row-1];
+   return {...row,vendorCode:(fields[manual]||fields[initial]||'').trim(),
+    vendorCell:column?'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/edit#gid='+source.gid+'&range='+column+row.row:'',
+    weekly:data.weekly?.[source.name]?.[row.code]??null};
+  });
  });
  return {sources:data.sources,rows,sheets:data.sheets};
 }
 export async function loadSupplierCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog'));}
-export async function loadReceiptCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog',{receipt:true}));}
+export async function loadReceiptCatalog(){return loadSupplierCatalog();}
 export async function loadOrderGridCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog',{orderGrid:true}));}
 export function supplierSelection(sources,brand,category){
  const brands=[...new Set(sources.map(s=>s.brand))];

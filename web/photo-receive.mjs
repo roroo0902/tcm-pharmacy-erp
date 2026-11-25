@@ -6,7 +6,7 @@ import {directEnabled,authorize,runDirect,directReview,directLog} from './direct
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {csvRows} from './sheets-data.mjs';
 import {lookupPostedTransaction} from './pending-recovery.mjs';
-import {matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=receiptweight20261120';
+import {normalizeDrug,matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=receiptweight20261120';
 import {quantitySteppers} from './quantity-stepper.mjs';
 const KEY='tcm-cloud-pending-v1',DISCARDED='tcm-photo-receipt-last-discarded-v1';
 const todayTaipei=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
@@ -44,14 +44,14 @@ function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMes
   const candidates=category?available.filter(row=>row.category===category):available;
   const categoryOptions=categories.map(value=>'<option value="'+esc(value)+'" '+(value===category?'selected':'')+'>'+esc(value)+'</option>').join('');
   const found=candidates.find(row=>String(row.id)===line.selected);
-  const options=candidates.map(row=>'<option value="'+esc(String(row.id))+'">'+esc(row.category+'｜'+row.code+'｜'+row.drug)+'</option>').join('');
+  const options=candidates.map(row=>'<option value="'+esc(String(row.id))+'">'+esc(row.category+'｜'+row.code+'｜'+row.drug+(row.vendorCode?'｜廠商 '+row.vendorCode:''))+'</option>').join('');
   const name=esc(line.name||'未讀出藥名'),id=esc(line.id);
   line.sourceQuantity??=line.quantity;
   return '<tr><td><strong>'+name+'</strong><small>原始編號 '+esc(line.code||'未讀出')+'</small></td>'+
    '<td>'+esc(line.unit||'單位不明')+'／'+esc(line.sourceQuantity||'數量不明')+
    '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
    '<td><div class="ai-review-match"><select class="ai-review-state"'+(found?' data-matched':'')+' style="width:auto;flex:0 0 auto" data-receipt-category="'+id+'" aria-label="'+name+' 庫存類別"><option value="">全部</option>'+categoryOptions+'</select>'+
-   '<div data-picker><div class="receipt-current-match">'+esc(found?found.code+'｜'+found.drug:'待配對')+'</div><input type="search" data-drug-search="'+id+'" aria-label="'+name+' 搜尋編號或藥名" placeholder="輸入編號或藥名" autocomplete="off">'+
+   '<div data-picker><div class="receipt-current-match">'+esc(found?found.code+'｜'+found.drug:'待配對')+'</div>'+(found?.vendorCell?'<a href="'+esc(found.vendorCell)+'" target="_blank" rel="noopener">'+esc(found.vendorCode?'廠商品號：'+found.vendorCode+'（修改）':'補登廠商品號')+'</a>':'')+'<input type="search" data-drug-search="'+id+'" aria-label="'+name+' 搜尋編號或藥名" placeholder="輸入編號或藥名" autocomplete="off">'+
    '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select>'+
    '<button type="button" data-new-drug hidden>＋新增庫存藥品</button><div data-registration hidden></div></div></div>'+
    '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)+'</small></td>'+
@@ -177,10 +177,10 @@ export function mountPhotoReceive({esc,fmt,ask}){
     const eligible=receiptCandidates(line,sources.filter(source=>source.brand===selected));
     const current=picker.closest('td').querySelector('[data-receipt-category]').value;
     panel.hidden=false;
-    panel.innerHTML='<label>廠商 <strong>'+esc(selected)+'</strong></label><label>類別<select data-source>'+
+    panel.innerHTML='<label>廠商 <strong>'+esc(selected)+'</strong></label><label>類別<select data-source><option value="">請選擇類別</option>'+
      eligible.map(source=>'<option value="'+esc(source.name)+'" '+(source.category===current?'selected':'')+'>'+esc(source.category)+'</option>').join('')+
      '</select></label><label>藥品名稱<input data-name maxlength="120" value="'+esc(input.value.trim())+'"></label>'+
-     '<label>藥品編號<input data-code maxlength="60" placeholder="請輸入新品號"></label>'+
+     '<label>廠商品號（選填）<input data-code maxlength="60" placeholder="可留白，之後補登"></label>'+
      '<p>期初 0 瓶，本次進貨另行入帳。</p><div class="registration-actions"><button type="button" data-cancel>取消</button> <button type="button" data-save>確認建檔並配對</button></div><small role="status"></small>';
     panel.querySelector('[data-code]').focus();
     panel.querySelector('[data-cancel]').onclick=()=>{panel.hidden=true;close();};
@@ -191,12 +191,15 @@ export function mountPhotoReceive({esc,fmt,ask}){
       const prior=JSON.parse(localStorage.getItem(KEY)||'null');
       if(prior&&!prior.verified)throw Error('請先核對上一筆交易');
       const source=eligible.find(item=>item.name===panel.querySelector('[data-source]').value);
-      const item=itemRegistration(source,panel.querySelector('[data-code]').value,panel.querySelector('[data-name]').value,0,rows);
-      const draft=cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-'+crypto.randomUUID(),action:'建檔',date:$('#ai-date').value,actor:$('#ai-actor').value.trim(),note:'拍照進貨新增品項',lines:[item]});
+      const vendorCode=panel.querySelector('[data-code]').value.trim();
+      if(/[｜|\r\n]/.test(vendorCode))throw Error('廠商品號不可包含分隔線或換行');
+      if(vendorCode&&rows.some(row=>row.brand===selected&&[row.code,row.vendorCode].some(code=>code&&normalizeDrug(code)===normalizeDrug(vendorCode))))throw Error('此廠商品號已有對應品項');
+      const item=itemRegistration(source,'RX-'+crypto.randomUUID(),panel.querySelector('[data-name]').value,0,rows);
+      const draft=cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-'+crypto.randomUUID(),action:'建檔',date:$('#ai-date').value,actor:$('#ai-actor').value.trim(),note:vendorCode?'廠商品號｜'+item.code+'｜'+vendorCode:'拍照進貨新增品項',lines:[item]});
       await directReview(draft,ask,async()=>{
        const catalog=await loadReceiptCatalog();
        const matches=catalog.rows.filter(row=>row.name===item.sheet&&row.code===item.code&&row.drug===item.name);
-       if(matches.length!==1)throw Error('建檔已送出，尚未從名冊讀回唯一品項，請核對建檔紀錄');
+       if(matches.length!==1||(vendorCode&&matches[0].vendorCode!==vendorCode))throw Error('建檔已送出，尚未從名冊讀回唯一品項，請核對建檔紀錄');
        if(JSON.parse(localStorage.getItem(KEY)||'null')?.id===draft.id)localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
        if(!alive||!recognized.includes(line))return;
        sources=catalog.sources;rows=catalog.rows;

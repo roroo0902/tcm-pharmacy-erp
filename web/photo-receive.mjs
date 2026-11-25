@@ -1,3 +1,4 @@
+import {itemRegistration} from './item-registration.mjs';
 import {protectDraft} from './page-safety.mjs';
 import {photoModelLabel} from './photo-model.mjs';
 import {loadReceiptCatalog} from './supplier-catalog.mjs';
@@ -51,7 +52,8 @@ function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMes
    '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
    '<td><div class="ai-review-match"><select class="ai-review-state"'+(found?' data-matched':'')+' style="width:auto;flex:0 0 auto" data-receipt-category="'+id+'" aria-label="'+name+' 庫存類別"><option value="">全部</option>'+categoryOptions+'</select>'+
    '<div data-picker><div class="receipt-current-match">'+esc(found?found.code+'｜'+found.drug:'待配對')+'</div><input type="search" data-drug-search="'+id+'" aria-label="'+name+' 搜尋編號或藥名" placeholder="輸入編號或藥名" autocomplete="off">'+
-   '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select></div></div>'+
+   '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select>'+
+   '<button type="button" data-new-drug hidden>＋新增庫存藥品</button><div data-registration hidden></div></div></div>'+
    '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)+'</small></td>'+
    '<td><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
    '<td><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已逐項核對藥名、編號、單位與瓶數" '+(line.reviewed?'checked':'')+'></td>'+
@@ -120,6 +122,11 @@ export function mountPhotoReceive({esc,fmt,ask}){
  }
  $('#ai-catalog-error button').onclick=()=>load();
  $('#ai-catalog-error .secondary').onclick=()=>catalogDialog.close();
+ let registrationCatalogFresh=false;
+ function onSync(){
+  if(registrationCatalogFresh){registrationCatalogFresh=false;return;}
+  load();
+ }
  async function load(){
   if(!alive)return;
   const seq=++run;catalogReady=false;rows=[];
@@ -163,18 +170,60 @@ export function mountPhotoReceive({esc,fmt,ask}){
    const select=picker.querySelector('select');
    const original=Array.from(select.options);
    const committed=select.value;
+   const add=picker.querySelector('[data-new-drug]');
+   const panel=picker.querySelector('[data-registration]');
+   const line=recognized.find(item=>item.id===input.dataset.drugSearch);
+   add.onclick=()=>{
+    const eligible=receiptCandidates(line,sources.filter(source=>source.brand===selected));
+    const current=picker.closest('td').querySelector('[data-receipt-category]').value;
+    panel.hidden=false;
+    panel.innerHTML='<label>廠商 <strong>'+esc(selected)+'</strong></label><label>類別<select data-source>'+
+     eligible.map(source=>'<option value="'+esc(source.name)+'" '+(source.category===current?'selected':'')+'>'+esc(source.category)+'</option>').join('')+
+     '</select></label><label>藥品名稱<input data-name maxlength="120" value="'+esc(input.value.trim())+'"></label>'+
+     '<label>藥品編號<input data-code maxlength="60" placeholder="請輸入新品號"></label>'+
+     '<p>期初 0 瓶，本次進貨另行入帳。</p><button type="button" data-cancel>取消</button> <button type="button" data-save>確認建檔並配對</button><small role="status"></small>';
+    panel.querySelector('[data-code]').focus();
+    panel.querySelector('[data-cancel]').onclick=()=>{panel.hidden=true;close();};
+    panel.querySelector('[data-save]').onclick=async()=>{
+     const message=panel.querySelector('[role=status]');
+     try{
+      if(!directEnabled())throw Error('請先連線 Google');
+      const prior=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(prior&&!prior.verified)throw Error('請先核對上一筆交易');
+      const source=eligible.find(item=>item.name===panel.querySelector('[data-source]').value);
+      const item=itemRegistration(source,panel.querySelector('[data-code]').value,panel.querySelector('[data-name]').value,0,rows);
+      const draft=cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-'+crypto.randomUUID(),action:'建檔',date:$('#ai-date').value,actor:$('#ai-actor').value.trim(),note:'拍照進貨新增品項',lines:[item]});
+      await directReview(draft,ask,async()=>{
+       const catalog=await loadReceiptCatalog();
+       const matches=catalog.rows.filter(row=>row.name===item.sheet&&row.code===item.code&&row.drug===item.name);
+       if(matches.length!==1)throw Error('建檔已送出，尚未從名冊讀回唯一品項，請核對建檔紀錄');
+       if(JSON.parse(localStorage.getItem(KEY)||'null')?.id===draft.id)localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
+       if(!alive||!recognized.includes(line))return;
+       sources=catalog.sources;rows=catalog.rows;
+       Object.assign(line,{selected:String(matches[0].id),manualSelection:true,categoryFilter:source.category,reviewed:false});
+       drawResult();showPending();registrationCatalogFresh=true;
+      },text=>{message.textContent=text;status(text);},{beforeCommit:()=>{
+       const latest=JSON.parse(localStorage.getItem(KEY)||'null');
+       if(latest&&!latest.verified&&latest.id!==draft.id)throw Error('請先核對上一筆交易');
+       localStorage.setItem(KEY,JSON.stringify(draft));showPending();
+      }});
+     }catch(error){message.textContent=error.message;}
+    };
+   };
    function filter(){
     const term=input.value.normalize('NFKC').trim().toLowerCase();
     const matches=original.slice(1).filter(option=>{
      const fields=option.textContent.split('｜').slice(1);
      return fields.some(field=>field.normalize('NFKC').toLowerCase().includes(term));
     });
+    add.hidden=!term||matches.length>0;
     original[0].textContent=matches.length?'請選擇相符藥品':'查無符合的藥品';
     select.replaceChildren(original[0],...matches);
     select.value=matches.some(option=>option.value===committed)?committed:'';
     select.size=Math.max(2,Math.min(6,matches.length+1));
    }
    function close(){
+    add.hidden=true;
     input.value='';
     original[0].textContent='請選擇相符藥品';
     select.replaceChildren(...original);
@@ -183,7 +232,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
    }
    input.onfocus=filter;
    input.oninput=filter;
-   picker.onfocusout=event=>{if(!picker.contains(event.relatedTarget))close();};
+   picker.onfocusout=event=>{if(panel.hidden&&!picker.contains(event.relatedTarget))close();};
    input.onkeydown=event=>{
     if(event.isComposing)return;
     if(event.key==='Escape'){close();input.blur();}
@@ -247,7 +296,16 @@ export function mountPhotoReceive({esc,fmt,ask}){
   const unresolved=pending&&pending.kind==='tcm-cloud'&&!pending.verified;
   $('#ai-pending').innerHTML=unresolved?'<h3>上次有一筆待核對交易</h3><p>交易編號：'+esc(pending.id)+'</p><p class="muted">為防止重複入庫，在讀回或以同一交易重試前，不能建立另一筆新進貨。</p><button type="button" id="ai-retry" class="secondary">使用原交易重新核對</button><button type="button" id="ai-readback" class="secondary">查詢 Google 交易紀錄</button>'+(pending.action==='進貨'?'<button type="button" id="ai-discard" class="secondary">取消未入帳的待核對紀錄</button>':''):'';
   if(unresolved){
-   $('#ai-retry').onclick=()=>send(cloudDraft(pending));
+   $('#ai-retry').onclick=()=>{
+    const draft=cloudDraft(pending);
+    if(draft.action!=='建檔')return send(draft);
+    directReview(draft,ask,async()=>{
+     const catalog=await loadReceiptCatalog(),item=draft.lines[0];
+     if(!catalog.rows.some(row=>row.name===item.sheet&&row.code===item.code&&row.drug===item.name))throw Error('尚未讀回建檔品項');
+     if(JSON.parse(localStorage.getItem(KEY)||'null')?.id===draft.id)localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
+     showPending();
+    },status);
+   };
    const discard=$('#ai-discard');
    if(discard)discard.onclick=()=>{
     const saved=localStorage.getItem(KEY),original=pending;
@@ -285,7 +343,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
    localStorage.setItem(KEY,JSON.stringify(draft));showPending();send(draft);
   }catch(error){status(error.message);}
  };
- window.addEventListener('erp-synced',load);
+ window.addEventListener('erp-synced',onSync);
  drawResult();drawBasket();showPending();load();
- return protectDraft(()=>{alive=false;run++;if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',load);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
+ return protectDraft(()=>{alive=false;run++;if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',onSync);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
 }

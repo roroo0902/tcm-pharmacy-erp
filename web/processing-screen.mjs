@@ -84,7 +84,7 @@ const css=`
 export function showReceiptReviewWarning(message,onReview){
  return beginProcessing({reading:true,compact:true,notice:true,catalogMessage:message,receiptWarning:true,onReview});
 }
-export function beginProcessing({reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false,inventorySync=false,notice=false,receiptWarning=false,onReview}={}){
+export function beginProcessing({action='',reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false,inventorySync=false,notice=false,receiptWarning=false,onReview}={}){
  if(active)throw Error('上一筆仍在入帳，請稍候');
  // Non-DOM callers can exercise the transaction logic independently.
  if(!globalThis.document?.createElement)return {readback(){},close(){}};
@@ -95,6 +95,18 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
   ? '<picture class="save-companion" aria-hidden="true"><source media="(prefers-reduced-motion: no-preference)" srcset="./web/assets/slime-loading.gif"><img src="./web/assets/slime-king.svg" width="96" height="100" alt=""></picture>'
   : '<img class="save-companion" src="./web/assets/slime-king.svg" width="96" height="100" alt="" aria-hidden="true">';
  dialog.innerHTML=`<section class="save-frame">${companion}<div class="save-banner">藥庫存檔中</div><div class="save-party" aria-hidden="true"><img class="save-quill" src="./web/assets/${receiptGuild?'herbal-trade.png':catalogMessage?'catalog-magnifier.svg':'magic-quill.svg'}" width="160" height="144" alt=""></div><h2 id="save-heading">正在入帳與讀回核對…</h2><p>系統正在儲存資料，並確認試算表中的數量。</p><div class="save-warning" id="save-warning">◆ 請勿關閉頁面、重新整理或重複送出</div><ol class="save-steps"><li class="done">${sendIcon}送出資料</li><li class="step-write">${writeIcon}寫入試算表</li><li class="step-read">${verifyIcon}讀回核對</li></ol><div class="save-dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="save-detail" role="status" aria-live="polite">正在等待 Google 完成寫入與核對</p><p class="save-footer">核對完成後，將自動顯示結果</p></section>`;
+ const cancelOrder=action==='取消訂貨';
+ const order=action==='訂貨'||cancelOrder;
+ if(order){
+  dialog.querySelector('.save-banner').textContent='廠商訂貨';
+  dialog.querySelector('#save-heading').textContent=cancelOrder?'正在取消訂單…':'正在同步訂單…';
+  dialog.querySelector('.save-frame > p').textContent=cancelOrder?'正在登記取消原因，並核對還原後的本周訂量。':'正在將本次訂貨量寫入廠商工作表，並核對各品項的瓶數。';
+  dialog.querySelector('#save-warning').textContent='◆ 同步完成前，請保持頁面開啟，避免重複送出。';
+  dialog.querySelector('.save-steps .done').innerHTML=sendIcon+(cancelOrder?'送出取消資料':'送出訂單資料');
+  dialog.querySelector('.step-write').innerHTML=writeIcon+(cancelOrder?'還原本周訂量':'寫入廠商工作表');
+  dialog.querySelector('.step-read').innerHTML=verifyIcon+(cancelOrder?'核對取消結果':'核對訂貨量');
+  dialog.querySelector('.save-detail').textContent='正在等待 Google 完成寫入';
+ }
  if(reading){dialog.dataset.stage='reading';dialog.querySelector('.save-banner').textContent='雲端資料核對中';dialog.querySelector('#save-heading').textContent='正在讀取最新雲端資料…';dialog.querySelector('.save-frame > p').textContent='請稍候，完成後會自動顯示下一步。';dialog.querySelector('.save-steps').hidden=true;dialog.querySelector('.save-detail').textContent='正在取得最新資料，尚未入帳';}
  if(catalogMessage){
   dialog.querySelector('.save-banner').textContent=receiptGuild?'補給資料讀取中':'每日耗損資料讀取中';
@@ -137,7 +149,7 @@ export function beginProcessing({reading=false,catalogMessage='',receiptGuild=fa
  try{dialog.showModal();}catch(e){stopReadingScroll();dialog.remove();if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow=oldOverflow;throw e;}
  active=true;if(!catalogMessage)win.addEventListener('beforeunload',beforeUnload);
  const timer=notice?null:setTimeout(()=>{dialog.querySelector('.save-detail').textContent=catalogMessage?'Google 回應較慢，請稍候。':reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
- let closed=false;const handle={readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent='正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);stopReadingScroll();dialog.close();dialog.remove();if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus({preventScroll:true});}};
+ let closed=false;const handle={readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent=order?(cancelOrder?'正在核對取消結果':'正在核對訂貨量'):'正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);stopReadingScroll();dialog.close();dialog.remove();if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus({preventScroll:true});}};
  if(notice){
   const button=doc.createElement('button');button.type='button';button.textContent=receiptWarning?'返回核對':'查看待核對操作';button.style.cssText='white-space:normal;max-width:100%;margin-top:12px';
   button.onclick=()=>{handle.close();onReview?.();};dialog.querySelector('.save-frame').append(button);button.focus();

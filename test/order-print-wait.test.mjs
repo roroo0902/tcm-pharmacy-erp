@@ -88,3 +88,16 @@ test('preview opened before another write must be reviewed anew even after that 
  stale.generate.onclick();await tick();
  assert.equal(h.calls.length,1);assert.match(stale.status.textContent,/重新核對/);
 });
+
+test('catalog additions merge at preview time and removing them preserves original quantities',()=>{
+ const fn=source.slice(source.indexOf(' function outputDraft()'),source.indexOf(' const snapshot='));
+ const original={key:'科達單方|A1004',brand:'科達',category:'單方',code:'A1004',name:'大黃',quantity:60,manual:false};
+ const extra={...original,catalog:true,quantity:'2'};
+ const rows=[original,extra];
+ const draft=new Function('source','snapshot',fn+';return outputDraft')({rows:[original]},()=>({rows:structuredClone(rows)}));
+ assert.equal(draft().rows[0].quantity,62);
+ extra.quantity='3';assert.equal(draft().rows[0].quantity,63);
+ rows.pop();assert.equal(draft().rows[0].quantity,60);
+ rows.push({...extra,category:'複方',code:'B1109',name:'甘麥大棗湯'});
+ assert.match(draft().rows[1].name,/甘麥大棗湯.*B1109/);
+});

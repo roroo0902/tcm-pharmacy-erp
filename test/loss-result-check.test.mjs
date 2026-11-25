@@ -54,3 +54,11 @@ test('quill displays a transparent PNG with stepped motion and reduced-motion su
  assert.doesNotMatch(svg,/rotate\(/);
  const screen=readFileSync(new URL('../web/processing-screen.mjs',import.meta.url),'utf8');assert.match(screen,/width:160px;height:144px/);assert.doesNotMatch(screen,/width:140px/);assert.match(screen,/image-rendering:pixelated/);
 });
+test('unsent draft remains pending without querying matching cloud totals',async()=>{
+ const s=setup(()=>assert.fail('draft must not query cloud'));
+ s.set({id:'D',phase:'draft',draft,verified:false});
+ await s.check();
+ assert.equal(s.record.verified,false);
+ assert.equal(s.counts.writes,0);
+ assert.equal(s.reports[0].title,'本筆為未送出草稿');
+});

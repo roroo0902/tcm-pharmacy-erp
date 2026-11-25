@@ -11,6 +11,10 @@ export function createLossResultCheck({readRecord,writeRecord,readCloud,begin,bl
   try{
    const record=readRecord(),snapshot=JSON.stringify(record);
    if(!record)throw Error('找不到待核對操作，請重新整理本頁。');
+   if(record.phase==='draft'){
+    report({state:'pending',title:'本筆為未送出草稿',detail:'草稿仍在待處理清單，可稍後繼續核對。'});
+    return;
+   }
    screen=begin();
    let data;
    try{

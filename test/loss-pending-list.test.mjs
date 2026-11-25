@@ -13,3 +13,11 @@ test('legacy uncertainty survives migration; removing one vendor retains other s
  slips.remove('new');
  assert.deepEqual(lossSlips(storage,'legacy').list(),[old]);
 });
+test('preserve unreadable entries and recover previously verified unsent drafts',()=>{
+ const storage=Object.assign(Object.create({getItem(k){return this[k]??null;},setItem(k,v){this[k]=v;}}),{legacy:'{','tcm-loss-slip-v1:broken':'{'});
+ const slips=lossSlips(storage,'legacy');
+ slips.save({id:'valid',phase:'draft',verified:true,draft:{date:'2026-11-25',lines:[]}});
+ assert.deepEqual(slips.list().map(r=>[r.id,r.verified]),[['valid',false]]);
+ assert.deepEqual([...slips.unreadable],['legacy','tcm-loss-slip-v1:broken']);
+ assert.equal(storage['tcm-loss-slip-v1:broken'],'{');
+});

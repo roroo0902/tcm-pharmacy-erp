@@ -1,12 +1,32 @@
 const prefix='tcm-loss-slip-v1:';
 export const lossSheets=draft=>[...new Set([...draft.lines.map(line=>line.sheet),...(draft.completionSheets||[])])];
 export function lossSlips(storage,legacyKey){
- const get=id=>JSON.parse(storage.getItem(prefix+id)||'null');
+ const unreadable=new Set();
+ function read(key){
+  const raw=storage.getItem(key);
+  unreadable.delete(key);
+  if(raw===null)return null;
+  try{
+   const record=JSON.parse(raw);
+   if(!record?.id||!Array.isArray(record.draft?.lines))throw Error();
+   // Undo the old total-only verification of a draft that was never submitted.
+   if(record.phase==='draft'&&record.verified)return {...record,verified:false};
+   return record;
+  }catch{
+   unreadable.add(key);
+   return null;
+  }
+ }
+ const get=id=>read(prefix+id);
  const save=r=>storage.setItem(prefix+r.id,JSON.stringify(r));
- const legacy=JSON.parse(storage.getItem(legacyKey)||'null');
- if(legacy?.id){if(!get(legacy.id))save(legacy);storage.removeItem(legacyKey);}
- const list=()=>Object.keys(storage).filter(k=>k.startsWith(prefix)).map(k=>get(k.slice(prefix.length))).filter(Boolean);
- return {get,save,list,remove:id=>storage.removeItem(prefix+id)};
+ const legacy=read(legacyKey);
+ if(legacy){
+  const key=prefix+legacy.id;
+  if(storage.getItem(key)===null)save(legacy);
+  if(get(legacy.id))storage.removeItem(legacyKey);
+ }
+ const list=()=>Object.keys(storage).filter(k=>k.startsWith(prefix)).map(read).filter(Boolean);
+ return {get,save,list,unreadable,remove:id=>storage.removeItem(prefix+id)};
 }
 
 const slipStyle=`<style>

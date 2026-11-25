@@ -8,7 +8,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 export const orderPrintControl=id=>`<div data-order-print="${esc(id)}" style="min-width:0;overflow-wrap:anywhere"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="secondary" data-print>產生訂藥列印版</button><button type="button" class="secondary" data-pdf>編輯／下載訂藥 PDF</button><button type="button" class="secondary" data-mail>選擇員工寄送 PDF</button></div><p role="status" style="white-space:normal;overflow-wrap:anywhere">可單獨輸出本筆或合併先前已確認訂單；不會重送訂貨或異動庫存。</p><div data-pdf-files></div><div data-mail-panel></div></div>`;
 export function googleOrderEntryMarkup(){return '<a class="button" href="'+esc(googleEntryUrl("#history"))+'" target="_blank" rel="noopener">開啟 Google 正式入口（交易紀錄）</a>';}
 export const orderRpc=(method,arg)=>new Promise((resolve,reject)=>{if(!globalThis.google?.script?.run)return reject(Error('請由 Google 正式入口使用此功能'));google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(Error(e.message||'作業未完成，請核對結果')))[method](arg);});
-export function bindOrderPrint(root,{autoMail=false,mergeIds:chosenMergeIds=null}={}){
+export function bindOrderPrint(root,{autoMail=false,onCancelOrder,mergeIds:chosenMergeIds=null}={}){
  if(!root)return;root.querySelectorAll('[data-order-print]').forEach(box=>{
  const button=box.querySelector('[data-print]'),id=box.dataset.orderPrint;let status=box.querySelector('[role=status]'),panel=box.querySelector('[data-mail-panel]'),filesPanel=box.querySelector('[data-pdf-files]'),delivery=null,urls=[];
  const openDelivery=()=>{if(!delivery){delivery=document.createElement('dialog');delivery.style.cssText='width:calc(100% - 32px);max-width:680px;white-space:normal;overflow-wrap:anywhere';delivery.innerHTML='<h2>訂藥 PDF</h2><p role="status"></p><div data-pdf-files></div><div data-mail-panel></div><div class="actions"><button type="button" class="secondary" data-close-delivery>關閉</button></div>';document.body.append(delivery);delivery.querySelector('[data-close-delivery]').onclick=()=>delivery.close();}status=delivery.querySelector('[role=status]');panel=delivery.querySelector('[data-mail-panel]');filesPanel=delivery.querySelector('[data-pdf-files]');if(!delivery.open)delivery.showModal();};
@@ -80,9 +80,9 @@ export function bindOrderPrint(root,{autoMail=false,mergeIds:chosenMergeIds=null
   }catch(e){if(visible())draftStatus.textContent=e.message;loading.failure(e);}
   finally{if(mailVisit===visit)mail.disabled=false;}
  };
- const edit=async(output='pdf',continueMail=false)=>{if(!globalThis.google?.script?.run){openDelivery();status.textContent='PDF 與寄送須在 Google 正式入口核對。切換不會寄信，未送出的草稿不會自動搬移。';panel.innerHTML=googleOrderEntryMarkup();return;}const mergeIds=chosenMergeIds??await chooseOrderOutput(id,orderRpc);if(mergeIds)openOrderPdfEditor({id,mergeIds,rpc:orderRpc,onMail:mailDraft,output,autoMail:continueMail});};button.onclick=()=>edit('print');box.querySelector('[data-pdf]').onclick=()=>edit();mail.onclick=()=>edit('pdf',true);if(autoMail)edit('pdf',true);
+ const edit=async(output='pdf',continueMail=false)=>{if(!globalThis.google?.script?.run){openDelivery();status.textContent='PDF 與寄送須在 Google 正式入口核對。切換不會寄信，未送出的草稿不會自動搬移。';panel.innerHTML=googleOrderEntryMarkup();return;}const mergeIds=chosenMergeIds??await chooseOrderOutput(id,orderRpc);if(mergeIds)openOrderPdfEditor({id,mergeIds,rpc:orderRpc,onMail:mailDraft,onCancelOrder,output,autoMail:continueMail});};button.onclick=()=>edit('print');box.querySelector('[data-pdf]').onclick=()=>edit();mail.onclick=()=>edit('pdf',true);if(autoMail)edit('pdf',true);
  });
 }
 
 
-export function openExistingOrderMail(id){const root=document.createElement("div");root.innerHTML=orderPrintControl(id);bindOrderPrint(root,{autoMail:true,mergeIds:[]});}
+export function openExistingOrderMail(id,onCancelOrder){const root=document.createElement("div");root.innerHTML=orderPrintControl(id);bindOrderPrint(root,{autoMail:true,mergeIds:[],onCancelOrder});}

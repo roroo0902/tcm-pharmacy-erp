@@ -178,7 +178,7 @@ export function mountOrderGrid({esc,fmt,ask}){
    return;
   }
   const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;$('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+p.id)}</p>${p.verified&&p.action==='訂貨'?'<button type="button" class="secondary" id="og-cancel-posted">刪除本筆訂單</button>':''}</details><button type="button" id="og-check" class="secondary">重新確認同步結果</button>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id):''}`:'';if(!p)return;if(p.verified&&p.action==='訂貨'){
-   bindOrderPrint($('#og-pending'));
+   bindOrderPrint($('#og-pending'),{onCancelOrder:cancelEditorOrder});
    $('#og-cancel-posted').onclick=()=>cancelPostedOrder(p,expected);
   }$('#og-check').onclick=async()=>{
   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
@@ -192,6 +192,15 @@ export function mountOrderGrid({esc,fmt,ask}){
    showPending();await load();status('已確認工作表中的操作結果。');
   }catch(e){status(e.message);}
  };}
+ function cancelEditorOrder(id){
+  const expected=localStorage.getItem(KEY);
+  let order;
+  try{order=JSON.parse(expected);}catch{}
+  if(!alive||order?.id!==id||order.action!=='訂貨'||order.verified!==true){
+   status('訂單狀態已變更，請至交易紀錄核對原訂單。');return;
+  }
+  cancelPostedOrder(order,expected);
+ }
  function cancelPostedOrder(order,expected){
   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
   ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(order.id)}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p><label>經手人<select id="og-cancel-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label>取消原因<input id="og-cancel-reason" required></label>`,async()=>{
@@ -220,7 +229,7 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(!owned)caution=postedOwnershipLost;
    if(alive){showPending();if(owned)await load();}
   },text=>status([text,caution].filter(Boolean).join('；')),{
-   autoMail:()=>alive&&owned,outputMergeIds:[],
+   onCancelOrder:cancelEditorOrder,autoMail:()=>alive&&owned,outputMergeIds:[],
    reviewIntro:()=>'<h3>確認合併訂貨單</h3><p>以下為兩筆合併後的品項與數量。確認後一次同步，並開啟 PDF 核對。</p>',
    reviewLabel:'確認合併訂貨並同步',
    beforeCommit:()=>{
@@ -245,7 +254,7 @@ export function mountOrderGrid({esc,fmt,ask}){
     if(prior.mergeOriginal&&JSON.stringify(posted)===JSON.stringify(cloudDraft(prior))){
      // A lost response must not add the same input to the already-posted batch.
      if(JSON.stringify(allLines())===prior.mergeInputLines){clearShortage('order');quantities.clear();prices.clear();manualLines=[];draw();}
-     openExistingOrderMail(posted.id);
+     openExistingOrderMail(posted.id,cancelEditorOrder);
      return;
     }
     resumedChoice={id:prior.id,mode:'merge'};
@@ -266,7 +275,7 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(!owned)caution=postedOwnershipLost;
    if(alive){showPending();if(owned)await load();}
   },text=>recoveryStatus([text,caution].filter(Boolean).join('；')),{
-   autoMail:()=>alive&&owned,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':'確認入帳',
+   onCancelOrder:cancelEditorOrder,autoMail:()=>alive&&owned,outputMergeIds,reviewIntro,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':'確認入帳',
    onDiscard:()=>ask('<h3>確定取消這次訂單？</h3><p>確認後會清除本次填寫的訂貨品項、數量與單價。</p>',()=>{
     if(!alive||submitted)return;
     if(input!==orderFormFingerprint()){recoveryStatus('訂貨內容已變更，請重新預覽。');return;}
@@ -348,7 +357,7 @@ export function mountOrderGrid({esc,fmt,ask}){
     busy=true;summary();let latest;try{latest=await orderRpc('erpOrderFollowupStatus',prior.id);}finally{busy=false;summary();}
     if(!alive)return;
     if(latest.state!=='unsent')throw Error('上一筆寄送狀態已變更，請重新核對；本筆輸入仍保留。');
-    if(choice==='previous'){openExistingOrderMail(prior.id);return;}
+    if(choice==='previous'){openExistingOrderMail(prior.id,cancelEditorOrder);return;}
    }
    outputMergeIds=choice==='merge'?[prior.id]:[];
    if(choice==='merge'){

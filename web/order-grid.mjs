@@ -1,3 +1,4 @@
+import {preserveLegacyRegistration} from './registration-pending.mjs';
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
 import {chooseOrderFollowup,orderMergeTable} from './order-followup.mjs';
 import {orderPrintControl,bindOrderPrint,orderRpc,openExistingOrderMail} from './order-print.mjs';
@@ -26,6 +27,7 @@ import {today} from './store.mjs';
 const KEY='tcm-cloud-pending-v1';
 const columns=[['code','藥品／編號'],['brandCategory','廠牌／類別'],['bottles','未拆封瓶數'],['periodLoss','期間耗損量'],['quantity','本次確認訂量'],['price','單價（元／瓶）'],['amount','訂貨小計（元）'],['updated','原表更新欄']];
 export function mountOrderGrid({esc,fmt,ask}){
+ preserveLegacyRegistration(localStorage);
  const c=document.querySelector('#content'),$=s=>c.querySelector(s),quantities=new Map(),prices=new Map();let sources=[],rows=[],brand='',category='',sort='code',direction='asc',alive=true,busy=false,loadFailed=false;
  let manualLines=[],page=1,pageSize=10;
  let loadingScreen=null;let periodData=null,periodUI;let shortageSeeded=false,recoveringPrevious=false;const readCatalog=createSupplierLoader(loadOrderGridCatalog);

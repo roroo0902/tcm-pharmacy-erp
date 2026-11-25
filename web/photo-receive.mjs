@@ -78,21 +78,21 @@ export function mountPhotoReceive({esc,fmt,ask}){
   '<div id="ai-result"></div><div class="actions"><button type="button" id="ai-add" disabled>核對後加入進貨清單</button></div><h3>本次進貨清單（尚未入庫）</h3><div id="ai-basket"></div><div class="actions"><button type="button" id="ai-preview" disabled>預覽庫存變化並確認同步</button></div><section id="ai-pending"></section></section>';
  root.insertAdjacentHTML('beforeend', `
  <style>
- #ai-catalog-dialog{box-sizing:border-box;width:min(640px,94vw);max-height:90dvh;overflow:auto;padding:22px;color:#182f49;background:#fff7e5;border:5px double #9d772f;border-radius:4px;box-shadow:0 0 0 2px #193451,0 12px 40px #16263b55;text-align:center}
+ #ai-catalog-dialog{box-sizing:border-box;width:min(710px,94vw);max-height:90dvh;overflow:auto;padding:22px;color:#182f49;background:#fff7e5;border:5px double #9d772f;border-radius:4px;box-shadow:0 0 0 2px #193451,0 12px 40px #16263b55;text-align:center}
  #ai-catalog-dialog::backdrop{background:#13263b66;backdrop-filter:blur(2px)}
- .ai-dialog-content{display:grid;grid-template-columns:clamp(65px,19vw,135px) 1fr;align-items:center;gap:14px}
+ .ai-dialog-content{display:grid;grid-template-columns:clamp(64px,20vw,158px) minmax(0,1fr);align-items:center;gap:clamp(10px,3vw,28px);text-align:left}
  .ai-dialog-content img{width:100%;image-rendering:pixelated}
- .ai-dialog-content h3{font-size:clamp(17px,3vw,24px);margin:0}
+ #ai-catalog-dialog h3{font-size:clamp(19px,4vw,34px);line-height:1.25;color:#142b50;margin:3px 0 0}.ai-dialog-caption{color:#805312;font-weight:600}
  .ai-dialog-footer{border-top:1px solid #bb913e;padding-top:10px;line-height:1.65;font-size:14px}
- .ai-dialog-dots{display:flex;gap:10px;justify-content:center;margin:16px}
+ .ai-dialog-dots{display:flex;gap:10px;justify-content:flex-start;margin:14px 0}
  .ai-dialog-dots i{width:8px;height:8px;background:#bb8828;animation:ai-catalog-pulse 1s steps(2,end) infinite}
  .ai-dialog-dots i:nth-child(2){animation-delay:.2s}.ai-dialog-dots i:nth-child(3){animation-delay:.4s}
  @keyframes ai-catalog-pulse{50%{opacity:.3}}@media(prefers-reduced-motion:reduce){.ai-dialog-dots i{animation:none}}
  #ai-catalog-dialog [hidden]{display:none}
  </style>
  <dialog id="ai-catalog-dialog" aria-labelledby="ai-catalog-title"><div class="ai-dialog-content">
- <img src="./web/assets/photo-wizard.png" alt=""><div>
- <h3 id="ai-catalog-title">正在讀取已啟用廠商與藥品名冊</h3>
+ <picture><source media="(prefers-reduced-motion: no-preference)" srcset="./web/assets/photo-wizard-rays.gif"><img src="./web/assets/photo-wizard.png" alt=""></picture><div>
+ <div class="ai-dialog-caption">正在讀取已啟用的</div><h3 id="ai-catalog-title">廠商與藥品名冊</h3>
  <div class="ai-dialog-dots" aria-hidden="true"><i></i><i></i><i></i></div>
  <div class="ai-dialog-footer">讀取完成後自動關閉，已填內容會保留。<br>僅讀取資料，不會入帳或變更庫存。</div>
  <div id="ai-catalog-error" hidden><p role="alert"></p><button type="button">重新讀取</button> <button class="secondary" type="button">關閉</button></div>
@@ -110,7 +110,8 @@ export function mountPhotoReceive({esc,fmt,ask}){
  const catalogTitle=$('#ai-catalog-title');
  const catalogError=$('#ai-catalog-error');
  function showCatalogState(message=null){
-  catalogTitle.textContent=message===null?'正在讀取已啟用廠商與藥品名冊':'名冊讀取失敗';
+  $('.ai-dialog-caption').hidden=message!==null;
+  catalogTitle.textContent=message===null?'廠商與藥品名冊':'名冊讀取失敗';
   catalogError.hidden=message===null;
   $('.ai-dialog-dots').hidden=message!==null;
   $('.ai-dialog-footer').hidden=message!==null;

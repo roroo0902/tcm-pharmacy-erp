@@ -177,7 +177,10 @@ export function mountOrderGrid({esc,fmt,ask}){
    $('#og-recover-previous').onclick=()=>p.mergeOriginal?reviewPendingMerge(p,localStorage.getItem(KEY)).catch(e=>status(e.message)):recoverPrevious(p.action);
    return;
   }
-  const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;$('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+p.id)}</p></details><button type="button" id="og-check" class="secondary">重新確認同步結果</button>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id):''}`:'';if(!p)return;if(p.verified&&p.action==='訂貨')bindOrderPrint($('#og-pending'));$('#og-check').onclick=async()=>{
+  const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;$('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+p.id)}</p>${p.verified&&p.action==='訂貨'?'<button type="button" class="secondary" id="og-cancel-posted">刪除本筆訂單</button>':''}</details><button type="button" id="og-check" class="secondary">重新確認同步結果</button>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id):''}`:'';if(!p)return;if(p.verified&&p.action==='訂貨'){
+   bindOrderPrint($('#og-pending'));
+   $('#og-cancel-posted').onclick=()=>cancelPostedOrder(p,expected);
+  }$('#og-check').onclick=async()=>{
   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
   try{
    const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(p.action)?'orders':'inventory')).text()).slice(1),cloudDraft(p));
@@ -189,6 +192,24 @@ export function mountOrderGrid({esc,fmt,ask}){
    showPending();await load();status('已確認工作表中的操作結果。');
   }catch(e){status(e.message);}
  };}
+ function cancelPostedOrder(order,expected){
+  if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
+  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(order.id)}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p><label>經手人<select id="og-cancel-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label>取消原因<input id="og-cancel-reason" required></label>`,async()=>{
+   try{
+    if(localStorage.getItem(KEY)!==expected)throw Error(pendingChanged);
+    const draft=cloudDraft({...order,id:'ERP-'+crypto.randomUUID(),action:'取消訂貨',reverses:order.id,date:today(),actor:document.querySelector('#og-cancel-actor').value,note:document.querySelector('#og-cancel-reason').value});
+    let submitted;
+    await directReview(draft,ask,async()=>{
+     const owned=savePendingIfCurrent(submitted,{...draft,verified:true});
+     if(alive){showPending();await load();if(!owned)status(pendingChanged);}
+    },status,{beforeCommit:reviewed=>{
+     if(!savePendingIfCurrent(expected,reviewed))throw Error(pendingChanged);
+     submitted=JSON.stringify(reviewed);
+     if(alive)showPending();
+    }});
+   }catch(e){status(e.message);}
+  },'下一步：核對取消內容');
+ }
  function currentDraft(id){
   return cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id,action:'訂貨',date:$('#og-date').value,actor:$('#og-actor').value,note:'',lines:allLines(),shortageLinks:shortageLinks('order',orderLines(rows,quantities,prices))});
  }

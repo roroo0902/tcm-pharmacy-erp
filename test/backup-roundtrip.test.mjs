@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {empty,validate,addItem,addEntry,today} from '../web/store.mjs';
+import {mountOrderBackup} from '../web/order-backup.mjs';
 import {validateOrderStore} from '../src/orders.mjs';
 const legacyKey='tcm-pharmacy-local-v1',orderKey='tcm-purchase-v2';
 const legacy=addEntry(addItem(empty(),{id:'QA',name:'非藥品',brand:'QA',category:'單方',code:'QA',safety:0,openingDate:today(),openingBottles:2}),{id:'QA-in',itemId:'QA',type:'進貨',bottles:1,date:today(),actor:'QA',note:'isolated'});
@@ -13,16 +14,13 @@ function fixture(kind,storage=new Map()){
  const key=kind==='legacy'?legacyKey:orderKey,elements=new Map(),downloads=[];let pending=null,rendered,notice='';
  const el=s=>{if(!elements.has(s))elements.set(s,{});return elements.get(s)};
  const localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v)};
- const c=vm.createContext({console,Blob,JSON,Date,validate,validateOrderStore,empty,today,localStorage,KEY:key,c:{},r:'backup',locked:false,data:kind==='legacy'?JSON.parse(storage.get(key)||JSON.stringify(empty())):null,
+ const c=vm.createContext({console,Blob,JSON,Date,validate,validateOrderStore,empty,today,localStorage,KEY:key,c:{insertAdjacentHTML:()=>{},querySelector:el},r:'backup',locked:false,data:kind==='legacy'?JSON.parse(storage.get(key)||JSON.stringify(empty())):null,
   $:el,document:{createElement:()=>({click(){downloads.push({name:this.download,blob:blobs.get(this.href)})}})},URL:{createObjectURL:b=>{const u='blob:'+blobs.size;blobs.set(u,b);return u},revokeObjectURL(){}},setTimeout:fn=>fn(),
   ask:(_html,action)=>{pending=action},message:t=>notice=t,status:t=>notice=t,
   navigator:{locks:{request:async(_key,action)=>action()}},render(){rendered=JSON.parse(localStorage.getItem(key))},read(){},source:{name:'科達單方'},select(){rendered=validateOrderStore(JSON.parse(localStorage.getItem(key)))}});
  const blobs=new Map();
- if(kind==='legacy'){
-  const src=fs.readFileSync('web/app.mjs','utf8');const mutation=src.split(/\r?\n/).find(x=>x.startsWith('async function mutate('));const block=src.split(/\r?\n/).find(x=>x.includes("if(r==='backup')"));vm.runInContext(mutation+'\n'+block,c);
- }else{
-  const src=fs.readFileSync('web/orders.mjs','utf8').split(/\r?\n/);vm.runInContext(src.filter(x=>x.includes('const stored=')||x.includes('const download=')||x.includes("$('#order-backup').onclick=")||x.includes("$('#order-restore').onchange=")).join('\n'),c);
- }
+ const src=fs.readFileSync('web/app.mjs','utf8');const mutation=src.split(/\r?\n/).find(x=>x.startsWith('async function mutate('));const block=src.split(/\r?\n/).find(x=>x.includes("if(r==='backup')"));
+ vm.runInContext(mountOrderBackup.toString()+'\n'+mutation+'\n'+block,c);
  async function choose(file){const input=el(kind==='legacy'?'#restore':'#order-restore'),path='C:/fakepath/'+file.name;if(input.value===path)return false;if(!Object.hasOwn(input,'value')){let selected='';Object.defineProperty(input,'value',{get:()=>selected,set:v=>{selected=v;if(v==='')input.files=[];}});}input.value=path;input.files=[file];pending=null;await input.onchange({target:input});return true;}
  return {choose,storage,downloads,key,export:()=>el(kind==='legacy'?'#export':'#order-backup').onclick(),async restore(raw){pending=null;await el(kind==='legacy'?'#restore':'#order-restore').onchange({target:{files:[{size:raw.length,text:async()=>raw}]}})},cancel(){pending=null},async confirm(){assert.equal(typeof pending,'function');await pending();pending=null},get pending(){return pending},get notice(){return notice},reopen(){return kind==='legacy'?validate(JSON.parse(storage.get(key))):validateOrderStore(JSON.parse(storage.get(key)))},get rendered(){return rendered}};
 }

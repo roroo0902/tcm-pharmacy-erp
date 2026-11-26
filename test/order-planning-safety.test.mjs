@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import * as pricing from '../web/receipt-pricing.mjs';
 import * as orders from '../src/orders.mjs';
+import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {lossOrderEntries} from '../web/loss-order-fill.mjs';
 import * as sort from '../web/order-sort.mjs';
 import {protectDraft} from '../web/page-safety.mjs';
@@ -34,7 +35,7 @@ test('automatic loss fill excludes only exact QA supplier and SKU',()=>{
 });
 
 const codeBody=(await readFile(new URL('../web/orders.mjs',import.meta.url),'utf8')).replace(/^import .+\n/gm,'').replace(/^export /gm,'');
-function mountHarness({historical=[]}={}){
+function mountHarness({historical=[], directReview}={}){
  const nodes=new Map(),store=new Map(),modals=[];
  const values={'#order-start':date,'#order-end':date,'#order-days':'7','#order-shipping':'0','#order-holiday':'0','#order-actor':'QA'};
  const $=(selector)=>{if(!nodes.has(selector))nodes.set(selector,{innerHTML:'',value:values[selector]??'',checked:false,showModal(){this.open=true;},close(){this.open=false;},listeners:{},addEventListener(ev,cb){this.listeners[ev]=cb;}});return nodes.get(selector);};
@@ -42,19 +43,22 @@ function mountHarness({historical=[]}={}){
  const host=$('#content'),baseGrid=grid();let reply=async()=>({values:baseGrid});
  host.querySelector=$;
  host.querySelectorAll=(selector)=>{
-  if(selector==='[data-send]')return historical.map(o=>{const b=$('send:'+o.id);b.dataset={send:o.id};return b;});
+  const datasetKey={'[data-send]':'send','[data-clear-order]':'clearOrder'}[selector];
+  if(datasetKey)return JSON.parse(store.get('tcm-purchase-v2')).orders.map(o=>{
+   const button=$(datasetKey+':'+o.id);button.dataset={[datasetKey]:o.id};return button;
+  });
   if(selector!=='[data-qty]')return [];
   return [...$('#order-table').innerHTML.matchAll(/data-qty="([^"]+)"[^>]*value="([^"]*)"/g)].map(m=>{
    const node=$('qty:'+m[1]);node.dataset={qty:m[1]};node.value=m[2];return node;
   });
  };
  const deps={...pricing,...orders,...sort,protectDraft,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
-  SOURCES:[source],ORDER_ENDPOINT:'fixture-disabled',today:()=>date,SHEET_ID:'other',directEnabled:()=>false,
+  SOURCES:[source],ORDER_ENDPOINT:'fixture-disabled',today:()=>date,SHEET_ID:'other',cloudDraft,directReview,directEnabled:()=>Boolean(directReview),
   fetch:async()=>({ok:true,headers:{get:()=> 'text/csv'},text:async()=>''}),csvRows:()=>[['','編號']],
   runDirect:(name)=>{assert.equal(name,'readLossPlanning');return reply();}};
  const mount=new Function(...Object.keys(deps),codeBody+'\nreturn mountOrders;')(...Object.values(deps));
- const unmount=mount({esc:String,fmt:String,ask:(html,run)=>modals.push({html,run})});
- return {$,modals,unmount,reply:f=>{reply=f;}};
+ const unmount=mount({esc:String,fmt:String,ask:(html,run,confirmLabel,cancelLabel)=>modals.push({html,run,confirmLabel,cancelLabel})});
+ return {$,modals,store,unmount,reply:f=>{reply=f;}};
 }
 test('real planning handlers block stale apply/confirmation, retain manual entry and re-enable after success',async()=>{
  const h=mountHarness(),{$}=h;
@@ -196,5 +200,43 @@ test('planning pager retains quantities and prices across pages and clears the w
   assert.match(h.modals.at(-1).html,/N00.*N10.*NT\$ 75/);
   $('#order-clear').onclick();h.modals.at(-1).run();
   assert.equal($('#order-total').textContent,'已填 0 項（含其他分頁） · 0 瓶 · 訂貨合計：NT$ 0');
+ }finally{h.unmount();}
+});
+
+test('confirmed draft exposes exactly two actions and approves the original order for review',async()=>{
+ const snapshot=orders.calculateOrderRows(grid(),source,options), row=snapshot.rows[1];
+ const order=orders.makeOrder(snapshot,{[row.id]:'3'},'QA',true,'PO-planning-0001',date);
+ const reviews=[];
+ const h=mountHarness({historical:[order],directReview:draft=>reviews.push(draft)});
+ try{
+  const html=h.$('#order-history').innerHTML;
+  assert.deepEqual([...html.matchAll(/<button\b[^>]*>([^<]*)<\/button>/g)].map(m=>m[1]),['確認並進行訂貨','清除這筆訂單']);
+  assert.doesNotMatch(h.$('#content').innerHTML,/開啟 Google 同步確認工具|匯出全部訂貨備份|還原訂貨備份/);
+  await h.$('send:'+order.id).onclick();
+  assert.equal(reviews.length,1);
+  assert.equal(reviews[0].id,'ERP-'+order.id);
+  assert.equal(reviews[0].actor,'QA');
+  assert.deepEqual(reviews[0].lines.map(l=>[l.sheet,l.code,l.quantity]),[['科達單方','NORMAL',3]]);
+ }finally{h.unmount();}
+});
+
+test('clearing a confirmed draft shows its counts and removes only that draft on confirmation',async()=>{
+ const snapshot=orders.calculateOrderRows(grid(),source,options), row=snapshot.rows[1];
+ const create=(id,qty)=>orders.makeOrder(snapshot,{[row.id]:String(qty)},'QA',true,id,date);
+ const selected=create('PO-planning-0001',3),other=create('PO-planning-0002',7);
+ const h=mountHarness({historical:[selected,other]});
+ const savedIds=()=>JSON.parse(h.store.get('tcm-purchase-v2')).orders.map(o=>o.id);
+ try{
+  h.$('clearOrder:'+selected.id).onclick();
+  const dialog=h.modals.at(-1);
+  assert.match(dialog.html,/科達/);
+  assert.match(dialog.html,/1\s*項/);
+  assert.match(dialog.html,/3\s*瓶/);
+  assert.equal(dialog.confirmLabel,'確認清除');
+  assert.deepEqual(savedIds(),[selected.id,other.id]);
+  await dialog.run();
+  assert.deepEqual(savedIds(),[other.id]);
+  assert.match(h.$('#order-history').innerHTML,/PO-planning-0002/);
+  assert.doesNotMatch(h.$('#order-history').innerHTML,/PO-planning-0001/);
  }finally{h.unmount();}
 });

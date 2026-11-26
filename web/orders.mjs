@@ -11,12 +11,11 @@ import {sheetPrice,pricingTotal,money} from './receipt-pricing.mjs';
 import {today} from './store.mjs';
 const ORDER_SHEET='1YcO7XRhN4T8wrL6wn-jD45lqif--rYQF4HCuBE-Nju8',GIDS={'科達單方':1285090474,'科達複方':1055167901,'天明單方':969684362,'天明複方':800389619},KEY='tcm-purchase-v2';
 export function mountOrders({esc,fmt,ask:askBase}){
- const ask=(html,action)=>askBase(html,action,'確認');
+ const ask=(html,action,label='確認',cancelLabel)=>askBase(html,action,label,cancelLabel);
  const host=document.querySelector('#content'),abort=new AbortController();let alive=true,busy=false,sourceRead='idle',snapshot=null,quantities={},source=SOURCES[0],legacy=new Map(),lastSync='',page=0,pageSize=10,sortKey='code',sortDirection='asc';
  installPlanningMobile(host);
  const stored=()=>{const s=JSON.parse(localStorage.getItem(KEY)||'{"drafts":{},"orders":[]}');return validateOrderStore(s);};
  let savedDraftState;const draftState=(opts=options())=>JSON.stringify([opts,Object.entries(quantities).filter(([,v])=>v!==''&&v!=null).sort(([a],[b])=>a.localeCompare(b))]);
- const download=(name,text,type='application/json')=>{const u=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);};
  const periodEnd=today();
  const firstDay=new Date(periodEnd+'T00:00:00Z');
  firstDay.setUTCDate(firstDay.getUTCDate()-3);
@@ -67,7 +66,7 @@ export function mountOrders({esc,fmt,ask:askBase}){
  <div class="plan-days-fields"><label>目標備貨天數<input id="order-days" type="number" min="1" max="90" step="0.5" value="3"></label><label>運送加成天數<input id="order-shipping" type="number" min="0" max="30" step="0.5" value="0.5"></label><label>假期加成天數<input id="order-holiday" type="number" min="0" max="90" step="0.5" value="0"></label></div>
  <p id="plan-days-summary" aria-live="polite"></p>
  <p class="muted">調整天數後，請按「讀取來源並計算耗損」更新各品項的建議量。</p>
- </section><label>經手人<select id="order-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div><div class="actions"><button id="order-load">讀取來源並計算耗損</button></div><p class="muted">建議訂量向上取整瓶，最低為 0 瓶。耗損資料須完整，品項與庫存須通過核對，才會顯示建議量。此為基礎建議，未核對或扣除在途、開封中存量；請依已確認到貨日與實物人工調整。驗收專用品仍可搜尋，但不納入營運訂貨。</p></section><section class="panel"><div class="panelhead"><h2 id="order-heading"></h2><input id="order-search" aria-label="搜尋訂貨藥品" placeholder="搜尋藥名或編號"></div><label class="check-label"><input type="checkbox" id="order-only-filled">只顯示本次已填品項（目前廠商／類別）</label><p class="muted">點選欄位標題切換升冪／降冪；全部品項排序後再分頁，空白與無效值固定置底。藥名與編號可分別排序。缺藥率按百分比排序，僅有缺藥標記者排在 100% 之後。原表更新欄僅有月／日時，依耗損期間結束年份比較。</p><p id="order-average-help" class="muted">每日平均耗損（瓶／日）＝期間耗損合計 ÷ 所選期間開藥日數（排除週日與指定排除日期）。缺日期、無效耗損或未確認的空白會顯示「資料不足」；勾選空白視為 0 後，該日仍列入分母。</p><button type="button" class="secondary" id="order-confirm-blanks" aria-describedby="order-blanks-scope" hidden>已確認這段期間都沒漏填，將空白當 0 瓶重算</button><div id="order-blanks-scope" class="muted" hidden><small>套用到目前廠商分類的所有品項，包含其他分頁。</small></div><div class="planning-fill-toolbar"><div><div class="planning-fill-buttons"><strong>填入本次訂貨量</strong><button class="secondary" id="order-usage">帶入期間耗損量</button><button class="secondary" id="order-suggest">帶入建議訂貨量</button></div><small id="planning-fill-note"></small></div><div id="order-pager"><label>每頁顯示 <select id="order-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><button class="secondary" id="order-prev">上一頁</button><span id="order-page"></span><button class="secondary" id="order-next">下一頁</button></div></div><div id="order-table"></div><label class="check-label"><input id="order-reviewed" type="checkbox">我已核對來源日期、缺漏資料與實際庫存，確認本次訂量</label><div class="actions"><button class="secondary" id="order-save">儲存本機草稿</button></div><p class="muted">草稿與確認紀錄只存此瀏覽器，不會自動傳送廠商、不扣庫存、不覆寫原表 D／L 欄。可下載訂單，或按「送往 Google 確認」同步到訂藥工作表；完成後至交易紀錄核對。</p><div class="actions" style="justify-content:flex-end;flex-wrap:wrap"><strong id="order-total" role="status"></strong><button class="secondary" id="order-clear">清除本次輸入</button><button id="order-confirm">確認並預覽整批訂貨</button></div></section><section class="panel"><h2>已確認訂貨草稿</h2>${ORDER_ENDPOINT?`<p><a href="${ORDER_ENDPOINT}" target="_blank" rel="noopener">開啟 Google 同步確認工具 ↗</a>（限 ryan25620280@gmail.com）</p>`:`<p class="muted">Google 寫入連線尚待部署授權；目前可儲存草稿及下載訂單。</p>`}<div id="order-history"></div><div class="actions"><button class="secondary" id="order-backup">匯出全部訂貨備份</button><label>還原訂貨備份<input id="order-restore" aria-label="還原訂貨備份" type="file" accept=".json"></label></div></section>`;
+ </section><label>經手人<select id="order-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div><div class="actions"><button id="order-load">讀取來源並計算耗損</button></div><p class="muted">建議訂量向上取整瓶，最低為 0 瓶。耗損資料須完整，品項與庫存須通過核對，才會顯示建議量。此為基礎建議，未核對或扣除在途、開封中存量；請依已確認到貨日與實物人工調整。驗收專用品仍可搜尋，但不納入營運訂貨。</p></section><section class="panel"><div class="panelhead"><h2 id="order-heading"></h2><input id="order-search" aria-label="搜尋訂貨藥品" placeholder="搜尋藥名或編號"></div><label class="check-label"><input type="checkbox" id="order-only-filled">只顯示本次已填品項（目前廠商／類別）</label><p class="muted">點選欄位標題切換升冪／降冪；全部品項排序後再分頁，空白與無效值固定置底。藥名與編號可分別排序。缺藥率按百分比排序，僅有缺藥標記者排在 100% 之後。原表更新欄僅有月／日時，依耗損期間結束年份比較。</p><p id="order-average-help" class="muted">每日平均耗損（瓶／日）＝期間耗損合計 ÷ 所選期間開藥日數（排除週日與指定排除日期）。缺日期、無效耗損或未確認的空白會顯示「資料不足」；勾選空白視為 0 後，該日仍列入分母。</p><button type="button" class="secondary" id="order-confirm-blanks" aria-describedby="order-blanks-scope" hidden>已確認這段期間都沒漏填，將空白當 0 瓶重算</button><div id="order-blanks-scope" class="muted" hidden><small>套用到目前廠商分類的所有品項，包含其他分頁。</small></div><div class="planning-fill-toolbar"><div><div class="planning-fill-buttons"><strong>填入本次訂貨量</strong><button class="secondary" id="order-usage">帶入期間耗損量</button><button class="secondary" id="order-suggest">帶入建議訂貨量</button></div><small id="planning-fill-note"></small></div><div id="order-pager"><label>每頁顯示 <select id="order-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><button class="secondary" id="order-prev">上一頁</button><span id="order-page"></span><button class="secondary" id="order-next">下一頁</button></div></div><div id="order-table"></div><label class="check-label"><input id="order-reviewed" type="checkbox">我已核對來源日期、缺漏資料與實際庫存，確認本次訂量</label><div class="actions"><button class="secondary" id="order-save">儲存本機草稿</button></div><p class="muted">草稿與確認紀錄只存此瀏覽器，不會自動傳送廠商、不扣庫存、不覆寫原表 D／L 欄。可下載訂單，或按「送往 Google 確認」同步到訂藥工作表；完成後至交易紀錄核對。</p><div class="actions" style="justify-content:flex-end;flex-wrap:wrap"><strong id="order-total" role="status"></strong><button class="secondary" id="order-clear">清除本次輸入</button><button id="order-confirm">確認並預覽整批訂貨</button></div></section><section class="panel"><h2>已確認訂貨草稿</h2><div id="order-history"></div></section>`;
  const $=q=>host.querySelector(q),status=(s,error=false)=>{$('#order-state').textContent=s;$('#order-state').className=error?'error':'muted';};
  $('#order-settings-help').onclick=()=>$('#order-settings-dialog').showModal();
  function resetBlankReview(){ $('#order-blank').checked=false; $('#order-reviewed').checked=false; }
@@ -114,10 +113,20 @@ export function mountOrders({esc,fmt,ask:askBase}){
   $('#order-total').textContent=`已填 ${lines.length} 項（含其他分頁） · ${fmt(bottles)} 瓶 · ${invalid?'請核對訂貨量':amount}`;
  }
  const qaOrder=o=>o.lines.some(r=>isOperationalOrderQa(r.sheet,r.code));
- function history(){const orders=stored().orders;$('#order-history').innerHTML=orders.length?orders.slice().reverse().map(o=>`<div class="order-history-row"><div><b>${esc(o.id)}</b>${qaOrder(o)?'<div class="pill warn">驗收紀錄・不可匯出廠商 CSV</div>':''}<p class="muted">${esc(o.lines[0]?.sheet)} · ${esc(o.actor)} · ${esc(o.status)}<br>${esc(o.options.start)}～${esc(o.options.end)} · ${o.lines.length} 項／${fmt(o.lines.reduce((a,r)=>a+r.quantity,0))} 瓶</p></div><div class="order-history-buttons"><button class="secondary" data-download="${esc(o.id)}">下載訂單 JSON</button>${ORDER_ENDPOINT?`<button data-send="${esc(o.id)}">${directEnabled()?'站內核對並同步':'送往 Google 確認'}</button>`:''}${qaOrder(o)?'':`<button class="secondary" data-csv="${esc(o.id)}">下載廠商 CSV</button>`}<button type="button" class="secondary" data-clear-order="${esc(o.id)}">清除這筆訂單</button></div></div>`).join(''):'<p class="muted">尚無確認紀錄。</p>';host.querySelectorAll('[data-clear-order]').forEach(button=>button.onclick=()=>{
+ const orderBottles=order=>order.lines.reduce((total,line)=>total+line.quantity,0);
+ function history(){
+  const orders=stored().orders;
+  $('#order-history').innerHTML=orders.length?orders.slice().reverse().map(o=>`<div class="order-history-row">
+   <div><b>${esc(o.id)}</b>${qaOrder(o)?'<div class="pill warn">驗收紀錄・無法送出訂貨</div>':''}<p class="muted">${esc(o.lines[0]?.sheet)} · ${esc(o.actor)} · ${esc(o.status)}<br>${esc(o.options.start)}～${esc(o.options.end)} · ${o.lines.length} 項／${fmt(orderBottles(o))} 瓶</p></div>
+   <div class="order-history-buttons">
+    <button type="button" data-send="${esc(o.id)}">確認並進行訂貨</button>
+    <button type="button" class="secondary" data-clear-order="${esc(o.id)}">清除這筆訂單</button>
+   </div>
+  </div>`).join(''):'<p class="muted">尚無確認紀錄。</p>';
+  host.querySelectorAll('[data-clear-order]').forEach(button=>button.onclick=()=>{
   const id=button.dataset.clearOrder;
   const selected=orders.find(order=>order.id===id);
-  ask('<p>清除這筆本機訂貨草稿？</p><p>'+esc(id)+'</p><p>清除只影響本機歷史清單。已同步的訂單仍保留在 Google 試算表。</p>',async()=>{
+  ask(`<h3>清除這筆訂單？</h3><p>${esc(id)}</p><p>${esc(selected.lines[0]?.sheet)} · ${selected.lines.length} 項／${fmt(orderBottles(selected))} 瓶</p><p>將從本機草稿清單移除這筆訂單。</p>`,async()=>{
    try{
     await navigator.locks.request(KEY,()=>{
      const state=stored(),index=state.orders.findIndex(order=>order.id===id);
@@ -126,9 +135,28 @@ export function mountOrders({esc,fmt,ask:askBase}){
     });
     history();status('已清除本機訂貨草稿 '+id);
    }catch(error){history();status(error.message,true);}
-  });
+  },'確認清除','取消');
  });
- host.querySelectorAll('[data-send]').forEach(b=>b.onclick=()=>{const o=stored().orders.find(o=>o.id===b.dataset.send);if(qaOrder(o))return status('歷史草稿含驗收專用品項，請另建營運草稿後再同步',true);if(directEnabled())return directReview(cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-'+o.id,action:'訂貨',date:new Date(o.createdAt).toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}),actor:o.actor,note:'批次訂貨；耗損期間 '+o.options.start+'～'+o.options.end,lines:o.lines}),ask,async()=>{},status);const f=document.createElement('form');f.method='POST';f.action=ORDER_ENDPOINT;f.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(cloudDraft({kind:"tcm-cloud",version:1,id:"ERP-"+o.id,action:"訂貨",date:new Date(o.createdAt).toLocaleDateString("en-CA",{timeZone:"Asia/Taipei"}),actor:o.actor,note:"批次訂貨；耗損期間 "+o.options.start+"～"+o.options.end,lines:o.lines}));f.append(input);document.body.append(f);f.submit();f.remove();status('已開啟 Google 確認頁；請登入指定帳號並在該頁確認匯入。此處尚未判定寫入成功。');});host.querySelectorAll('[data-download]').forEach(b=>b.onclick=()=>{const o=stored().orders.find(o=>o.id===b.dataset.download);download(o.id+'.json',JSON.stringify(o,null,2));});host.querySelectorAll('[data-csv]').forEach(b=>b.onclick=()=>{const o=stored().orders.find(o=>o.id===b.dataset.csv);if(qaOrder(o))return status('驗收紀錄不可匯出廠商 CSV',true);const cell=v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';download(o.id+'.csv','\uFEFF'+[['訂單編號','廠商','類別','編號','藥品','訂貨瓶數'],...o.lines.map(r=>[o.id,r.brand,r.category,r.code,r.name,r.quantity])].map(row=>row.map(cell).join(',')).join('\r\n'),'text/csv;charset=utf-8');});}
+ host.querySelectorAll('[data-send]').forEach(button=>button.onclick=()=>{
+  const order=orders.find(record=>record.id===button.dataset.send);
+  const latest=stored().orders.find(record=>record.id===order.id);
+  if(JSON.stringify(latest)!==JSON.stringify(order)){
+   history();
+   return status('草稿已變動，請重新核對。',true);
+  }
+  if(qaOrder(order))return status('歷史草稿含驗收專用品項，請另建營運草稿後再同步',true);
+  const draft=cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-'+order.id,action:'訂貨',
+   date:new Date(order.createdAt).toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}),
+   actor:order.actor,note:'批次訂貨；耗損期間 '+order.options.start+'～'+order.options.end,lines:order.lines});
+  if(directEnabled())return directReview(draft,ask,async()=>{},status);
+  if(!ORDER_ENDPOINT)return status('Google 訂貨連線尚未設定。',true);
+  const form=document.createElement('form'),input=document.createElement('input');
+  form.method='POST';form.action=ORDER_ENDPOINT;form.target='_blank';form.rel='noopener';
+  input.type='hidden';input.name='payload';input.value=JSON.stringify(draft);
+  form.append(input);document.body.append(form);form.submit();form.remove();
+  status('已開啟 Google 確認頁；請在該頁核對並確認訂貨。');
+ });
+ }
  async function saveDraft(){if(!snapshot||!samePeriod())throw Error('期間或參數已變更，請重新計算');await navigator.locks.request(KEY,()=>{const s=stored();s.drafts[source.name]={snapshot,quantities,legacy:[...legacy],lastSync};localStorage.setItem(KEY,JSON.stringify(s));savedDraftState=draftState(snapshot.options);});}
  async function fetchGrid(id,gid,range){const url=id===SHEET_ID?dailyExportUrl({gid}):`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}&range=${range}`;const r=directEnabled()&&id===SHEET_ID?await directSheet(SOURCES.find(s=>String(s.gid)===String(gid)),abort.signal):await fetch(url,{cache:'no-store',credentials:'omit',signal:AbortSignal.any([abort.signal,AbortSignal.timeout(30000)])});if(!r.ok||!r.headers.get('content-type')?.includes('text/csv'))throw Error('來源無法讀取，請確認 Google 分享權限');return csvRows(await r.text());}
  const readDialog=$('#order-read-dialog');
@@ -172,8 +200,6 @@ export function mountOrders({esc,fmt,ask:askBase}){
   quantities={};$('#order-reviewed').checked=false;render();
  });
  $('#order-save').onclick=async()=>{try{await saveDraft();status('本機草稿已保存');}catch(e){status(e.message,true);}};
- $('#order-confirm').onclick=()=>{try{if(!freshSnapshot())throw Error('請先成功重新讀取目前期間與參數，尚未確認訂貨');const selectedSnapshot=snapshot;const order=makeOrder(snapshot,quantities,$('#order-actor').value,$('#order-reviewed').checked,'PO-'+today().replaceAll('-','')+'-'+crypto.randomUUID(),new Date().toISOString());ask(`<h3>${esc(source.name)} 整批訂貨預覽</h3><ul>${order.lines.map(r=>'<li>'+esc(r.code)+' '+esc(r.name)+' · '+fmt(r.quantity)+' 瓶</li>').join('')}</ul><p>${esc($('#order-total').textContent)}</p><p>將保存為「已確認草稿・未送出」。不傳送廠商或增加庫存。</p>`,async()=>{try{await navigator.locks.request(KEY,()=>{if(!freshSnapshot()||snapshot!==selectedSnapshot)throw Error('來源已變動，請重新確認訂貨');const s=stored();if(s.orders.some(o=>JSON.stringify([o.options,o.lines,o.actor])===JSON.stringify([order.options,order.lines,order.actor])))throw Error('相同內容已確認，請使用既有訂單，避免重複訂貨');s.orders.push(order);s.drafts[source.name]={snapshot,quantities,legacy:[...legacy],lastSync};localStorage.setItem(KEY,JSON.stringify(s));savedDraftState=draftState(snapshot.options);});history();status('確認草稿已保存，可下載訂單');}catch(e){status(e.message,true);}});}catch(e){status(e.message,true);}};
- $('#order-backup').onclick=()=>download('訂貨備份_'+today()+'.json',JSON.stringify({kind:'tcm-purchase-backup',version:2,...stored()},null,2));
- $('#order-restore').onchange=async e=>{try{const file=e.target.files[0];e.target.value='';if(!file)return;if(file.size>10000000)throw Error('備份超過10MB');const s=JSON.parse(await file.text());if(s.kind!=='tcm-purchase-backup'||s.version!==2||!s.drafts||!Array.isArray(s.orders)||s.orders.some(o=>o.kind!=='tcm-purchase-order'||!Array.isArray(o.lines)||!o.options))throw Error('訂貨備份格式錯誤');validateOrderStore(s);ask('<p>還原會取代本機訂貨草稿及確認紀錄，請先匯出目前備份。</p>',async()=>{await navigator.locks.request(KEY,()=>localStorage.setItem(KEY,JSON.stringify({drafts:s.drafts,orders:s.orders})));select(source);status('訂貨備份已還原');});}catch(e){status(e.message,true);}};
+ $('#order-confirm').onclick=()=>{try{if(!freshSnapshot())throw Error('請先成功重新讀取目前期間與參數，尚未確認訂貨');const selectedSnapshot=snapshot;const order=makeOrder(snapshot,quantities,$('#order-actor').value,$('#order-reviewed').checked,'PO-'+today().replaceAll('-','')+'-'+crypto.randomUUID(),new Date().toISOString());ask(`<h3>${esc(source.name)} 整批訂貨預覽</h3><ul>${order.lines.map(r=>'<li>'+esc(r.code)+' '+esc(r.name)+' · '+fmt(r.quantity)+' 瓶</li>').join('')}</ul><p>${esc($('#order-total').textContent)}</p><p>將保存為「已確認草稿・未送出」。不傳送廠商或增加庫存。</p>`,async()=>{try{await navigator.locks.request(KEY,()=>{if(!freshSnapshot()||snapshot!==selectedSnapshot)throw Error('來源已變動，請重新確認訂貨');const s=stored();if(s.orders.some(o=>JSON.stringify([o.options,o.lines,o.actor])===JSON.stringify([order.options,order.lines,order.actor])))throw Error('相同內容已確認，請使用既有訂單，避免重複訂貨');s.orders.push(order);s.drafts[source.name]={snapshot,quantities,legacy:[...legacy],lastSync};localStorage.setItem(KEY,JSON.stringify(s));savedDraftState=draftState(snapshot.options);});history();status('草稿已保存，可在「已確認訂貨草稿」繼續訂貨。');}catch(e){status(e.message,true);}});}catch(e){status(e.message,true);}};
  select(source);load();return protectDraft(()=>{alive=false;if(readDialog.open)readDialog.close();abort.abort();},()=>draftState()!==savedDraftState);
 }

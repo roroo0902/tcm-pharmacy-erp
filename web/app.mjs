@@ -1,5 +1,5 @@
 import {restoreNavigationIcons} from './navigation-icons.mjs';
-import {mountReleasePolish} from './release-polish.mjs?v=release20261120r1';
+import {mountReleasePolish} from './release-polish.mjs?v=loss20261126';
 import {isProcessing} from './processing-screen.mjs';
 import {pageScope,allowLeave} from './page-safety.mjs';
 import {mountShortage} from './shortage.mjs?v=release20261120r1';
@@ -11,7 +11,7 @@ import {mountReceiptGrid} from './receive-grid.mjs?v=release20261120r1';
 import {mountCloudEntry,mountCloudHistory} from './cloud-entry.mjs?v=release20261120r1';
 import {mountPhotoReceive} from './photo-receive.mjs?v=receiptweight20261120';
 import {updateQuestTheme} from './quest-theme.mjs?v=ryan20261103';
-import {mountLoss} from './loss.mjs?v=release20261120r1';
+import {mountLoss} from './loss.mjs?v=loss20261126';
 import {mountReceive} from './receive.mjs?v=compact20261030';
 import {mountOrders} from './orders.mjs?v=release20261120r1';
 import {mountSheets} from './sheets.mjs?v=stockread20261119';

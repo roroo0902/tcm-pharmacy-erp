@@ -9,7 +9,7 @@ import {chooseReceiptMode} from './receipt-choice.mjs';
 import {seedShortage,shortageLinks,clearShortage} from './shortage-handoff.mjs?v=release20261120r1';
 import {watchSupplierCatalog} from './catalog-events.mjs';
 import {reconcileOrderInputs} from './order-refresh.mjs';
-import {createSupplierLoader,loadReceiptCatalog,supplierSelection} from './supplier-catalog.mjs?v=receiptread20261119';
+import {loadReceiptCatalog,supplierSelection} from './supplier-catalog.mjs?v=receiptread20261119';
 import {priceCents,money,pricingTotal} from './receipt-pricing.mjs?v=compact20261030';
 import {quantitySteppers} from './quantity-stepper.mjs?v=stepper20261029';
 import {directEnabled,directReview,directLog} from './direct-sync.mjs?v=release20261120r1';
@@ -28,7 +28,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  // Ownership is scoped to this mounted form, never written into a pending transaction.
  let ownedNormalReceipt=null,activePreview=null;
  let rows=[],sources=[],source=null,brand='',category='',sort='code',direction='asc',alive=true,loading=false,loadFailed=false,ticket=0,pending=null,checkingPending=false;
- let shortageSeeded=false,shortageHandoff=null;const readCatalog=createSupplierLoader(loadReceiptCatalog);
+ let shortageSeeded=false,shortageHandoff=null;
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
  c.innerHTML=`${supplyLayout}<style>
 #receipt-process[hidden]{display:none}
@@ -99,12 +99,12 @@ export function mountReceiptGrid({esc,fmt,ask}){
  const refreshStatus=createRefreshStatus($('#receipt-refresh'));
  let catalogScreen;
  const closeCatalogScreen=()=>{catalogScreen?.close();catalogScreen=null;};
- async function load(syncPrices=false,{showDialog=false,compact=true}={}){
+ async function load(syncPrices=false,{showDialog=false,compact=true,fresh=false}={}){
   closeCatalogScreen();
-  const run=++ticket;loading=true;refreshStatus.start();loadFailed=false;status('正在讀取 '+(brand+category||'共用廠商與品項')+'…');$('#receipt-submit').disabled=true;
-  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:"正在讀取廠商與品項…"});const data=await readCatalog();if(!alive||run!==ticket)return;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){shortageHandoff=seedShortage('receive',rows,quantities,receiptKey)||null;shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();catalogStatus();}
+  let readAt;const run=++ticket;loading=true;refreshStatus.start();loadFailed=false;status('正在讀取 '+(brand+category||'共用廠商與品項')+'…');$('#receipt-submit').disabled=true;
+  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:"正在讀取廠商與品項…"});const data=await loadReceiptCatalog({fresh:fresh||syncPrices===true});if(!alive||run!==ticket)return;readAt=data.readAt;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){shortageHandoff=seedShortage('receive',rows,quantities,receiptKey)||null;shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();catalogStatus();}
   catch(e){if(alive&&run===ticket){loadFailed=true;status(e.message+'；已填數量仍保留，請重新讀取工作表重試');}}
-  finally{if(alive&&run===ticket){closeCatalogScreen();loading=false;refreshStatus.finish(!loadFailed);summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
+  finally{if(alive&&run===ticket){closeCatalogScreen();loading=false;refreshStatus.finish(!loadFailed,readAt);summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
  }
  const processButton=$('#receipt-process');
  const pendingStatus=text=>{if(alive)$('#receipt-pending-status').textContent=text;};
@@ -399,6 +399,11 @@ export function mountReceiptGrid({esc,fmt,ask}){
   e.preventDefault();
   if(loading||loadFailed||checkingPending||isProcessing())return;
   try{
+   // Inherited prices and stock are always refreshed before building a new receipt.
+   if(directEnabled()&&quantities.size){
+    await load(false,{showDialog:true,fresh:true});
+    if(!alive||loadFailed||loading)return;
+   }
    const previousRecord=localStorage.getItem(KEY),separateRecord=localStorage.getItem(SEPARATE);
    const prior=JSON.parse(previousRecord||'null'),separate=JSON.parse(separateRecord||'null');
    if(ownedNormalReceipt&&prior?.id!==ownedNormalReceipt.id&&matchesOwnedNormal(ownedNormalReceipt.id,ownedNormalReceipt)){

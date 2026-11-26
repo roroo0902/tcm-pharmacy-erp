@@ -8,14 +8,14 @@ import {shortageStyle} from './shortage-style.mjs?v=shortageCards2';
 export function mountShortage({esc,ask}){
  const c=document.querySelector('#content');let alive=true,busy=false,readState='loading',readError='',state={records:[],substitutions:[],events:[],orders:[],receipts:[]},rows=[],tab='records',filter='',query='',brand='',category='',alternativeSource=null,returnFilters=null;const selectedIds=new Set();
  const labels={pending:'待確認缺藥',confirmed:'已確認缺藥',sufficient:'開封中足夠',closed:'已結案',cancelled:'取消補貨',deferred:'暫不補貨',unknown:'待回覆',available:'可供貨',unavailable:'廠商缺貨'};
- const key=r=>r.sheet+'|'+r.code,allocations=()=>state.events.filter(e=>e.allocation).map(e=>e.allocation),progress=r=>shortageProgress(r,allocations(),state.orders,state.receipts);
+ const key=r=>r.sheet+'|'+r.code,allocations=()=>state.events.filter(e=>e.allocation).map(e=>e.allocation),progress=r=>state.progress?.[r.id]??shortageProgress(r,allocations(),state.orders,state.receipts);
  const status=t=>{const e=c.querySelector('#sh-state');if(e)e.textContent=t;};
  const itemOptions=(value='')=>rows.filter(r=>r.code&&!r.warning?.includes('編號')).map(r=>`<option value="${esc(r.name+'|'+r.code)}" ${value===r.name+'|'+r.code?'selected':''}>${esc(r.brand+' '+r.category+' · '+r.code+' '+r.drug)}（${r.bottles??'待核對'}瓶）</option>`).join('');
  const item=k=>{const r=rows.find(r=>r.name+'|'+r.code===k);if(!r)throw Error('請選擇有效品項');return {sheet:r.name,code:r.code,name:r.drug};};
- async function load(){
+ async function load({fresh=false}={}){
   if(busy)return;busy=true;readState='loading';draw();
   try{
-   await authorize();const result=await Promise.all([runDirect('readShortage'),loadSupplierCatalog()]);if(!alive)return;
+   await authorize();const result=await Promise.all([runDirect('readShortage',{view:'summary'}),loadSupplierCatalog({fresh})]);if(!alive)return;
    state=result[0];rows=result[1].rows;readState='ready';
   }catch(e){readState='error';readError=e.message;}finally{busy=false;}
   if(alive){draw();if(readState==='ready')status('已讀回 Google 工作表 · '+new Date().toLocaleTimeString('zh-TW'));}
@@ -26,8 +26,20 @@ export function mountShortage({esc,ask}){
  const actor=()=>'<label>經手人<select name="actor" data-staff required><option value="">請選擇經手人</option></select></label>';
  function edit(record,initial){const r=record||{id:'SH-'+crypto.randomUUID(),revision:0,status:'pending',supply:'unknown',need:0,threshold:0,priority:'normal'};ask(`<form id="shortage-edit"><h3>${initial?'核對開封量':record?'更新缺藥追蹤':'登記缺藥'}</h3><div class="grid">${record?'<label>藥品<select name="item" disabled>'+itemOptions(key(record))+'</select></label>':substitutionPicker('item','缺藥品項',esc)}${actor()}${field('need','待補需求（瓶）',r.need,'number','min="0" max="1000000" step="1" required')}${field('threshold','低庫存門檻（瓶）',r.threshold,'number','min="0" max="1000000" step="1" required')}${select('status','開封量與缺藥狀態',Object.entries(labels).filter(([k])=>['pending','confirmed','sufficient','closed','cancelled','deferred'].includes(k)),r.status)}${select('supply','廠商供貨',Object.entries(labels).filter(([k])=>['unknown','available','unavailable'].includes(k)),r.supply)}${select('priority','處理優先順序',[['urgent','優先'],['normal','一般']],r.priority)}${field('eta','預計到貨日',r.eta||'','date')}<label class="full">條件與備註（結案／取消／暫緩請填原因）<textarea name="note" maxlength="1000">${esc(r.note||'')}</textarea></label></div></form>`,()=>{const f=new FormData(document.querySelector('#shortage-edit'));save('record',{...r,...(record?{}:item(f.get('item'))),actor:f.get('actor'),need:Number(f.get('need')),threshold:Number(f.get('threshold')),priority:f.get('priority'),status:f.get('status'),supply:f.get('supply'),eta:f.get('eta'),note:f.get('note')});},'儲存追蹤');if(!record)mountSubstitutionPicker(document.querySelector('#shortage-edit [data-picker="item"]'),rows,initial,esc);}
  function substitute(r){r=r||{id:'SU-'+crypto.randomUUID(),revision:0,priority:1,status:'pending'};ask(`<form id="sub-edit"><h3>缺藥替代設定</h3><img class="shortage-alchemist" src="./web/assets/shortage-alchemist-pixel.png" alt="鍊金術師調配藥劑插圖"><div class="grid">${substitutionPicker('from','缺藥品項',esc)}${substitutionPicker('to','替代候選',esc)}${actor()}${select('status','確認狀態',[['pending','待專業確認'],['confirmed','已確認'],['disabled','停用']],r.status)}${field('priority','候選順序',r.priority,'number','min="1" max="100" required')}<label class="full">適用條件、限制與備註<textarea name="note" maxlength="1000">${esc(r.note||'')}</textarea></label></div><p>此候選僅供人工核對，由缺藥品項指向替代候選；處方與劑量由專業人員確認。</p></form>`,()=>{const f=new FormData(document.querySelector('#sub-edit'));save('substitution',{...r,from:item(f.get('from')),to:item(f.get('to')),priority:Number(f.get('priority')),status:f.get('status'),note:f.get('note'),actor:f.get('actor')});},'儲存替代設定');const form=document.querySelector('#sub-edit');for(const side of ['from','to'])mountSubstitutionPicker(form.querySelector('[data-picker="'+side+'"]'),rows,r[side],esc);}
- function link(r,kind){const events=kind==='order'?state.orders:state.receipts,action=kind==='order'?'訂貨':'進貨',reversed=new Set(events.map(e=>e.draft?.reverses));const choices=events.filter(e=>e.draft?.action===action&&!reversed.has(e.draft.id)&&e.draft.lines.some(l=>l.sheet===r.sheet&&l.code===r.code));ask(`<form id="allocation-edit"><h3>關聯已確認${action}紀錄</h3><p>只關聯已入帳的交易，不會再次變更庫存。請確認這筆數量屬於本次補貨。</p><label>交易<select name="transactionId" required><option value="">請選擇</option>${choices.map(e=>`<option value="${esc(e.draft.id)}">${esc(e.draft.date+' '+e.draft.actor+' '+e.draft.id+' · '+e.draft.lines.find(l=>l.sheet===r.sheet&&l.code===r.code).quantity+'瓶')}</option>`).join('')}</select></label>${field('quantity','本次關聯瓶數','','number','min="1" max="1000000" required')}${actor()}</form>`,()=>{const f=new FormData(document.querySelector('#allocation-edit'));save('allocation',{shortageId:r.id,kind,transactionId:f.get('transactionId'),sheet:r.sheet,code:r.code,quantity:Number(f.get('quantity'))},f.get('actor'));},'確認關聯');}
- function history(r){const logs=state.events.filter(e=>e.targetId===r.id);ask(`<h3>追蹤歷程</h3>${logs.map(e=>`<p>${esc(e.time)} · ${esc(e.actor)} · ${esc(e.kind==='allocation'?'關聯交易': '更新設定')}</p><details><summary>內容</summary><pre style="white-space:pre-wrap">${esc(e.request)}</pre></details>`).join('')||'<p>尚無紀錄</p>'}`,()=>{},'關閉');}
+ // Legacy deployments return full details even when a summary is requested.
+ // Only history and manual allocation need the full transaction list.
+ async function showDetail(record,show){
+  if(busy)return;
+  if(!state.progress){show(record,state);return;}
+  busy=true;status('正在讀取追蹤明細…');
+  try{
+   const detail=await runDirect('readShortage');
+   if(alive){status('');show(record,detail);}
+  }catch(error){if(alive)status('明細讀取失敗：'+error.message+'。請再試一次。');}
+  finally{busy=false;}
+ }
+ function link(r,kind,detail){const events=kind==='order'?detail.orders:detail.receipts,action=kind==='order'?'訂貨':'進貨',reversed=new Set(events.map(e=>e.draft?.reverses));const choices=events.filter(e=>e.draft?.action===action&&!reversed.has(e.draft.id)&&e.draft.lines.some(l=>l.sheet===r.sheet&&l.code===r.code));ask(`<form id="allocation-edit"><h3>關聯已確認${action}紀錄</h3><p>只關聯已入帳的交易，不會再次變更庫存。請確認這筆數量屬於本次補貨。</p><label>交易<select name="transactionId" required><option value="">請選擇</option>${choices.map(e=>`<option value="${esc(e.draft.id)}">${esc(e.draft.date+' '+e.draft.actor+' '+e.draft.id+' · '+e.draft.lines.find(l=>l.sheet===r.sheet&&l.code===r.code).quantity+'瓶')}</option>`).join('')}</select></label>${field('quantity','本次關聯瓶數','','number','min="1" max="1000000" required')}${actor()}</form>`,()=>{const f=new FormData(document.querySelector('#allocation-edit'));save('allocation',{shortageId:r.id,kind,transactionId:f.get('transactionId'),sheet:r.sheet,code:r.code,quantity:Number(f.get('quantity'))},f.get('actor'));},'確認關聯');}
+ function history(r,detail){const logs=detail.events.filter(e=>e.targetId===r.id);ask(`<h3>追蹤歷程</h3>${logs.map(e=>`<p>${esc(e.time)} · ${esc(e.actor)} · ${esc(e.kind==='allocation'?'關聯交易': '更新設定')}</p><details><summary>內容</summary><pre style="white-space:pre-wrap">${esc(e.request)}</pre></details>`).join('')||'<p>尚無紀錄</p>'}`,()=>{},'關閉');}
  const closedSections=new Set();
  const metricNames={pending:'待確認缺藥',low:'低庫存待補',arrival:'已訂待到貨',unavailable:'廠商缺貨'};
  function draw(){
@@ -78,7 +90,7 @@ export function mountShortage({esc,ask}){
   all('[data-filter]').forEach(b=>b.onclick=()=>{filter=filter===b.dataset.filter?'':b.dataset.filter;draw();});
   if(find('#sh-retry'))find('#sh-retry').onclick=()=>save(null,null,null,true);
   find('#sh-new').onclick=()=>recordTab?edit():substitute();
-  find('#sh-reload').onclick=load;find('#sh-reload').disabled=readState==='loading';find('#sh-new').disabled=!ready;
+  find('#sh-reload').onclick=()=>load({fresh:true});find('#sh-reload').disabled=readState==='loading';find('#sh-new').disabled=!ready;
   const canOrder=({record,p,open})=>open&&record.status!=='deferred'&&p.toOrder>0;
   const orderableRecords=records.filter(canOrder);
   if(ready)for(const id of selectedIds)if(!orderableRecords.some(x=>x.record.id===id))selectedIds.delete(id);
@@ -143,7 +155,7 @@ export function mountShortage({esc,ask}){
     for(const d of all('[data-section]'))d.ontoggle=()=>{if(d.open)closedSections.delete(d.dataset.section);else closedSections.add(d.dataset.section);};
     all('[data-implicit]').forEach(b=>b.onclick=()=>edit(null,item(b.dataset.implicit)));
     all('[data-edit]').forEach(b=>b.onclick=()=>edit(state.records.find(r=>r.id===b.dataset.edit)));
-    for(const kind of ['order','receipt'])all('[data-link-'+kind+']').forEach(b=>b.onclick=()=>link(state.records.find(r=>r.id===b.getAttribute('data-link-'+kind)),kind));
+    for(const kind of ['order','receipt'])all('[data-link-'+kind+']').forEach(b=>b.onclick=()=>showDetail(state.records.find(r=>r.id===b.getAttribute('data-link-'+kind)),(record,detail)=>link(record,kind,detail)));
     all('[data-selected]').forEach(e=>e.onchange=()=>{if(e.checked)selectedIds.add(e.dataset.selected);else selectedIds.delete(e.dataset.selected);updateBatch();});
     for(const action of ['order','receive'])all('[data-'+action+']').forEach(b=>b.onclick=()=>{
      const {record,p}=records.find(x=>x.record.id===b.getAttribute('data-'+action));
@@ -158,7 +170,7 @@ export function mountShortage({esc,ask}){
     all('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(filter===b.dataset.filter)));
     updateBatch();
    }
-   all('[data-history]').forEach(b=>b.onclick=()=>history({id:b.dataset.history}));
+   all('[data-history]').forEach(b=>b.onclick=()=>showDetail({id:b.dataset.history},history));
   }
   list();
  }

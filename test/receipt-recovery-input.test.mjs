@@ -53,7 +53,7 @@ async function fixture({initial,catalog=[row],direct=true}={}){
  const mountDeps={receiptEntryDialog:()=>()=>{},...deps,...recover,receiptKey,receiptLines,sortReceiptRows,receiptPrice,priceCents,money,pricingTotal,
   document:{querySelector:()=>host,body:{append(){}},createElement:()=>({append(input){this.input=input;},submit(){external.push(JSON.parse(this.input.value));},remove(){}})},
   navigator:{locks:{request:async(_key,fn)=>fn()}},LOSS_ENDPOINT:'https://example.invalid',window:{addEventListener(){},removeEventListener(){}},crypto:{randomUUID:()=>issued++?oldId.slice(4):normalId.slice(4)},
-  createSupplierLoader:()=>async()=>({sources:catalog,rows:catalog.map(r=>({...r,bottles:stock}))}),loadReceiptCatalog:()=>{},watchSupplierCatalog:()=>()=>{},
+  loadReceiptCatalog:async()=>({sources:catalog,rows:catalog.map(r=>({...r,bottles:stock}))}),watchSupplierCatalog:()=>()=>{},
   supplierSelection:(_sources,brand)=>{const selected=catalog.find(r=>r.brand===brand)||catalog[0];return {source:selected,brand:selected.brand,category:selected.category,brands:catalog.map(r=>r.brand),categories:[selected.category]};},
   beginProcessing:()=>({close(){}}),isProcessing:()=>false,showReceiptReviewWarning:x=>warnings.push(x),createRefreshStatus:()=>({start(){},finish(){}}),
   supplyLayout:'',protectDraft:(fn,dirty)=>Object.assign(fn,{hasUnsavedChanges:dirty}),operationResult:()=>'',quantitySteppers(){},sheetUrl:()=> '#',

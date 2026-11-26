@@ -18,8 +18,9 @@ function erpDirect(operation,input,token){
  if(operation==='saveLossPeriodSettings')return periodSaveSettings_(input);
  if(operation==='readLossDay')return periodDay_(input);
  if(operation==='completeLossDay')return periodComplete_(input);
- if(operation==='readShortage')return shortageRead_();
+ if(operation==='readShortage')return input?.view==='summary'?shortageSummary_():shortageRead_();
  if(operation==='saveShortage')return shortageSave_(input);
+ if(operation==='readOrderCatalog'&&input?.supplierGrid===true)return erpSupplierInventoryCatalog_(true);
  if(operation==='readOrderCatalog')return (input?.receipt===true||input?.orderGrid===true)?erpSupplierInventoryCatalog_():erpOrderCatalog_();
  if(operation==='readLossCatalog'||operation==='readDailyLossGrid')return erpDailyLossGrid_(input);
  if(operation==='recognizeReceipt')return erpRecognizeReceipt_(input);

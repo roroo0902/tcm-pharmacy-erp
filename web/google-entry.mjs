@@ -31,6 +31,14 @@ export function restoreGooglePage(google,location){
   });
  });
 }
+export function openRememberedEntry(){
+ if(globalThis.google?.script?.run)return false;
+ let storage;
+ try{storage=localStorage;}catch{return false;}
+ if(!autoOpenGoogle(storage,location.search,location.hash))return false;
+ location.replace(googleEntryUrl(location.hash));
+ return true;
+}
 export function mountGoogleEntry(){
  const notice=document.querySelector('.notice');if(!notice)return;
  if(globalThis.google?.script?.run){
@@ -46,23 +54,13 @@ export function mountGoogleEntry(){
  notice.before(box);
  const open=box.querySelector('#open-google-pharmacy'),check=box.querySelector('input'),status=box.querySelector('[role="status"]');
  open.href=googleEntryUrl(location.hash);
- let timer;
- const cancel=()=>{clearTimeout(timer);timer=null;};
  open.addEventListener('click',()=>{
-  cancel();entryPreference(storage,check.checked);open.href=googleEntryUrl(location.hash);
+  entryPreference(storage,check.checked);open.href=googleEntryUrl(location.hash);
  });
  box.querySelector('#stay-github').onclick=()=>{
-  cancel();entryPreference(storage,false);check.checked=false;
+  entryPreference(storage,false);check.checked=false;
   status.textContent='已取消自動開啟。此頁仍使用原本的「登入 Google 同步」。';
  };
- check.onchange=()=>{if(!check.checked){cancel();entryPreference(storage,false);status.textContent='已取消記住此瀏覽器。';}};
- if(autoOpenGoogle(storage,location.search,location.hash)){
-  status.textContent='已記住此瀏覽器，3 秒後開啟 Google 藥庫。';
-  timer=setTimeout(()=>location.assign(googleEntryUrl(location.hash)),3000);
- }
- document.querySelector('#content')?.addEventListener('input',()=>{
-  if(timer){cancel();status.textContent='已暫停自動開啟，請先完成目前輸入。';}
- });
+ check.onchange=()=>{if(!check.checked){entryPreference(storage,false);status.textContent='已取消記住此瀏覽器。';}};
  window.addEventListener('hashchange',()=>{open.href=googleEntryUrl(location.hash);});
- window.addEventListener('beforeunload',cancel,{once:true});
 }

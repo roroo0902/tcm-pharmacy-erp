@@ -52,3 +52,28 @@ test('supplier inventory catalog batches only visible columns and preserves thei
  assert.equal(rows[4][6],'0');
  assert.equal(output.weekly,undefined);
 });
+test('compact registration and receipt catalog retains actual vendor edit cell, aliases and original rows',async()=>{
+ const {parseSupplierCatalog}=await import('../web/supplier-catalog.mjs');
+ const source={name:'甲單方',brand:'甲',category:'單方',gid:12};
+ const headers=[];headers[52]='廠商品號（補登）';headers[30]='建檔廠商品號';
+ const calls=[];
+ const payloads=[
+  [[headers]],
+  [[['編號'],[],['01'],[],['02']],[['藥品名稱','價格'],['','','','未拆封'],['甲','10','日期','3'],[],['乙','11','','1']],
+   [[],[],['缺','低','11/26']], [['廠商品號（補登）'],[],['00A']], [['建檔廠商品號'],[],['原品號'],[],['00B']]]
+ ];
+ const ctx=vm.createContext({ERP:{inventory:'inventory'},SpreadsheetApp:{openById:id=>{assert.equal(id,'inventory');return {};}},
+  Sheets:{Spreadsheets:{Values:{batchGet:(id,{ranges})=>{
+   calls.push([...ranges]);return {valueRanges:payloads.shift().map(values=>({values}))};
+  }}}}
+ });
+ vm.runInContext(fs.readFileSync('gas/cloud/order-catalog.gs','utf8'),ctx);
+ ctx.erpOrderSources_=()=>[source];
+ const catalog=parseSupplierCatalog(ctx.erpSupplierInventoryCatalog_(true));
+ assert.deepEqual(calls,[["'甲單方'!1:1"],['B:B','D:G','K:M','BA:BA','AE:AE'].map(r=>"'甲單方'!"+r)]);
+ assert.equal(catalog.rows[0].arrival,'11/26');
+ assert.equal(catalog.rows[0].vendorCode,'00A');
+ assert.equal(catalog.rows[1].row,5);
+ assert.equal(catalog.rows[1].vendorCode,'00B');
+ assert.match(catalog.rows[1].vendorCell,/#gid=12&range=BA5$/);
+});

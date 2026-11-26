@@ -10,9 +10,12 @@ function harness(){
  let state={inventory:[{id:1,name:item.sheet,values:[['','編號','','藥品名稱'],['','','','','','','未拆封'],['','QA1','','測試藥一','','',2],['','QA2','','測試藥二','','',4]]}],orders:[]};
  let lockAvailable=true,fail=false,throwAfter=false,released=0;const batches=[];
  const copy=x=>JSON.parse(JSON.stringify(x));
- function sheet(s){return {getSheetId:()=>s.id,getLastRow:()=>s.values.length,getRange:(r,c,n=1,m=1)=>{const rows=()=>Array.from({length:n},(_,i)=>Array.from({length:m},(_,j)=>s.values[r-1+i]?.[c-1+j]??''));return {getValues:rows,getDisplayValues:()=>rows().map(row=>row.map(String)),getValue:()=>rows()[0][0]};},getDataRange:()=>({getDisplayValues:()=>copy(s.values).map(row=>row.map(String))})};}
+ function sheet(s){return {getName:()=>s.name,getSheetId:()=>s.id,getLastRow:()=>s.values.length,getRange:(r,c,n=1,m=1)=>{const rows=()=>Array.from({length:n},(_,i)=>Array.from({length:m},(_,j)=>s.values[r-1+i]?.[c-1+j]??''));return {getValues:rows,getDisplayValues:()=>rows().map(row=>row.map(String)),getValue:()=>rows()[0][0]};},getDataRange:()=>({getDisplayValues:()=>copy(s.values).map(row=>row.map(String))})};}
  const book=id=>({getSheetByName:name=>{const s=state[id].find(s=>s.name===name);return s?sheet(s):null;},getSheets:()=>state[id].map(sheet)});
- const ctx=vm.createContext({console,ERP:{inventory:'inventory',orders:'orders',log:'藥庫_同步紀錄',orderLog:'藥庫_訂貨紀錄'},Session:{getActiveUser:()=>({getEmail:()=> 'fixture@example.invalid'})},erpOrderSources_:()=>[{name:item.sheet}],SpreadsheetApp:{openById:book},LockService:{getScriptLock:()=>({tryLock:()=>lockAvailable,releaseLock:()=>released++})},Sheets:{Spreadsheets:{batchUpdate:({requests},id)=>{
+ const ctx=vm.createContext({console,ERP:{inventory:'inventory',orders:'orders',log:'藥庫_同步紀錄',orderLog:'藥庫_訂貨紀錄'},Session:{getActiveUser:()=>({getEmail:()=> 'fixture@example.invalid'})},erpOrderSources_:()=>[{name:item.sheet}],SpreadsheetApp:{openById:book},LockService:{getScriptLock:()=>({tryLock:()=>lockAvailable,releaseLock:()=>released++})},Sheets:{Spreadsheets:{Values:{batchGet:(id,{ranges})=>({valueRanges:ranges.map(range=>{
+  const name=range.slice(1,-5).replaceAll("''","'");
+  return {values:copy(state[id].find(sheet=>sheet.name===name).values)};
+ })})},batchUpdate:({requests},id)=>{
   if(fail)throw Error('fixture batch rejected');const next=copy(state);batches.push(copy({requests,id}));
   for(const r of requests){if(r.addSheet){const p=r.addSheet.properties;if(next[id].some(s=>s.id===p.sheetId||s.name===p.title))throw Error('duplicate sheet');next[id].push({id:p.sheetId,name:p.title,values:[]});continue;}
    const update=r.updateCells||r.appendCells;if(!update)throw Error('unexpected mutation');const sid=update.sheetId??update.start.sheetId,s=next[id].find(s=>s.id===sid);if(!s)throw Error('missing sheet');const start=r.appendCells?s.values.length:update.start.rowIndex,col=r.appendCells?0:update.start.columnIndex;
@@ -29,3 +32,19 @@ test('substitution revisions preserve directional identity and readback',()=>{co
 test('confirmed order and receipt allocations respect available quantities and audit',()=>{const h=harness();h.save(request('create'));for(const [kind,action,quantity] of [['order','訂貨',10],['receipt','進貨',4]])h.log(kind,{draft:{id:'ERP-'+kind+'-fixture',action,lines:[{...item,quantity}]}});const a=(kind,qty)=>({shortageId:id,kind,transactionId:'ERP-'+kind+'-fixture',sheet:item.sheet,code:item.code,quantity:qty});const r={...request('link-order',a('order',10),'allocation'),actor:'隔離測試員'};h.save(r);h.save(r);h.save({...request('link-receipt',a('receipt',4),'allocation'),actor:'隔離測試員'});const s=h.read();assert.equal(s.events.filter(e=>e.allocation).length,2);assert.throws(()=>h.save({...request('overbook',a('receipt',1),'allocation'),actor:'隔離測試員'}),/超過/);h.log('order',{draft:{id:'ERP-cancel-fixture',action:'取消訂貨',reverses:'ERP-order-fixture'}});assert.throws(()=>h.save({...request('cancel-link',a('order',1),'allocation'),actor:'隔離測試員'}),/取消/);});
 test('atomic failure and lock conflict leave inventory and tracking unchanged',()=>{const h=harness(),before=h.state();h.setFailure(true);assert.throws(()=>h.save(request('failed')),/batch rejected/);assert.deepEqual(h.state(),before);assert.equal(h.released(),1);h.setFailure(false);h.setLock(false);assert.throws(()=>h.save(request('locked')),/其他操作/);assert.deepEqual(h.state(),before);assert.equal(h.released(),1);});
 test('transaction embedded links are read as allocations without extra sheet mutations',()=>{const h=harness();h.save(request('create'));const before=h.batches.length;h.log('order',{draft:{id:'ERP-linked-fixture',action:'訂貨',actor:'隔離測試員',lines:[{...item,quantity:5}],shortageLinks:[{shortageId:id,sheet:item.sheet,code:item.code,quantity:5}]},time:'2026-11-03T00:00:00Z'});const s=h.read(),link=s.events.find(e=>e.allocation);assert.equal(link.allocation.transactionId,'ERP-linked-fixture');assert.equal(link.allocation.kind,'order');assert.equal(h.batches.length,before);});
+
+
+test('summary matches full progress for embedded and manual allocations, including later reversals',()=>{
+ const h=harness();
+ h.save(request('open'));
+ h.log('order',{draft:{id:'ERP-order',action:'訂貨',lines:[{...item,quantity:5}],shortageLinks:[{shortageId:id,sheet:item.sheet,code:item.code,quantity:5}]}});
+ h.log('receipt',{draft:{id:'ERP-receipt',action:'進貨',lines:[{...item,quantity:3}]}});
+ h.save({...request('allocation',{shortageId:id,kind:'receipt',transactionId:'ERP-receipt',sheet:item.sheet,code:item.code,quantity:2},'allocation'),actor:'隔離測試員'});
+ const summary=()=>JSON.parse(JSON.stringify(h.ctx.shortageSummary_()));
+ assert.equal(summary().progress[id].ordered,5);
+ assert.equal(summary().progress[id].received,2);
+ h.log('order',{draft:{id:'ERP-reversal',action:'取消訂貨',reverses:'ERP-order'}});
+ assert.deepEqual(summary().progress[id],{ordered:0,received:2,outstanding:0,toOrder:8,progress:'partial',invalidAllocations:1});
+ assert.deepEqual(Object.keys(summary()).sort(),['progress','records','substitutions']);
+ assert.equal(h.read().events.filter(e=>e.allocation).length,2);
+});

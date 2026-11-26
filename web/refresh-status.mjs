@@ -13,11 +13,11 @@ export function createRefreshStatus(button, now = () => new Date()) {
    button.setAttribute('aria-busy', 'true');
    status.textContent = '正在讀取工作表，已填數量保留。';
   },
-  finish(success) {
+  finish(success, updatedAt) {
    button.disabled = false;
    button.textContent = label;
    button.setAttribute('aria-busy', 'false');
-   if (success) lastUpdated = now().toLocaleString('zh-TW', {timeZone:'Asia/Taipei',hour12:false});
+   if (success) lastUpdated = (updatedAt || now()).toLocaleString('zh-TW', {timeZone:'Asia/Taipei',hour12:false});
    status.textContent = success ? '更新時間：' + lastUpdated : '讀取失敗，已填數量保留。' + (lastUpdated ? '上次更新：' + lastUpdated : '請重試。');
   }
  };

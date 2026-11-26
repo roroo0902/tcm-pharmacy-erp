@@ -10,27 +10,60 @@ function erpOrderSources_(ss=SpreadsheetApp.openById(ERP.inventory),readHeaders=
 function erpSupplierHeaders_(name,rows){
  if(rows[0]?.[1]!=='編號'||rows[0]?.[3]!=='藥品名稱'||rows[0]?.[4]!=='價格'||rows[1]?.[6]!=='未拆封')throw Error(name+' 欄位格式不符，請依標準庫存表建立');
 }
-function erpSupplierInventoryCatalog_(){
+function erpSupplierInventoryCatalog_(includeVendorCodes=false){
  const ss=SpreadsheetApp.openById(ERP.inventory),sources=erpOrderSources_(ss,false),sheets={};
  if(!sources.length)return {sources,sheets};
- const ranges=sources.flatMap(({name})=>{
-  const title="'"+name.replace(/'/g,"''")+"'";
-  return ['B:B','D:G','K:L'].map(range=>title+'!'+range);
+ const titles=sources.map(({name})=>"'"+name.replace(/'/g,"''")+"'!");
+ const vendorHeaders=['廠商品號（補登）','建檔廠商品號'];
+ const vendorEditColumns={};
+ const headers=includeVendorCodes?erpBatchInventoryRanges_(titles.map(title=>title+'1:1')):[];
+ const ranges=[];
+ const plans=sources.map(({name},i)=>{
+  const start=ranges.length,columns=['B:B','D:G',includeVendorCodes?'K:M':'K:L'];
+  const vendorColumns=[];
+  if(includeVendorCodes){
+   for(const header of vendorHeaders){
+    const position=(headers[i].values?.[0]||[]).indexOf(header);
+    if(position<0)continue;
+    const letter=erpCatalogColumn_(position+1);
+    if(header===vendorHeaders[0])vendorEditColumns[name]=letter;
+    vendorColumns.push(header);
+    columns.push(letter+':'+letter);
+   }
+  }
+  ranges.push(...columns.map(range=>titles[i]+range));
+  return {name,start,vendorColumns};
  });
- const result=Sheets.Spreadsheets.Values.batchGet(ERP.inventory,{ranges,valueRenderOption:'FORMATTED_VALUE'});
- if(result.valueRanges?.length!==ranges.length)throw Error('庫存品項來源未完整讀取');
- sources.forEach(({name},index)=>{
-  const [codes,details,shortages]=result.valueRanges.slice(index*3,index*3+3).map(range=>range.values||[]);
-  // Rebuild original column positions and row numbers for the shared catalog parser.
+ const values=erpBatchInventoryRanges_(ranges);
+ for(const {name,start,vendorColumns} of plans){
+  const [codes,details,shortages]=values.slice(start,start+3).map(range=>range.values||[]);
+  const vendors=vendorColumns.map((header,i)=>{
+   const col=values[start+3+i].values||[];
+   if(col[0]?.[0]!==header)throw Error(name+' 廠商品號欄位已變更，請重新讀取');
+   return col;
+  });
+  // Retain the real row numbers, but pack far-right vendor codes directly after M.
   const rows=Array.from({length:Math.max(codes.length,details.length,shortages.length)},(_,i)=>{
    const [drug='',price='',updated='',stock='']=details[i]||[];
-   const [flag='',rate='']=shortages[i]||[];
-   return ['',codes[i]?.[0]??'','',drug,price,updated,stock,'','','',flag,rate];
+   const [flag='',rate='',arrival='']=shortages[i]||[];
+   const row=['',codes[i]?.[0]??'','',drug,price,updated,stock,'','','',flag,rate];
+   if(includeVendorCodes)row.push(arrival,...vendors.map(col=>col[i]?.[0]??''));
+   return row;
   });
   erpSupplierHeaders_(name,rows);
   sheets[name]=rows;
- });
- return {sources,sheets};
+ }
+ return includeVendorCodes?{sources,sheets,vendorEditColumns}:{sources,sheets};
+}
+function erpCatalogColumn_(n){
+ let letter='';
+ while(n>0){n--;letter=String.fromCharCode(65+n%26)+letter;n=Math.floor(n/26);}
+ return letter;
+}
+function erpBatchInventoryRanges_(ranges){
+ const result=Sheets.Spreadsheets.Values.batchGet(ERP.inventory,{ranges,valueRenderOption:'FORMATTED_VALUE'});
+ if(result.valueRanges?.length!==ranges.length)throw Error('庫存品項來源未完整讀取');
+ return result.valueRanges;
 }
 function erpOrderCatalog_(){
  const sources=erpOrderSources_(),inv=SpreadsheetApp.openById(ERP.inventory),orders=SpreadsheetApp.openById(ERP.orders),sheets={},weekly={};

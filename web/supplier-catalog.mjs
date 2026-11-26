@@ -1,4 +1,5 @@
-import {runDirect} from './direct-sync.mjs?v=release20261120r1';
+import {supplierCache} from './recent-read.mjs';
+import {hostedEnabled,runDirect} from './direct-sync.mjs?v=release20261120r1';
 import {SHEET_ID,parseSheet} from './sheets-data.mjs';
 
 // Registration, receipt, order and daily loss screens use the server's enabled supplier registry.
@@ -13,8 +14,8 @@ export function parseSupplierCatalog(data){
   const values=grid.map(row=>row.map(value=>String(value??'')));
   const manual=values[0]?.indexOf('廠商品號（補登）')??-1;
   const initial=values[0]?.indexOf('建檔廠商品號')??-1;
-  let column='';
-  for(let n=manual+1;n>0;n=Math.floor((n-1)/26))column=String.fromCharCode(65+(n-1)%26)+column;
+  let column=data.vendorEditColumns?.[source.name]||'';
+  for(let n=column?0:manual+1;n>0;n=Math.floor((n-1)/26))column=String.fromCharCode(65+(n-1)%26)+column;
   return parseSheet(values,source).map(row=>{
    const fields=values[row.row-1];
    return {...row,vendorCode:(fields[manual]||fields[initial]||'').trim(),
@@ -24,8 +25,14 @@ export function parseSupplierCatalog(data){
  });
  return {sources:data.sources,rows,sheets:data.sheets};
 }
-export async function loadSupplierCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog'));}
-export async function loadReceiptCatalog(){return loadSupplierCatalog();}
+async function readSupplierRows(){
+ const catalog=parseSupplierCatalog(await runDirect('readOrderCatalog',{supplierGrid:true}));
+ return {...catalog,readAt:new Date()};
+}
+export function loadSupplierCatalog(options){
+ return hostedEnabled()?supplierCache.read(readSupplierRows,options):readSupplierRows();
+}
+export const loadReceiptCatalog=loadSupplierCatalog;
 export async function loadOrderGridCatalog(){return parseSupplierCatalog(await runDirect('readOrderCatalog',{orderGrid:true}));}
 export function supplierSelection(sources,brand,category){
  const brands=[...new Set(sources.map(s=>s.brand))];

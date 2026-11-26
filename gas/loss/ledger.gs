@@ -2,14 +2,32 @@
 const LOSS_LEDGER='每日耗損明細';
 const LOSS_LEDGER_HEADERS=['日期','廠商／類別','藥品編號','藥品名稱','當日累計瓶數','版本','來源','核對狀態','備註','經手人','更新時間'];
 function lossLedgerRead_(ss){return lossLedgerReadScoped_(ss);}
+// Read the date column once. The append-only ledger can contain corrections to any older day.
+function lossLedgerDayRows_(sheet,last,date){
+ if(last<2)return [];
+ const dates=sheet.getRange(2,1,last-1,1).getValues();
+ const blocks=[];
+ for(let i=0;i<dates.length;i++){
+  const raw=dates[i][0];
+  // Inspect undated rows too: completely blank rows are allowed; partially filled ones must fail.
+  if(raw!==''&&loss3Date_(raw)!==date)continue;
+  const row=i+2,previous=blocks[blocks.length-1];
+  if(previous&&row-previous.last<=16)previous.last=row;
+  else blocks.push({first:row,last:row});
+ }
+ // Very fragmented historical imports are cheaper as a bounded scan than many remote calls.
+ if(blocks.length>4)blocks.splice(0,blocks.length,{first:blocks[0].first,last:blocks[blocks.length-1].last});
+ return blocks.flatMap(block=>sheet.getRange(block.first,1,block.last-block.first+1,9).getValues());
+}
 function lossLedgerReadScoped_(ss,onlyDate){
  const sh=ss.getSheetByName(LOSS_LEDGER);if(!sh)throw Error('獨立耗損明細尚未完成移轉，請聯絡維護人員');
  const last=sh.getLastRow();
  if(last>100000)throw Error('耗損明細已達讀取上限，請先封存');
- const v=onlyDate?sh.getRange(1,1,Math.max(1,last),9).getValues():sh.getDataRange().getValues(),latest=new Map();
- const headers=onlyDate?[...v[0],...sh.getRange(1,10,1,2).getValues()[0]]:v[0].slice(0,11);
+ const all=onlyDate?null:sh.getDataRange().getValues(),latest=new Map();
+ const headers=onlyDate?sh.getRange(1,1,1,11).getValues()[0]:all[0].slice(0,11);
  if(headers.join('|')!==LOSS_LEDGER_HEADERS.join('|'))throw Error('每日耗損明細表頭已變更');
- for(const r of v.slice(1)){if(r.every(x=>x===''))continue;const date=loss3Date_(r[0]);
+ const rows=onlyDate?lossLedgerDayRows_(sh,last,onlyDate):all.slice(1);
+ for(const r of rows){if(r.every(x=>x===''))continue;const date=loss3Date_(r[0]);
  if(onlyDate&&date!==onlyDate)continue;
  const key=JSON.stringify([date,String(r[1]),String(r[2])]);
  if(!r[1]||!r[2]||!r[3]||!Number.isInteger(r[5])||r[5]<0||!['已核對','待核對'].includes(r[7]))throw Error('每日耗損明細格式待核對');

@@ -24,3 +24,22 @@ test('hosted entry preserves the chosen page and rejects arbitrary redirect targ
  await restoreGooglePage(google,location);assert.equal(location.hash,'overview');
  const local={hash:'#history'};await restoreGooglePage(undefined,local);assert.equal(local.hash,'#history');
 });
+
+test('remembered GitHub visit opens its selected Google page immediately and keeps the stay override',async()=>{
+ const {openRememberedEntry}=await import('../web/google-entry.mjs');
+ const keys=['location','localStorage','google'];
+ const saved=keys.map(k=>Object.getOwnPropertyDescriptor(globalThis,k));
+ const opened=[];
+ const location={search:'',hash:'#items',replace:url=>opened.push(url)};
+ try{
+  for(const [k,v] of Object.entries({location,localStorage:{getItem:()=> 'google'},google:undefined}))
+   Object.defineProperty(globalThis,k,{value:v,configurable:true});
+  assert.equal(openRememberedEntry(),true);
+  assert.deepEqual(opened,[googleEntryUrl('#items')]);
+  location.search='?stay=1';assert.equal(openRememberedEntry(),false);
+  location.search='';location.hash='#backup';assert.equal(openRememberedEntry(),false);
+  location.hash='#items';Object.defineProperty(globalThis,'google',{value:{script:{run:{}}}});
+  assert.equal(openRememberedEntry(),false);
+  assert.equal(opened.length,1);
+ }finally{keys.forEach((k,i)=>saved[i]?Object.defineProperty(globalThis,k,saved[i]):Reflect.deleteProperty(globalThis,k));}
+});

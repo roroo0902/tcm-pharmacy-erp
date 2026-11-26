@@ -50,6 +50,44 @@ function shortageLatest_(rows){const m=new Map();rows.forEach(r=>m.set(r.id,r));
 function shortageLog_(id,title){const ss=SpreadsheetApp.openById(id),sh=ss.getSheetByName(title);if(!sh)return [];if(sh.getRange(1,1).getValue()!=='交易編號'||sh.getLastRow()>10000)throw Error('交易紀錄格式或範圍異常');return sh.getLastRow()<2?[]:sh.getRange(2,1,sh.getLastRow()-1,3).getValues().filter(r=>r.some(v=>v!==''&&v!==null)).map(r=>JSON.parse(r[1]));}
 function shortageRead_(){const ss=SpreadsheetApp.openById(ERP.inventory),orders=shortageLog_(ERP.orders,ERP.orderLog),receipts=shortageLog_(ERP.inventory,ERP.log),events=shortageRows_(ss,SHORTAGE_TABLES.events);for(const [kind,list] of [['order',orders],['receipt',receipts]])for(const event of list)for(const a of event.draft.shortageLinks||[])events.push({targetId:a.shortageId,kind:'allocation',actor:event.draft.actor,time:event.time,request:JSON.stringify(event.draft),allocation:{...a,kind,transactionId:event.draft.id}});return {records:shortageLatest_(shortageRows_(ss,SHORTAGE_TABLES.records)),substitutions:shortageLatest_(shortageRows_(ss,SHORTAGE_TABLES.substitutions)),events,orders,receipts};}
 
+// The initial checklist needs exact progress across all dates, but not transaction
+// payloads or historical notes. Read the append-only tables once per workbook.
+function shortageReadTables_(bookId,titles){
+ const names=new Set(SpreadsheetApp.openById(bookId).getSheets().map(sheet=>sheet.getName()));
+ const present=titles.filter(title=>names.has(title));
+ const tables=Object.fromEntries(titles.map(title=>[title,[]]));
+ if(!present.length)return tables;
+ const ranges=present.map(title=>"'"+title.replace(/'/g,"''")+"'!A:C");
+ const response=Sheets.Spreadsheets.Values.batchGet(bookId,{ranges,valueRenderOption:'UNFORMATTED_VALUE'});
+ if(response.valueRanges?.length!==present.length)throw Error('缺藥資料未完整讀取，請重新讀取');
+ present.forEach((title,index)=>{
+  const values=response.valueRanges[index].values||[];
+  if(values.length>10000)throw Error(title+' 超過讀取上限');
+  const log=title===ERP.orderLog||title===ERP.log;
+  const valid=log?values[0]?.[0]==='交易編號':values[0]?.join('|')==='事件編號|資料JSON|更新時間';
+  if(!valid)throw Error(title+' 表頭不符');
+  tables[title]=values.slice(1).filter(row=>row.some(v=>v!==''&&v!==null)).map(row=>JSON.parse(row[1]));
+ });
+ return tables;
+}
+function shortageSummary_(){
+ const {records,substitutions,events}=SHORTAGE_TABLES;
+ const tables=shortageReadTables_(ERP.inventory,[records,substitutions,events,ERP.log]);
+ const latest=shortageLatest_(tables[records]);
+ const progress={};
+ if(latest.length){
+  const orders=shortageReadTables_(ERP.orders,[ERP.orderLog])[ERP.orderLog],receipts=tables[ERP.log];
+  const allocations=tables[events].filter(event=>event.allocation).map(event=>event.allocation);
+  for(const [kind,transactions] of [['order',orders],['receipt',receipts]]){
+   for(const {draft} of transactions){
+    for(const link of draft.shortageLinks||[])allocations.push({...link,kind,transactionId:draft.id});
+   }
+  }
+  for(const record of latest)progress[record.id]=Shortage.shortageProgress(record,allocations,orders,receipts);
+ }
+ return {records:latest,substitutions:shortageLatest_(tables[substitutions]),progress};
+}
+
 function shortageItem_(item){const sources=erpOrderSources_();if(!sources.some(s=>s.name===item.sheet))throw Error('廠商來源未啟用');const v=SpreadsheetApp.openById(ERP.inventory).getSheetByName(item.sheet).getDataRange().getDisplayValues().slice(2);const matches=v.filter(r=>String(r[1]).trim()===item.code);if(matches.length!==1||String(matches[0][3]).trim()!==item.name)throw Error('藥品編號或名稱已變動，請重新讀取');}
 function shortageSave_(input){
  const lock=LockService.getScriptLock();if(!lock.tryLock(30000))throw Error('其他操作處理中，請重試');

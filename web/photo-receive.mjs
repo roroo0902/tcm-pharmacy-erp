@@ -120,26 +120,29 @@ export function mountPhotoReceive({esc,fmt,ask}){
   if(message!==null)$('#ai-catalog-error p').textContent=message;
   if(!catalogDialog.open)catalogDialog.showModal();
  }
- $('#ai-catalog-error button').onclick=()=>load();
+ $('#ai-catalog-error button').onclick=()=>load({fresh:true});
  $('#ai-catalog-error .secondary').onclick=()=>catalogDialog.close();
  let registrationCatalogFresh=false;
  function onSync(){
   if(registrationCatalogFresh){registrationCatalogFresh=false;return;}
   load();
  }
- async function load(){
+ function drawBrandButtons(brands){
+  $('#ai-source').innerHTML=brands.map(brand=>'<button type="button" class="secondary '+(brand===selected?'selected':'')+'" data-ai-brand="'+esc(brand)+'" aria-pressed="'+(brand===selected)+'">'+esc(brand)+'</button>').join('');
+ }
+ async function load({fresh=false}={}){
   if(!alive)return;
   const seq=++run;catalogReady=false;rows=[];
   recognized.forEach(line=>{line.reviewed=false;});drawResult();
   showCatalogState();
   try{
-   const catalog=await loadReceiptCatalog();
+   const catalog=await loadReceiptCatalog({fresh});
    if(seq!==run||!alive)return;
    const brands=[...new Set(catalog.sources.map(source=>source.brand))];
    const previous=selected;
    selected=brands.includes(selected)?selected:brands[0];
    if(previous&&previous!==selected)recognized=[];
-   $('#ai-source').innerHTML=brands.map(brand=>'<button type="button" class="secondary '+(brand===selected?'selected':'')+'" data-ai-brand="'+esc(brand)+'" aria-pressed="'+(brand===selected)+'">'+esc(brand)+'</button>').join('');
+   drawBrandButtons(brands);
    sources=catalog.sources;rows=catalog.rows;catalogReady=true;drawResult();drawBasket();catalogDialog.close();
    status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');
   }catch(error){if(seq===run&&alive){rows=[];catalogReady=false;drawResult();status(error.message);showCatalogState(error.message);}}
@@ -197,7 +200,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
       const item=itemRegistration(source,'RX-'+crypto.randomUUID(),panel.querySelector('[data-name]').value,0,rows);
       const draft=cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-'+crypto.randomUUID(),action:'建檔',date:$('#ai-date').value,actor:$('#ai-actor').value.trim(),note:vendorCode?'廠商品號｜'+item.code+'｜'+vendorCode:'拍照進貨新增品項',lines:[item]});
       await directReview(draft,ask,async()=>{
-       const catalog=await loadReceiptCatalog();
+       const catalog=await loadReceiptCatalog({fresh:true});
        const matches=catalog.rows.filter(row=>row.name===item.sheet&&row.code===item.code&&row.drug===item.name);
        if(matches.length!==1||(vendorCode&&matches[0].vendorCode!==vendorCode))throw Error('建檔已送出，尚未從名冊讀回唯一品項，請核對建檔紀錄');
        if(JSON.parse(localStorage.getItem(KEY)||'null')?.id===draft.id)localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
@@ -255,8 +258,10 @@ export function mountPhotoReceive({esc,fmt,ask}){
   root.querySelectorAll('[data-basket-remove]').forEach(b=>b.onclick=()=>{basket.splice(Number(b.dataset.basketRemove),1);drawBasket();});
   $('#ai-preview').disabled=!basket.length;
  }
- $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||loading||button.dataset.aiBrand===selected)return;selected=button.dataset.aiBrand;recognized=[];drawResult();load();};
- $('#ai-reload').onclick=async()=>{try{if(directEnabled())await authorize();await load();}catch(error){status(error.message);}};
+ $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||loading||button.dataset.aiBrand===selected)return;selected=button.dataset.aiBrand;recognized=[];
+  drawBrandButtons([...new Set(sources.map(source=>source.brand))]);drawResult();drawBasket();
+  status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');};
+ $('#ai-reload').onclick=async()=>{try{if(directEnabled())await authorize();await load({fresh:true});}catch(error){status(error.message);}};
 
  $('#ai-image').onchange=()=>{pastedImage=null;$('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';};
  $('#ai-image').onpaste=event=>{
@@ -307,7 +312,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
     const draft=cloudDraft(pending);
     if(draft.action!=='建檔')return send(draft);
     directReview(draft,ask,async()=>{
-     const catalog=await loadReceiptCatalog(),item=draft.lines[0];
+     const catalog=await loadReceiptCatalog({fresh:true}),item=draft.lines[0];
      if(!catalog.rows.some(row=>row.name===item.sheet&&row.code===item.code&&row.drug===item.name))throw Error('尚未讀回建檔品項');
      if(JSON.parse(localStorage.getItem(KEY)||'null')?.id===draft.id)localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
      showPending();

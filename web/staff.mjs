@@ -1,13 +1,16 @@
-import {runDirect} from './direct-sync.mjs?v=release20261120r1';
+import {createReadCache} from './recent-read.mjs';
+import {hostedEnabled,runDirect} from './direct-sync.mjs?v=release20261120r1';
 
 // Share one request between dynamically mounted pages and review dialogs.
 export function staffLoader(read=()=>runDirect('readStaff')){
- let pending;
- return ()=>pending||(pending=Promise.resolve().then(read).then(result=>{
+ const cache=createReadCache(300000);
+ const fetchNames=async()=>{
+  const result=await read();
   const names=[...new Set((result.names||[]).map(n=>String(n).trim()).filter(Boolean))];
   if(!names.length)throw Error('員工名冊尚未填寫姓名');
   return names;
- }).finally(()=>{pending=null;}));
+ };
+ return (options)=>cache.read(fetchNames,options);
 }
 export function installStaffSelectors(){
  const load=staffLoader(), initialized=new WeakSet();
@@ -20,17 +23,17 @@ export function installStaffSelectors(){
    const refresh=document.createElement('button');refresh.type='button';refresh.className='secondary small staff-refresh';refresh.textContent='更新員工名冊';
    const controls=document.createElement('span');controls.className='staff-controls';controls.append(status,refresh);el.after(controls);
    let sequence=0;
-   async function update(){
+   async function update(fresh=false){
     const current=++sequence,previous=el.value;el.disabled=true;el.value='';refresh.disabled=true;
     controls.hidden=false;status.textContent='正在讀取員工名冊…';
     try{
-     const names=await load();if(!el.isConnected||current!==sequence)return;
+     const names=await load({fresh:fresh||!hostedEnabled()});if(!el.isConnected||current!==sequence)return;
      el.replaceChildren(new Option('請選擇經手人',''),...names.map(n=>new Option(n,n)));
      el.value=names.includes(previous)?previous:'';el.disabled=false;status.textContent='來源：員工名冊 B 欄';controls.hidden=el.hasAttribute('data-staff-compact');
     }catch(e){if(el.isConnected&&current===sequence){el.replaceChildren(new Option('員工名冊尚未載入',''));status.textContent=e.message.includes('不支援的操作')?'線上同步版本尚未更新，請重新整理後再試。':e.message;}}
     finally{if(el.isConnected&&current===sequence)refresh.disabled=false;}
    }
-   refresh.onclick=update;update();
+   refresh.onclick=()=>update(true);update();
   });
  }
  const observer=new MutationObserver(mount);observer.observe(document.body,{childList:true,subtree:true});mount();

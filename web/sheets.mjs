@@ -1,3 +1,4 @@
+import {supplierCache} from './recent-read.mjs';
 import {parseSupplierCatalog} from './supplier-catalog.mjs';
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {exportInventory,filterInventory,selectInventory} from './inventory-export.mjs';
@@ -86,7 +87,7 @@ export function mountSheets({esc,fmt}){
   if(!alive)return;snapshots.set(s.gid,{rows,time:Date.now()});errors.delete(s.gid);}catch(e){if(alive)errors.set(s.gid,e.name==='TimeoutError'?'讀取逾時':e.message==='Failed to fetch'?'連線或分享權限有變，請重試':e.message);}}));}catch(e){errors.set('catalog',e.message);}finally{loadingScreen?.close();loadingScreen=null;busy=false;if(alive){$('#cloud-refresh').disabled=false;$('#cloud-status').textContent=errors.has('catalog')?'廠商設定讀取失敗：'+errors.get('catalog')+'；保留上次資料，請重新同步。':errors.size?`有 ${errors.size} 個分頁同步失敗；成功分頁已更新，舊資料已標示。`:`已同步 ${sources.length} 個分頁 · ${time(Date.now())}`;draw();}}}
  $('#cloud-search').oninput=()=>{page=0;draw();};
  $('#cloud-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;page=0;draw();}};
- $('#cloud-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;page=0;draw();}};$('#cloud-prev').onclick=()=>{page--;draw();};$('#cloud-next').onclick=()=>{page++;draw();};$('#cloud-refresh').onclick=()=>sync({showDialog:true});
+ $('#cloud-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;page=0;draw();}};$('#cloud-prev').onclick=()=>{page--;draw();};$('#cloud-next').onclick=()=>{page++;draw();};$('#cloud-refresh').onclick=()=>{supplierCache.clear();return sync({showDialog:true});};
  const onVisible=()=>{if(!document.hidden)sync();};document.addEventListener('visibilitychange',onVisible);const timer=setInterval(()=>{if(!document.hidden)sync();},directEnabled()?directPollMs():60000);window.addEventListener('erp-synced',onSynced);draw();sync({showDialog:true});return()=>{alive=false;loadingScreen?.close();loadingScreen=null;window.removeEventListener('erp-synced',onSynced);controller.abort();clearInterval(timer);document.removeEventListener('visibilitychange',onVisible);};
 }
 

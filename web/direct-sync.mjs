@@ -1,3 +1,4 @@
+import {markCatalogWrite} from './catalog-events.mjs';
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
 import {receiptAddMarkup,bindReceiptAdd} from './receipt-review-add.mjs';
 import {orderPrintControl,bindOrderPrint} from './order-print.mjs';
@@ -157,7 +158,9 @@ export async function directReview(draft,ask,onSuccess,status,options={}){
      if((order||reviewed.action==='進貨')&&globalThis.navigator?.locks)await navigator.locks.request('tcm-cloud-pending-v1',reserve);
      else await reserve();
     }
-    const result=await runDirect('commit',reviewed,preview.token);
+    let result;
+    try{result=await runDirect('commit',reviewed,preview.token);}
+    finally{markCatalogWrite();}
     if(loss){
      screen.readback();
      const check=await runDirect('preview',reviewed);

@@ -1,7 +1,7 @@
 import {supplierCache} from './recent-read.mjs';
 import {parseSupplierCatalog} from './supplier-catalog.mjs';
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
-import {exportInventory,filterInventory,selectInventory} from './inventory-export.mjs';
+import {exportInventory,filterInventory,selectInventory,inventoryLabels} from './inventory-export.mjs?v=overviewCards1';
 import {money} from './receipt-pricing.mjs';
 import {directEnabled,runDirect,directPollMs} from './direct-sync.mjs?v=release20261120r1';
 import {sortSheetRows} from './sheets-sort.mjs';
@@ -12,14 +12,20 @@ export function mountSheets({esc,fmt}){
 #content #cloud-table th:nth-child(-n+2),#content #cloud-table td:nth-child(-n+2){text-align:center;vertical-align:middle}
 #content #cloud-table tbody td:first-child{padding-left:54px;padding-right:54px}
 #content #cloud-table th:nth-child(-n+2) .sort-heading{text-align:center}
-#cloud-cards button.card{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;min-width:0;background:#fffdf5}
-#cloud-cards [data-cloud-filter="warning"]::after{background-image:url("./web/assets/checklist-scroll.png");opacity:1;image-rendering:pixelated}
-#cloud-cards [data-cloud-filter="zero"]::after{background-image:url("./web/assets/empty-treasure-chest.png");width:56px;height:56px;filter:none;opacity:1;image-rendering:pixelated}
-#cloud-cards button.card:hover{background:#f8f0da;border-color:#8a6a2d}
-#cloud-cards button.card[aria-pressed="true"]{border-color:#315e81;box-shadow:inset 0 0 0 2px #315e81,0 3px 0 #d8dccf}
-#cloud-cards button.card:focus-visible{outline:3px solid #315e81;outline-offset:4px}
-#cloud-cards .card-hint{display:block;font-size:12px;margin-top:8px;color:#405c73}
-
+#cloud-cards{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+#cloud-cards button.card{width:100%;min-width:0;min-height:112px;display:flex;align-items:center;justify-content:center;gap:clamp(7px,1vw,16px);padding:18px 12px;text-align:left;background:#fffdf5;border:1px solid #c6a362;color:#173650;font:inherit;cursor:pointer}
+#cloud-cards button.card img{width:clamp(50px,5vw,86px);height:70px;object-fit:contain;flex:none}
+#cloud-cards .metric-copy{border-inline-start:1px solid #bca575;padding-inline-start:clamp(7px,1vw,16px);min-width:0}
+#cloud-cards .metric-copy small{display:block;font-size:clamp(.9rem,1.1vw,1.16rem);font-weight:700;color:inherit;letter-spacing:0}
+#cloud-cards .metric-copy strong{margin:2px 0 0;color:inherit;font-size:clamp(1.55rem,2.25vw,2.3rem);overflow-wrap:anywhere}
+#cloud-cards .metric-copy em{display:inline;color:inherit;font:600 .85rem/1 system-ui;margin-inline-start:4px}
+#cloud-cards button.card::after{content:none}
+#cloud-cards button.card:hover{background:#f7f0df}
+#cloud-cards button.card[aria-pressed=true]{background:#142f49;color:white;border-color:#a88036;box-shadow:inset 0 0 0 3px #edc56d}
+#cloud-cards button.card[aria-pressed=true]::after{content:'✓';position:absolute;top:5px;right:5px;width:18px;height:18px;display:grid;place-items:center;background:#ffda85;color:#142f49;border-radius:50%;font:bold 14px/1 sans-serif;opacity:1;filter:none}
+#cloud-cards button.card:focus-visible{outline:3px solid #a88036;outline-offset:3px}
+@media(max-width:1100px){#cloud-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){#cloud-cards{gap:8px}#cloud-cards button.card{min-height:94px;padding:16px 8px;gap:5px}#cloud-cards button.card img{width:38px;height:44px}#cloud-cards .metric-copy{padding-inline-start:6px}}
 #cloud-brands .cloud-all-wrap,#cloud-categories .cloud-all-wrap{display:inline-flex;padding-right:14px;margin-right:6px;border-right:1px solid #b49a60}
 #cloud-brands .cloud-all,#cloud-categories .cloud-all{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:108px;min-height:44px;background:#f3e4b7;color:#183b56;border:1px solid #b39448;box-shadow:0 3px 0 #b6a16b;font-weight:600}
 #cloud-brands .cloud-all::before,#cloud-categories .cloud-all::before{content:none}
@@ -49,11 +55,22 @@ export function mountSheets({esc,fmt}){
  $('#cloud-brands').innerHTML=selection.brands.map(b=>filterButton(b,brand,'brand')).join('');
  $('#cloud-categories').innerHTML=selection.categories.map(c=>filterButton(c,category,'category')).join('');
  const all=sources.flatMap(s=>snapshots.get(s.gid)?.rows??[]);const q=$('#cloud-search').value.toLowerCase();const filters={q,brand,category,status:statusFilter,sortKey,sortDirection,sortYear};const matching=filterInventory(all,filters),list=selectInventory(all,filters);const exportReady=!busy&&!errors.size&&snapshots.size===sources.length&&list.length>0;$('#cloud-export').disabled=!exportReady;$('#cloud-export-status').textContent=busy?'正在同步，完成後即可匯出。':errors.size||snapshots.size!==sources.length?'來源尚未完整同步，請同步成功後再匯出。':!list.length?'目前沒有符合條件的品項。':'匯出目前條件的全部品項（含其他頁），依目前排序排列。';$('#cloud-export').onclick=()=>{if(!exportReady||busy)return;try{const file=exportInventory(all,filters,[...snapshots].map(([gid,v])=>({name:sources.find(s=>s.gid===gid).name,time:v.time})));const url=URL.createObjectURL(new Blob([file.bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})),a=document.createElement('a');a.href=url;a.download=file.filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);$('#cloud-export-status').textContent='已產生 '+file.count+' 筆品項的 Excel，請確認瀏覽器下載完成。';}catch(e){$('#cloud-export-status').textContent=e.message;}};const pages=Math.max(1,Math.ceil(list.length/50));page=Math.min(page,pages-1);$('#cloud-prev').disabled=page===0;$('#cloud-next').disabled=page===pages-1;$('#cloud-page').textContent=`第 ${page+1} / ${pages} 頁 · ${list.length} 筆`;
- const labels={all:'符合品項',zero:'零庫存',warning:'待核對'};
- $('#cloud-detail-title').textContent=labels[statusFilter]+'明細 · '+list.length+' 筆';
+ $('#cloud-detail-title').textContent=inventoryLabels[statusFilter]+'明細 · '+list.length+' 筆';
  const focusedCard=document.activeElement?.dataset?.cloudFilter;
- $('#cloud-cards').innerHTML=[['符合品項',matching.length,'筆','all'],['已填瓶數合計',matching.reduce((s,r)=>s+(r.bottles??0),0),'瓶 · 依搜尋與廠牌條件',null],['零庫存',matching.filter(r=>r.bottles===0).length,'筆','zero'],['待核對',matching.filter(r=>r.warning).length,'筆','warning']].map(([label,n,unit,key])=>{const body=`<small>${label}</small><strong>${snapshots.size?fmt(n):'—'}</strong><em>${unit}</em>`;return key?`<button type="button" class="card" data-cloud-filter="${key}" aria-pressed="${statusFilter===key}" aria-controls="cloud-table">${body}<span class="card-hint">${statusFilter===key?'目前顯示':'點選查看明細 ↓'}</span></button>`:`<div class="card">${body}</div>`;}).join('');
- content.querySelectorAll('[data-cloud-filter]').forEach(button=>button.onclick=()=>{statusFilter=button.dataset.cloudFilter;page=0;draw();$('#cloud-detail-title').focus({preventScroll:true});$('#cloud-details').scrollIntoView({block:'start'});});
+ const metrics=[
+  ['all', matching.length, '筆'],
+  ['filled', matching.reduce((sum,row)=>sum+(row.bottles??0),0), '瓶'],
+  ['zero', matching.filter(row=>row.bottles===0).length, '筆'],
+  ['warning', matching.filter(row=>row.warning).length, '筆']
+ ];
+ $('#cloud-cards').innerHTML=metrics.map(([key,count,unit])=>`<button type="button" class="card" data-cloud-filter="${key}" aria-pressed="${statusFilter===key}" aria-controls="cloud-table">
+  <img src="./web/assets/inventory-card-${key}.png" alt="">
+  <span class="metric-copy"><small>${inventoryLabels[key]}</small><strong>${snapshots.size?fmt(count):'—'}<em>${unit}</em></strong></span>
+ </button>`).join('');
+ content.querySelectorAll('[data-cloud-filter]').forEach(button=>button.onclick=()=>{
+  statusFilter=button.dataset.cloudFilter;page=0;draw();
+  content.querySelector('[data-cloud-filter="'+statusFilter+'"]').focus({preventScroll:true});
+ });
  if(focusedCard)content.querySelector('[data-cloud-filter="'+focusedCard+'"]').focus({preventScroll:true});
  $('#cloud-table').innerHTML=list.length?`<div class="tablewrap"><table><thead><tr>${heading('code','編號',['drug','藥品名稱'])}${heading('brand','廠牌／類別')}${heading('price','單價（元／瓶）')}${heading('bottles','未拆封瓶數')}${heading('updated','原表更新欄')}${heading('stockout','缺藥標記',['shortage','缺藥率'])}${heading('warning','核對事項')}<th>原表</th></tr></thead><tbody>${list.slice(page*50,page*50+50).map(r=>`<tr data-category="${esc(r.category)}"><td><b>${esc(r.drug)}</b><div class="muted">${esc(r.code||'未填編號')}</div></td><td>${esc(r.brand)}<div class="muted">${esc(r.category)}</div></td><td class="num">${r.unitPriceCents!==undefined?esc(money(r.unitPriceCents)):r.priceWarning?esc(r.priceRaw)+'（待核對）':'未填'}</td><td class="num"><b>${r.stockRaw===''?'未填':esc(r.stockRaw)}</b>${r.bottles!==null?' 瓶':''}</td><td>${esc(r.updated||'未填')}</td><td>${esc([r.stockout,r.shortage].filter(Boolean).join('／')||'—')}</td><td>${r.warning?`<span class="pill warn">${esc(r.warning)}</span>`:'—'}${errors.has(r.gid)?'<div class="pill out">舊資料・同步失敗</div>':''}</td><td><a href="${sheetUrl(r)}&range=B${r.row}:M${r.row}" target="_blank" rel="noopener">查看 ↗</a></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">${busy?'正在讀取…':errors.size===sources.length?'目前無法取得來源資料，請稍後重新同步。':'沒有符合的藥品。'}</div>`;
  content.querySelectorAll('[data-sort]').forEach(button=>button.onclick=()=>{const key=button.dataset.sort;sortDirection=key===sortKey&&sortDirection==='asc'?'desc':'asc';sortKey=key;page=0;draw();content.querySelector('[data-sort="'+key+'"]').focus();});

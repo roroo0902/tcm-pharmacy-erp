@@ -138,6 +138,41 @@ export function mountLoss({esc,fmt,ask,message}){
  },'繼續核對差額');
  }catch(e){message(e.message,true);}}
  $('#loss-submit-complete').onclick=()=>submitLoss(true);
+ function restoreSlipInputs(record){
+  const catalog=[...rowById.values()];
+  const entries=record.draft.lines.map(line=>{
+   const matches=catalog.filter(row=>row.name===line.sheet&&row.code===line.code&&row.drug===line.name);
+   if(matches.length!==1)throw Error('品項已變更，請重新核對');
+   return {row:matches[0],total:line.total};
+  });
+  for(const {row,total} of entries){
+   dayDraft.quantities.set(row.id,String(total));
+   dayDraft.rows.set(row.id,row);
+  }
+  $('#loss-actor').value=record.draft.actor;
+  dayDraft.reason=lossCorrectionReason(record.draft.reason);
+  dayDraft.reasonKind=lossReasons.find(([, ,text])=>text&&text===dayDraft.reason)?.[0]||(dayDraft.reason?'other':'');
+ }
+ async function returnLossPreview(record){
+  if(disposed)return;
+  try{
+   const sameDraft=()=>record.phase==='draft'&&!record.verified&&JSON.stringify(slips.get(record.id))===JSON.stringify(record);
+   if(!sameDraft())throw Error('耗損單狀態已變更，請先查詢同步結果。');
+   if(date!==record.draft.date){
+    selectDate(record.draft.date);$('#loss-date').value=date;await load();
+    if(disposed||loadFailed||date!==record.draft.date)return;
+   }
+   await navigator.locks.request('tcm-loss-slip-update',()=>{
+    if(disposed)return;
+    if(!sameDraft())throw Error('耗損單狀態已變更，請先查詢同步結果。');
+    restoreSlipInputs(record);
+    slips.remove(record.id);
+    reuseResultId='';
+    currentId=slips.list().find(r=>!r.verified)?.id||slips.list().at(-1)?.id;
+    draw();showPending();status('已返回表單，可繼續修改各廠牌的耗損數量。');
+   });
+  }catch(e){if(!disposed){showPending();status(e.message);}}
+ }
  const checkPending=createLossResultCheck({readRecord:readResult,writeRecord:record=>slips.save(record),readCloud:async draft=>{const data=await runDirect('readLossCatalog',{date:draft.date});if(draft.completionSheets)data.completion=await Promise.all(draft.completionSheets.map(sheet=>runDirect('readLossDay',{date:draft.date,sheet})));return data;},begin:()=>beginProcessing({reading:true}),blocked:isProcessing,disposed:()=>disposed,report:showLossCheckResult,changed:()=>{reuseResultId='';showPending();}});
  function showPending(){if(disposed)return;pending=readResult();$('#loss-pending').innerHTML=operationResult(pending,'loss',localStorage.getItem(HIDDEN_RESULT));
  const count=slips.list().filter(r=>!r.verified).length;
@@ -156,7 +191,7 @@ export function mountLoss({esc,fmt,ask,message}){
    if(JSON.stringify(readResult())!==original){status('待登錄內容已變更，請重新核對');return;}
    selectDate(record.draft.date);$('#loss-date').value=date;await load();if(disposed||loadFailed||date!==record.draft.date)return;
    if(JSON.stringify(readResult())!==original){status('待登錄內容已變更，請重新核對');return;}
-   try{const selectedRows=record.draft.lines.map(line=>{const matches=[...rowById.values()].filter(r=>r.name===line.sheet&&r.code===line.code&&r.drug===line.name);if(matches.length!==1)throw Error('品項已變更，請重新核對');return {row:matches[0],line};});for(const {row,line} of selectedRows){dayDraft.quantities.set(row.id,String(line.total));dayDraft.rows.set(row.id,row);}$('#loss-actor').value=record.draft.actor;dayDraft.reason=lossCorrectionReason(record.draft.reason);dayDraft.reasonKind=lossReasons.find(([, ,text])=>text&&text===dayDraft.reason)?.[0]||(dayDraft.reason?'other':'');reuseResultId=record.id;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}
+   try{restoreSlipInputs(record);reuseResultId=record.id;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}
   },'載入並修改');
  };
  if($('#loss-cancel'))$('#loss-cancel').onclick=async()=>{
@@ -176,12 +211,14 @@ export function mountLoss({esc,fmt,ask,message}){
  }
  function markSent(record){
   const live=slips.get(record.id);
-  if(!live||live.verified||JSON.stringify(live.draft)!==JSON.stringify(record.draft))throw Error('耗損單已變更或移除，請重新核對');
+  if(!live||live.verified||live.phase!==record.phase||JSON.stringify(live.draft)!==JSON.stringify(record.draft))throw Error('耗損單已變更或移除，請重新核對');
   slips.save({...live,phase:'submitted'});
  }
  function sendLoss(record){const draft={...record.draft,reason:lossCorrectionReason(record.draft.reason)};
- if(directEnabled())return directReview(draft,ask,async()=>{slips.save({...record,verified:true,phase:'posted'});if(disposed)return;reuseResultId='';clearSlipInputs(record);if(date===record.draft.date){dayDraft=draftFor(date);cache.clear();rowById.clear();}showPending();await load();},text=>{if(!disposed)message(text);},{beforeCommit:()=>navigator.locks.request('tcm-loss-slip-update',()=>markSent(record)),reviewIntro:()=>draft.reason?'<p>更正原因：'+esc(draft.reason)+'</p>':''});
- ask('<p>將重新開啟這筆耗損的 Google 核對頁，日期與累計量保持不變，確認前不扣庫存。</p>',()=>{const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(draft);form.append(input);document.body.append(form);markSent(record);form.submit();form.remove();message('已開啟 Google 核對頁，請於完成後查詢同步結果。');},'開啟 Google 核對頁');
+ const onReturn=record.phase==='draft'&&!record.verified?()=>returnLossPreview(record):undefined;
+ const beforeCommit=()=>navigator.locks.request('tcm-loss-slip-update',()=>markSent(record));
+ if(directEnabled())return directReview(draft,ask,async()=>{slips.save({...record,verified:true,phase:'posted'});if(disposed)return;reuseResultId='';clearSlipInputs(record);if(date===record.draft.date){dayDraft=draftFor(date);cache.clear();rowById.clear();}showPending();await load();},text=>{if(!disposed)message(text);},{beforeCommit,onReturn,reviewIntro:()=>draft.reason?'<p>更正原因：'+esc(draft.reason)+'</p>':''});
+ ask('<p>將重新開啟這筆耗損的 Google 核對頁，日期與累計量保持不變，確認前不扣庫存。</p>',async()=>{try{await beforeCommit();}catch(e){status(e.message);return;}const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(draft);form.append(input);document.body.append(form);form.submit();form.remove();message('已開啟 Google 核對頁，請於完成後查詢同步結果。');},'開啟 Google 核對頁',undefined,onReturn);
  }
  showPending();
  if(directEnabled()){const notes=$('#loss-submit-complete').parentElement.parentElement.querySelectorAll(':scope > p.muted');notes[0].textContent='在站內核對差額後按確認入帳。相同累計不重扣；雲端資料變更時需重新預覽。';notes[1].textContent='新增品項請先至藥品建帳；耗損存入獨立每日明細。若要將整個分類標記完成，請選「預覽並完成正常品項登錄」。';}const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>load();window.addEventListener('erp-synced',sync);load({showDialog:true}).finally(openSlips);return protectDraft(()=>{disposed=true;slipDialog?.close();closeCatalogScreen();stopWordAxis();completion.dispose();stopCatalogWatch();generation++;window.removeEventListener('erp-synced',sync);},()=>[...drafts.values()].some(d=>d.quantities.size>0||d.reason.trim()!==''||!!d.reasonKind));

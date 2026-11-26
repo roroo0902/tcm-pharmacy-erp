@@ -120,6 +120,30 @@ test('loss confirms success only after a separate fresh readback and rejects a n
  readbacks=1;await review();await confirm();assert.equal(success,1);assert.match(status,/入帳後資料又有變動/);
 });
 
+test('loss preview offers its return callback only before commit',async t=>{
+ const m=await client(t),calls=[],dialogs=[];
+ let returns=0;
+ globalThis.fetch=async(_url,init)=>{
+  const [op]=JSON.parse(init.body).parameters;
+  calls.push(op);
+  if(op==='commit')throw Error('lost reply');
+  return response({token:'snapshot',lines:[{delta:1}]});
+ };
+ const draft={kind:'tcm-loss-cumulative',lines:[{total:1}]};
+ const review=()=>m.directReview(draft,(html,confirm,label,backLabel,back)=>dialogs.push({html,confirm,back}),
+  ()=>assert.fail('write outcome is unknown'),()=>{},{onReturn:()=>returns++});
+ await review();
+ await dialogs.at(-1).back();
+ assert.equal(returns,1);
+ assert.deepEqual(calls,['prepareLoss','preview']);
+ await review();
+ await dialogs.at(-1).confirm();
+ assert.match(dialogs.at(-1).html,/結果尚待核對/);
+ assert.equal(dialogs.at(-1).back,undefined);
+ assert.equal(calls.filter(op=>op==='commit').length,1);
+ assert.equal(returns,1);
+});
+
 test('API snapshot stays stable when transport reorders nested object keys',()=>{
  const {c}=server();
  c.lossV3Preview=d=>({token:JSON.stringify(d),lines:[]});

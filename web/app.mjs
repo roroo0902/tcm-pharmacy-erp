@@ -2,7 +2,7 @@ import {restoreNavigationIcons} from './navigation-icons.mjs';
 import {mountReleasePolish} from './release-polish.mjs?v=loss20261126';
 import {isProcessing} from './processing-screen.mjs';
 import {pageScope,allowLeave} from './page-safety.mjs';
-import {mountShortage} from './shortage.mjs?v=release20261120r1';
+import {mountShortage} from './shortage.mjs?v=shortageDesk20261126';
 import {mountOrderGrid} from './order-grid.mjs?v=orderDelete20261126';
 import {installStaffSelectors} from './staff.mjs?v=allstaff20261030';
 import {setupDirect} from './direct-sync.mjs?v=release20261120r1';

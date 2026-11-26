@@ -4,9 +4,9 @@ import {runDirect,authorize,directReview} from './direct-sync.mjs?v=release20261
 import {loadSupplierCatalog} from './supplier-catalog.mjs?v=googlesync20261114';
 import {shortageProgress,normalizeShortage,normalizeSubstitution} from '../src/shortage.mjs?v=release20261120r1';
 import {queueShortage} from './shortage-handoff.mjs?v=release20261120r1';
-import {today} from './store.mjs';
+import {shortageStyle} from './shortage-style.mjs';
 export function mountShortage({esc,ask}){
- const c=document.querySelector('#content');let alive=true,busy=false,readState='loading',readError='',state={records:[],substitutions:[],events:[],orders:[],receipts:[]},rows=[],tab='records',filter='',query='',brand='',category='',alternativeSource=null;const selectedIds=new Set();
+ const c=document.querySelector('#content');let alive=true,busy=false,readState='loading',readError='',state={records:[],substitutions:[],events:[],orders:[],receipts:[]},rows=[],tab='records',filter='',query='',brand='',category='',alternativeSource=null,returnFilters=null;const selectedIds=new Set();
  const labels={pending:'待確認缺藥',confirmed:'已確認缺藥',sufficient:'開封中足夠',closed:'已結案',cancelled:'取消補貨',deferred:'暫不補貨',unknown:'待回覆',available:'可供貨',unavailable:'廠商缺貨'};
  const key=r=>r.sheet+'|'+r.code,allocations=()=>state.events.filter(e=>e.allocation).map(e=>e.allocation),progress=r=>shortageProgress(r,allocations(),state.orders,state.receipts);
  const status=t=>{const e=c.querySelector('#sh-state');if(e)e.textContent=t;};
@@ -24,23 +24,140 @@ export function mountShortage({esc,ask}){
  const field=(name,label,value='',type='text',extra='')=>`<label>${label}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;
  const select=(name,label,options,value)=>`<label>${label}<select name="${name}">${options.map(([v,t])=>`<option value="${v}" ${v===value?'selected':''}>${t}</option>`).join('')}</select></label>`;
  const actor=()=>'<label>經手人<select name="actor" data-staff required><option value="">請選擇經手人</option></select></label>';
- function edit(record,initial){const r=record||{id:'SH-'+crypto.randomUUID(),revision:0,status:'pending',supply:'unknown',need:0,threshold:0,priority:'normal'};ask(`<form id="shortage-edit"><h3>${record?'更新':'登記'}缺藥</h3><div class="grid">${record?'<label>藥品<select name="item" disabled>'+itemOptions(key(record))+'</select></label>':substitutionPicker('item','缺藥品項',esc)}${actor()}${field('need','待補需求（瓶）',r.need,'number','min="0" max="1000000" step="1" required')}${field('threshold','低庫存門檻（瓶）',r.threshold,'number','min="0" max="1000000" step="1" required')}${select('status','人工確認',Object.entries(labels).filter(([k])=>['pending','confirmed','sufficient','closed','cancelled','deferred'].includes(k)),r.status)}${select('supply','廠商供貨',Object.entries(labels).filter(([k])=>['unknown','available','unavailable'].includes(k)),r.supply)}${select('priority','處理優先順序',[['urgent','優先'],['normal','一般']],r.priority)}${field('eta','預計到貨日',r.eta||'','date')}<label class="full">條件與備註（結案／取消／暫緩請填原因）<textarea name="note" maxlength="1000">${esc(r.note||'')}</textarea></label></div></form>`,()=>{const f=new FormData(document.querySelector('#shortage-edit'));save('record',{...r,...(record?{}:item(f.get('item'))),actor:f.get('actor'),need:Number(f.get('need')),threshold:Number(f.get('threshold')),priority:f.get('priority'),status:f.get('status'),supply:f.get('supply'),eta:f.get('eta'),note:f.get('note')});},'儲存追蹤');if(!record)mountSubstitutionPicker(document.querySelector('#shortage-edit [data-picker="item"]'),rows,initial,esc);}
- function substitute(r){r=r||{id:'SU-'+crypto.randomUUID(),revision:0,priority:1,status:'pending'};ask(`<form id="sub-edit"><h3>缺藥替代設定</h3><img class="shortage-alchemist" src="./web/assets/shortage-alchemist-pixel.png" alt="鍊金術師調配藥劑插圖"><div class="grid">${substitutionPicker('from','A 藥（缺）',esc)}${substitutionPicker('to','B 藥（候選替代）',esc)}${actor()}${select('status','確認狀態',[['pending','待專業確認'],['confirmed','已確認'],['disabled','停用']],r.status)}${field('priority','候選順序',r.priority,'number','min="1" max="100" required')}<label class="full">適用條件、限制與備註<textarea name="note" maxlength="1000">${esc(r.note||'')}</textarea></label></div><p>僅建立人工管理設定，不自動替換處方或換算劑量；A → B 不代表 B → A。</p></form>`,()=>{const f=new FormData(document.querySelector('#sub-edit'));save('substitution',{...r,from:item(f.get('from')),to:item(f.get('to')),priority:Number(f.get('priority')),status:f.get('status'),note:f.get('note'),actor:f.get('actor')});},'儲存替代設定');const form=document.querySelector('#sub-edit');for(const side of ['from','to'])mountSubstitutionPicker(form.querySelector('[data-picker="'+side+'"]'),rows,r[side],esc);}
+ function edit(record,initial){const r=record||{id:'SH-'+crypto.randomUUID(),revision:0,status:'pending',supply:'unknown',need:0,threshold:0,priority:'normal'};ask(`<form id="shortage-edit"><h3>${initial?'核對開封量':record?'更新缺藥追蹤':'登記缺藥'}</h3><div class="grid">${record?'<label>藥品<select name="item" disabled>'+itemOptions(key(record))+'</select></label>':substitutionPicker('item','缺藥品項',esc)}${actor()}${field('need','待補需求（瓶）',r.need,'number','min="0" max="1000000" step="1" required')}${field('threshold','低庫存門檻（瓶）',r.threshold,'number','min="0" max="1000000" step="1" required')}${select('status','開封量與缺藥狀態',Object.entries(labels).filter(([k])=>['pending','confirmed','sufficient','closed','cancelled','deferred'].includes(k)),r.status)}${select('supply','廠商供貨',Object.entries(labels).filter(([k])=>['unknown','available','unavailable'].includes(k)),r.supply)}${select('priority','處理優先順序',[['urgent','優先'],['normal','一般']],r.priority)}${field('eta','預計到貨日',r.eta||'','date')}<label class="full">條件與備註（結案／取消／暫緩請填原因）<textarea name="note" maxlength="1000">${esc(r.note||'')}</textarea></label></div></form>`,()=>{const f=new FormData(document.querySelector('#shortage-edit'));save('record',{...r,...(record?{}:item(f.get('item'))),actor:f.get('actor'),need:Number(f.get('need')),threshold:Number(f.get('threshold')),priority:f.get('priority'),status:f.get('status'),supply:f.get('supply'),eta:f.get('eta'),note:f.get('note')});},'儲存追蹤');if(!record)mountSubstitutionPicker(document.querySelector('#shortage-edit [data-picker="item"]'),rows,initial,esc);}
+ function substitute(r){r=r||{id:'SU-'+crypto.randomUUID(),revision:0,priority:1,status:'pending'};ask(`<form id="sub-edit"><h3>缺藥替代設定</h3><img class="shortage-alchemist" src="./web/assets/shortage-alchemist-pixel.png" alt="鍊金術師調配藥劑插圖"><div class="grid">${substitutionPicker('from','缺藥品項',esc)}${substitutionPicker('to','替代候選',esc)}${actor()}${select('status','確認狀態',[['pending','待專業確認'],['confirmed','已確認'],['disabled','停用']],r.status)}${field('priority','候選順序',r.priority,'number','min="1" max="100" required')}<label class="full">適用條件、限制與備註<textarea name="note" maxlength="1000">${esc(r.note||'')}</textarea></label></div><p>此候選僅供人工核對，由缺藥品項指向替代候選；處方與劑量由專業人員確認。</p></form>`,()=>{const f=new FormData(document.querySelector('#sub-edit'));save('substitution',{...r,from:item(f.get('from')),to:item(f.get('to')),priority:Number(f.get('priority')),status:f.get('status'),note:f.get('note'),actor:f.get('actor')});},'儲存替代設定');const form=document.querySelector('#sub-edit');for(const side of ['from','to'])mountSubstitutionPicker(form.querySelector('[data-picker="'+side+'"]'),rows,r[side],esc);}
  function link(r,kind){const events=kind==='order'?state.orders:state.receipts,action=kind==='order'?'訂貨':'進貨',reversed=new Set(events.map(e=>e.draft?.reverses));const choices=events.filter(e=>e.draft?.action===action&&!reversed.has(e.draft.id)&&e.draft.lines.some(l=>l.sheet===r.sheet&&l.code===r.code));ask(`<form id="allocation-edit"><h3>關聯已確認${action}紀錄</h3><p>只關聯已入帳的交易，不會再次變更庫存。請確認這筆數量屬於本次補貨。</p><label>交易<select name="transactionId" required><option value="">請選擇</option>${choices.map(e=>`<option value="${esc(e.draft.id)}">${esc(e.draft.date+' '+e.draft.actor+' '+e.draft.id+' · '+e.draft.lines.find(l=>l.sheet===r.sheet&&l.code===r.code).quantity+'瓶')}</option>`).join('')}</select></label>${field('quantity','本次關聯瓶數','','number','min="1" max="1000000" required')}${actor()}</form>`,()=>{const f=new FormData(document.querySelector('#allocation-edit'));save('allocation',{shortageId:r.id,kind,transactionId:f.get('transactionId'),sheet:r.sheet,code:r.code,quantity:Number(f.get('quantity'))},f.get('actor'));},'確認關聯');}
  function history(r){const logs=state.events.filter(e=>e.targetId===r.id);ask(`<h3>追蹤歷程</h3>${logs.map(e=>`<p>${esc(e.time)} · ${esc(e.actor)} · ${esc(e.kind==='allocation'?'關聯交易': '更新設定')}</p><details><summary>內容</summary><pre style="white-space:pre-wrap">${esc(e.request)}</pre></details>`).join('')||'<p>尚無紀錄</p>'}`,()=>{},'關閉');}
- function draw(){if(!alive||!state)return;const open=state.records.filter(r=>!['closed','cancelled'].includes(r.status));const implicit=rows.filter(r=>r.bottles===0&&r.code&&!state.records.some(s=>s.sheet===r.name&&s.code===r.code&&!['closed','cancelled'].includes(s.status)));
- const counts=[['pending','待確認缺藥',open.filter(r=>r.status==='pending').length+implicit.length],['low','低庫存待補',open.filter(r=>{const row=rows.find(x=>x.name===r.sheet&&x.code===r.code);return row?.bottles!==null&&row?.bottles<r.threshold;}).length],['arrival','已訂待到貨',open.filter(r=>progress(r).outstanding>0).length],['unavailable','廠商缺貨',open.filter(r=>r.supply==='unavailable').length]];
- c.innerHTML=`<style>dialog:has(#shortage-edit),dialog:has(#sub-edit),dialog:has(#allocation-edit){width:min(960px,94vw);max-width:960px;max-height:88vh;overflow:auto;background:#fffdf4;color:#24445a}dialog:has(#sub-edit) label,dialog:has(#shortage-edit) label,dialog:has(#allocation-edit) label{color:#24445a}.sub-picker{min-width:0;margin:0;padding:14px;border:1px solid #d1bd8f;border-radius:8px}.sub-picker legend{padding:0 6px;font-weight:600}.sub-picker label{margin-bottom:12px}.sub-picker select{width:100%;min-width:0}.sub-picker small{display:block;line-height:1.6}.shortage-alchemist{display:block;width:160px;height:160px;object-fit:contain;margin:0 auto 12px}.shortage-tabs{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}.shortage-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.shortage-cards button{text-align:left;padding:18px;background:#fffdf5;color:#24445a;border:1px solid #d1bd8f}.shortage-cards strong{display:block;font-size:30px;margin-top:8px}.shortage-row{display:grid;grid-template-columns:2fr 1fr 1fr 2fr;gap:14px;padding:18px;border-bottom:1px solid #ddd9c9;align-items:center}.shortage-row .actions{flex-wrap:wrap;gap:6px}.shortage-row button{min-height:32px;padding:4px 8px;font-size:12px}.shortage-row small{display:block}.shortage-filters{display:flex;gap:10px;flex-wrap:wrap}.shortage-filters>*{flex:1;min-width:130px}.shortage-illustration{text-align:center;font-size:48px;color:#b78a40;padding:20px;background:radial-gradient(ellipse,#f5e9ca,transparent)}@media(max-width:760px){.shortage-cards{grid-template-columns:1fr 1fr}.shortage-row{grid-template-columns:1fr 1fr;border:1px solid #d6c9aa;border-radius:8px;margin:12px 0}.shortage-row>:first-child,.shortage-row>.actions{grid-column:1/-1}.shortage-tabs button{flex:1}.shortage-row .actions button{min-height:40px}}#content .shortage-row{text-align:center}#content .shortage-row>*{min-width:0;overflow-wrap:anywhere}#content .shortage-row .actions,#content .shortage-row .check-label{justify-content:center}#content .shortage-row .check-label{align-items:center}#content .shortage-cards button{text-align:center}#content .panel:has(#sh-list) .panelhead h2{flex:1;text-align:center}#content #sh-list>p{text-align:center}@media(max-width:760px){#content .panel:has(#sh-list) .panelhead h2{width:100%}} </style><div class="shortage-tabs"><button data-tab="records" class="${tab==='records'?'':'secondary'}">缺藥與補貨清單</button><button data-tab="substitutions" class="${tab==='substitutions'?'':'secondary'}">缺藥替代設定</button></div><p class="notice">未拆封 0 瓶不一定完全缺藥，請先確認開封中藥品。訂貨不自動入庫；統計可能重疊。</p><p id="sh-state" role="status"></p>${localStorage.getItem('tcm-shortage-pending-v1')?'<button id="sh-retry">重試待確認儲存</button>':''}${tab==='records'?`<div class="shortage-cards">${counts.map(([k,t,n])=>`<button data-filter="${k}" ${readState==='ready'?'':'disabled'}>${t}<strong>${readState==='ready'?n:readState==='error'?'無法取得':'待讀取'}</strong>${readState==='ready'?'項':''}</button>`).join('')}</div>`:''}<section class="panel"><div class="panelhead"><h2>${tab==='records'?'缺藥與補貨清單':'缺藥替代設定'}</h2><div class="actions"><button id="sh-new">＋${tab==='records'?'手動登記缺藥':'建立替代設定'}</button><button id="sh-reload" class="secondary">重新讀取</button></div></div><div class="shortage-filters"><input id="sh-search" placeholder="搜尋藥名、編號或備註" value="${esc(query)}" aria-label="搜尋缺藥"><select id="sh-brand" aria-label="廠商"><option value="">全部廠商</option>${[...new Set(rows.map(r=>r.brand))].map(b=>`<option ${brand===b?'selected':''}>${esc(b)}</option>`).join('')}</select><select id="sh-category" aria-label="類別"><option value="">全部類別</option>${['單方','複方'].map(b=>`<option ${category===b?'selected':''}>${b}</option>`).join('')}</select><select id="sh-filter" aria-label="處理進度">${[['','全部待處理'],...counts.map(([k,t])=>[k,t]),['closed','已結案／取消'],['all','全部紀錄']].map(([v,t])=>`<option value="${v}" ${filter===v?'selected':''}>${t}</option>`).join('')}</select></div><div class="actions"><button id="sh-batch" class="secondary">將勾選品項加入訂貨草稿</button></div><div id="sh-list"></div></section>`;
- c.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;filter='';alternativeSource=null;draw();});c.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;draw();});if(c.querySelector('#sh-retry'))c.querySelector('#sh-retry').onclick=()=>save(null,null,null,true);c.querySelector('#sh-new').onclick=()=>tab==='records'?edit():substitute();c.querySelector('#sh-reload').onclick=load;c.querySelector('#sh-reload').disabled=readState==='loading';c.querySelector('#sh-new').disabled=readState!=='ready';c.querySelector('#sh-batch').disabled=readState!=='ready';c.querySelector('#sh-batch').style.display=tab==='records'?'':'none';c.querySelector('#sh-batch').onclick=()=>{try{const selected=state.records.filter(r=>selectedIds.has(r.id)&&!['closed','cancelled','deferred'].includes(r.status)).map(r=>({...r,quantity:progress(r).toOrder})).filter(r=>r.quantity>0);if(!selected.length)throw Error('請勾選有待補需求的品項');const operational=selected.filter(r=>!isOperationalOrderQa(r.sheet,r.code)),skipped=selected.length-operational.length;if(!operational.length)return status('驗收專用品項不會加入營運訂貨草稿');const queue=()=>{if(!alive||readState!=='ready')return;try{queueShortage('order',operational);location.hash='orders';}catch(e){status(e.message);}};if(skipped)ask('<p>已排除 '+skipped+' 項驗收專用品項；只帶入其他營運品項。</p>',queue,'只帶入營運品項');else queue();}catch(e){status(e.message);}};
- for(const [id,set] of [['sh-search',v=>{query=v;alternativeSource=null;}],['sh-brand',v=>brand=v],['sh-category',v=>category=v],['sh-filter',v=>filter=v]])c.querySelector('#'+id).oninput=e=>{set(e.target.value);list();};
- function list(){const matches=(it,note='')=>{const row=rows.find(x=>x.name===it.sheet&&x.code===it.code);return (!brand||row?.brand===brand)&&(!category||row?.category===category)&&`${it.name} ${it.code} ${note}`.toLowerCase().includes(query.toLowerCase());};
- const el=c.querySelector('#sh-list');
- if(readState==='loading'){el.innerHTML='<p role="status">正在讀取正式資料…</p>';return;}
- if(readState==='error'){el.innerHTML='<p role="alert">讀取失敗：'+esc(readError)+'。請按「重新讀取」。</p>';return;}
- if(tab==='substitutions'){const scope=alternativeSource?`<p class="notice">查看此缺藥品項的替代設定：${esc(alternativeSource.name)}（${esc(alternativeSource.sheet)} · ${esc(alternativeSource.code)}）。輸入搜尋或點選分頁可取消這個範圍。</p>`:'';el.innerHTML=scope+'<div class="shortage-illustration" aria-hidden="true"><img class="shortage-alchemist" src="./web/assets/shortage-alchemist-pixel.png" alt="鍊金術師"></div>'+(state.substitutions.filter(r=>alternativeSource?r.from.sheet===alternativeSource.sheet&&r.from.code===alternativeSource.code&&matches(r.from,r.note):matches(r.from,r.note)||query&&matches(r.to,r.note)).sort((a,b)=>a.priority-b.priority).map(r=>`<article class="shortage-row"><div><b>${esc(r.from.name)} → ${esc(r.to.name)}</b><small>${esc(r.from.sheet)} → ${esc(r.to.sheet)}</small></div><div>${esc({pending:'待專業確認',confirmed:'已確認',disabled:'停用'}[r.status])}</div><div>${esc(r.note)}</div><div class="actions"><button data-sub="${r.id}">編輯設定</button><button data-history="${r.id}">歷程</button></div></article>`).join('')||(state.substitutions.length?'<p>沒有符合條件的替代設定。</p>':'<p>尚無替代設定。</p>'));c.querySelectorAll('[data-sub]').forEach(b=>b.onclick=()=>substitute(state.substitutions.find(r=>r.id===b.dataset.sub)));}
- else{const selected=state.records.filter(r=>{if(!matches(r,r.note))return false;const p=progress(r),row=rows.find(x=>x.name===r.sheet&&x.code===r.code),closed=['closed','cancelled'].includes(r.status);return filter==='all'||filter==='closed'?filter==='all'||closed:!closed&&(!filter||filter==='pending'&&r.status==='pending'||filter==='low'&&row?.bottles!==null&&row?.bottles<r.threshold||filter==='arrival'&&p.outstanding>0||filter==='unavailable'&&r.supply==='unavailable');}).sort((a,b)=>(a.priority==='urgent'?-1:1)-(b.priority==='urgent'?-1:1));
- el.innerHTML=selected.map(r=>{const p=progress(r),row=rows.find(x=>x.name===r.sheet&&x.code===r.code);return `<article class="shortage-row"><div><label class="check-label"><input type="checkbox" data-selected="${r.id}" ${selectedIds.has(r.id)?'checked':''} aria-label="選取 ${esc(r.name)}"><b>${esc(r.name)}</b></label><small>${esc(r.sheet+' · '+r.code)}</small><small>${esc(r.note)}</small></div><div>未拆封 ${row?.bottles??'待核對'} 瓶<small>${esc(labels[r.status])} · ${esc(labels[r.supply])}</small></div><div>需求 ${r.need} 瓶${p.invalidAllocations?'<small>有取消／沖銷或待核對關聯，請查看歷程</small>':''}<small>已訂 ${p.ordered} · 到貨 ${p.received} · 待到 ${p.outstanding}</small><small>預計 ${esc(r.eta||'待回覆')}</small></div><div class="actions"><button data-edit="${r.id}">更新追蹤</button><button data-link-order="${r.id}">關聯訂貨</button><button data-link-receipt="${r.id}">關聯到貨</button><button data-history="${r.id}">歷程</button><button data-order="${r.id}">加入訂貨草稿</button><button data-receive="${r.id}">登錄實際到貨</button><button data-alternatives="${r.id}">查看替代設定</button></div></article>`;}).join('');if(!filter||filter==='pending')el.innerHTML+=implicit.filter(r=>matches({sheet:r.name,code:r.code,name:r.drug})).map(r=>`<article class="shortage-row"><div><b>${esc(r.drug)}</b><small>${esc(r.name+' · '+r.code)}</small></div><div>未拆封 0 瓶</div><div>待確認開封中存量</div><button data-implicit="${esc(r.name+'|'+r.code)}">確認供應狀態</button></article>`).join('');if(!el.innerHTML)el.innerHTML='<p>沒有符合條件的紀錄。</p>';c.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>edit(state.records.find(r=>r.id===b.dataset.edit)));for(const kind of ['order','receipt'])c.querySelectorAll('[data-link-'+kind+']').forEach(b=>b.onclick=()=>link(state.records.find(r=>r.id===b.getAttribute('data-link-'+kind)),kind));c.querySelectorAll('[data-implicit]').forEach(b=>b.onclick=()=>{edit(null,item(b.dataset.implicit));});}
- c.querySelectorAll('[data-selected]').forEach(e=>e.onchange=()=>{if(e.checked)selectedIds.add(e.dataset.selected);else selectedIds.delete(e.dataset.selected);});for(const action of ['order','receive'])c.querySelectorAll('[data-'+action+']').forEach(b=>b.onclick=()=>{const r=state.records.find(r=>r.id===b.getAttribute('data-'+action));if(action==='order'&&isOperationalOrderQa(r.sheet,r.code))return status('驗收專用品項不會加入營運訂貨草稿');const p=progress(r),quantity=action==='order'?p.toOrder:p.outstanding;if(quantity<1){status('沒有待補或待到貨數量，請先核對追蹤紀錄');return;}try{queueShortage(action,[{...r,quantity}]);location.hash=action==='order'?'orders':'receive';}catch(e){status(e.message);}});c.querySelectorAll('[data-alternatives]').forEach(b=>b.onclick=()=>{const r=state.records.find(r=>r.id===b.dataset.alternatives);alternativeSource={sheet:r.sheet,code:r.code,name:r.name};query=brand=category=filter='';tab='substitutions';draw();});c.querySelectorAll('[data-history]').forEach(b=>b.onclick=()=>history({id:b.dataset.history}));}list();
+ const closedSections=new Set();
+ const metricNames={pending:'待確認缺藥',low:'低庫存待補',arrival:'已訂待到貨',unavailable:'廠商缺貨'};
+ function draw(){
+  if(!alive)return;
+  const catalog=new Map(rows.map(row=>[row.name+'|'+row.code,row]));
+  const records=state.records.map(record=>({
+   record,row:catalog.get(key(record)),p:progress(record),
+   open:!['closed','cancelled'].includes(record.status)
+  }));
+  const openKeys=new Set(records.filter(x=>x.open).map(x=>key(x.record)));
+  const implicit=rows.filter(row=>row.bottles===0&&row.code&&!openKeys.has(row.name+'|'+row.code));
+  const includesMetric=(entry,k)=>{
+   if(!entry.open)return false;
+   const {record:r,row,p}=entry;
+   if(k==='pending')return r.status==='pending';
+   if(k==='low')return row?.bottles!=null&&row.bottles<r.threshold;
+   if(k==='arrival')return p.outstanding>0;
+   return r.supply==='unavailable';
+  };
+  const recordTab=tab==='records',ready=readState==='ready';
+  const card=(k,title)=>{
+   const count=records.filter(x=>includesMetric(x,k)).length+(k==='pending'?implicit.length:0);
+   return `<button type="button" aria-pressed="${filter===k}" data-filter="${k}"${ready?'':' disabled'}><img src="./web/assets/shortage-${k}.png" width="28" height="28" alt="">${title}<strong>${ready?count:readState==='error'?'無法取得':'待讀取'}</strong>${ready?'項':''}</button>`;
+  };
+  const options=(entries,current)=>entries.map(([v,label])=>`<option value="${esc(v)}" ${current===v?'selected':''}>${esc(label)}</option>`).join('');
+  const brands=[...new Set(rows.map(r=>r.brand))],categories=[...new Set(rows.map(r=>r.category).filter(Boolean))];
+  c.innerHTML=`${shortageStyle}
+   <div class="shortage-tabs"><button data-tab="records" aria-pressed="${recordTab}" class="${recordTab?'':'secondary'}">缺藥與補貨清單</button><button data-tab="substitutions" aria-pressed="${!recordTab}" class="${recordTab?'secondary':''}">替代候選</button></div>
+   <p id="sh-state" role="status"></p>${localStorage.getItem('tcm-shortage-pending-v1')?'<button id="sh-retry">重試待確認儲存</button>':''}
+   ${recordTab?`<div class="shortage-cards">${Object.entries(metricNames).map(([k,title])=>card(k,title)).join('')}</div>`:''}
+   <section class="panel shortage-panel"><div class="panelhead"><h2>${recordTab?'缺藥與補貨清單':'替代候選'}</h2>
+   <div class="actions"><button id="sh-new">＋${recordTab?'登記缺藥':'建立替代候選'}</button><button id="sh-reload" class="secondary">重新讀取</button></div></div>
+   <div class="shortage-filters"><input id="sh-search" placeholder="搜尋藥名、編號或備註" value="${esc(query)}" aria-label="搜尋缺藥">
+   <select id="sh-brand" aria-label="廠商">${options([['','全部廠商'],...brands.map(b=>[b,b])],brand)}</select>
+   <select id="sh-category" aria-label="類別">${options([['','全部類別'],...categories.map(v=>[v,v])],category)}</select>
+   ${recordTab?`<select id="sh-filter" aria-label="處理進度">${options([['','全部待處理'],...Object.entries(metricNames),['closed','已結案／取消'],['all','全部紀錄']],filter)}</select>`:''}</div>
+   <div id="sh-list"></div>${recordTab?'<div class="sh-batch"><button id="sh-batch" disabled>將已選 0 項加入訂貨草稿</button><span id="sh-hidden" role="status"></span></div>':''}</section>`;
+  const find=s=>c.querySelector(s),all=s=>Array.from(c.querySelectorAll(s));
+  function goTab(dest){
+   if(dest==='records'&&returnFilters)({query,brand,category,filter}=returnFilters);
+   else filter='';
+   returnFilters=null;alternativeSource=null;tab=dest;draw();
+  }
+  all('[data-tab]').forEach(b=>b.onclick=()=>goTab(b.dataset.tab));
+  all('[data-filter]').forEach(b=>b.onclick=()=>{filter=filter===b.dataset.filter?'':b.dataset.filter;draw();});
+  if(find('#sh-retry'))find('#sh-retry').onclick=()=>save(null,null,null,true);
+  find('#sh-new').onclick=()=>recordTab?edit():substitute();
+  find('#sh-reload').onclick=load;find('#sh-reload').disabled=readState==='loading';find('#sh-new').disabled=!ready;
+  const canOrder=({record,p,open})=>open&&record.status!=='deferred'&&p.toOrder>0;
+  const orderableRecords=records.filter(canOrder);
+  if(ready)for(const id of selectedIds)if(!orderableRecords.some(x=>x.record.id===id))selectedIds.delete(id);
+  function updateBatch(){
+   if(!recordTab)return;
+   const visibleIds=new Set(all('[data-selected]').map(input=>input.dataset.selected));
+   const hidden=[...selectedIds].filter(id=>!visibleIds.has(id)).length;
+   find('#sh-batch').textContent='將已選 '+selectedIds.size+' 項加入訂貨草稿';
+   find('#sh-batch').disabled=!ready||!selectedIds.size;
+   find('#sh-hidden').textContent=hidden?'其中 '+hidden+' 項未顯示在目前清單':'';
+  }
+  function handoff(action,items){
+   if(!alive||readState!=='ready')return;
+   try{queueShortage(action,items);location.hash=action==='order'?'orders':'receive';}catch(e){status(e.message);}
+  }
+  if(recordTab)find('#sh-batch').onclick=()=>{
+   const selected=orderableRecords.filter(x=>selectedIds.has(x.record.id)).map(({record,p})=>({...record,quantity:p.toOrder}));
+   const operational=selected.filter(r=>!isOperationalOrderQa(r.sheet,r.code)),skipped=selected.length-operational.length;
+   if(!selected.length)return status('請勾選有待補需求的品項');
+   if(!operational.length)return status('驗收專用品項不會加入營運訂貨草稿');
+   if(skipped)ask('<p>已排除 '+skipped+' 項驗收專用品項；只帶入其他營運品項。</p>',()=>handoff('order',operational),'只帶入營運品項');
+   else handoff('order',operational);
+  };
+  const inputs=[['sh-search',v=>{query=v;alternativeSource=null;}],['sh-brand',v=>brand=v],['sh-category',v=>category=v]];
+  if(recordTab)inputs.push(['sh-filter',v=>filter=v]);
+  for(const [id,set] of inputs)find('#'+id).oninput=e=>{set(e.target.value);list();};
+  function matches(it,note=''){
+   const row=catalog.get(key(it));
+   return (!brand||row?.brand===brand)&&(!category||row?.category===category)&&`${it.name} ${it.code} ${note}`.toLowerCase().includes(query.trim().toLowerCase());
+  }
+  function section(id,title,html){
+   return html?`<details class="shortage-section" data-section="${id}" ${closedSections.has(id)?'':'open'}><summary>${title}</summary>${html}</details>`:'';
+  }
+  function recordRow(entry){
+   const {record:r,row,p,open}=entry,id=esc(r.id);
+   const button=(action,label)=>`<button type="button" data-${action}="${id}">${label}</button>`;
+   const order=canOrder(entry),receive=open&&p.outstanding>0;
+   const primary=(order?button('order','加入訂貨草稿'):'')+(receive?button('receive','登錄實際到貨'):'');
+   const update=button('edit','更新追蹤');
+   return `<article class="shortage-row"><div class="sh-item"><label class="check-label"><input type="checkbox" data-selected="${id}" ${selectedIds.has(r.id)?'checked':''} ${order?'':'disabled'} aria-label="選取 ${esc(r.name)}"><b>${esc(r.name)}</b></label><small>${esc(r.sheet+' · '+r.code)}</small>${r.note?`<small>${esc(r.note)}</small>`:''}</div>
+    <div class="sh-stock">未拆封 ${row?.bottles==null?'待核對':esc(row.bottles)+' 瓶'}<small>${esc(labels[r.status])} · ${esc(labels[r.supply])}</small></div>
+    <div class="sh-progress"><small>需補 ${r.need}　已訂 ${p.ordered}　已到 ${p.received}</small>
+    ${p.toOrder>0?`<strong>尚需訂 ${p.toOrder} 瓶</strong>`:''}${p.outstanding>0?`<strong>待到 ${p.outstanding} 瓶</strong>`:''}
+    ${r.eta?`<small>預計到貨 ${esc(r.eta)}</small>`:''}${p.invalidAllocations?'<small>關聯交易待核對，請查看歷程。</small>':''}</div>
+    <div class="sh-actions">${primary||update}<details class="sh-more"><summary>更多操作</summary><div>${primary?update:''}${button('link-order','連結已有訂貨單')}${button('link-receipt','連結已有進貨單')}${button('alternatives','查看替代候選')}${button('history','查看歷程')}</div></details></div></article>`;
+  }
+  function list(){
+   const el=find('#sh-list');
+   if(readState!=='ready'){el.innerHTML=readState==='loading'?'<p role="status">正在讀取正式資料…</p>':'<p role="alert">讀取失敗：'+esc(readError)+'。請按「重新讀取」。</p>';return;}
+   if(!recordTab){
+    const scope=alternativeSource?`<p class="notice">查看此缺藥品項的替代設定：${esc(alternativeSource.name)}（${esc(alternativeSource.sheet)} · ${esc(alternativeSource.code)}）</p>`:'';
+    const back=returnFilters?'<button type="button" class="secondary" id="sh-back">返回補貨清單</button>':'';
+    const candidates=state.substitutions.filter(r=>alternativeSource?key(r.from)===key(alternativeSource)&&matches(r.from,r.note):matches(r.from,r.note)||query&&matches(r.to,r.note)).sort((a,b)=>a.priority-b.priority);
+    el.innerHTML=back+scope+'<div class="shortage-illustration" aria-hidden="true"><img class="shortage-alchemist" src="./web/assets/shortage-alchemist-pixel.png" alt=""></div>'+(candidates.map(r=>`<article class="shortage-row"><div class="sh-item"><b>${esc(r.from.name)} → ${esc(r.to.name)}</b><small>${esc(r.from.sheet)} · ${esc(r.from.code)} → ${esc(r.to.sheet)} · ${esc(r.to.code)}</small></div><div>候選順序 ${esc(r.priority)}<small>${esc({pending:'待專業確認',confirmed:'已確認',disabled:'停用'}[r.status])}</small></div><div>${esc(r.note)}</div><div class="sh-actions"><button data-sub="${esc(r.id)}">編輯候選</button><button class="secondary" data-history="${esc(r.id)}">查看歷程</button></div></article>`).join('')||(state.substitutions.length?'<p>沒有符合條件的替代設定。</p>':'<p>尚無替代設定。</p>'));
+    if(returnFilters)find('#sh-back').onclick=()=>goTab('records');
+    all('[data-sub]').forEach(b=>b.onclick=()=>substitute(state.substitutions.find(r=>r.id===b.dataset.sub)));
+   }else{
+    const visible=records.filter(x=>matches(x.record,x.record.note)&&(filter==='all'||(filter==='closed'?!x.open:filter?includesMetric(x,filter):x.open))).sort((a,b)=>Number(b.record.priority==='urgent')-Number(a.record.priority==='urgent'));
+    const checks=(!filter||filter==='pending'||filter==='all')?implicit.filter(row=>matches({sheet:row.name,name:row.drug,code:row.code})):[];
+    const checkRows=checks.map(r=>`<article class="shortage-row"><div class="sh-item"><b>${esc(r.drug)}</b><small>${esc(r.name+' · '+r.code)}</small></div><div class="sh-stock">未拆封 0 瓶</div><div class="sh-progress">開封量待核對</div><div class="sh-actions"><button data-implicit="${esc(r.name+'|'+r.code)}">核對開封量</button></div></article>`).join('');
+    el.innerHTML=section('check','待核對開封量',checkRows)+section('tracked','補貨追蹤',visible.map(recordRow).join(''))||'<p>沒有符合條件的紀錄。</p>';
+    for(const d of all('[data-section]'))d.ontoggle=()=>{if(d.open)closedSections.delete(d.dataset.section);else closedSections.add(d.dataset.section);};
+    all('[data-implicit]').forEach(b=>b.onclick=()=>edit(null,item(b.dataset.implicit)));
+    all('[data-edit]').forEach(b=>b.onclick=()=>edit(state.records.find(r=>r.id===b.dataset.edit)));
+    for(const kind of ['order','receipt'])all('[data-link-'+kind+']').forEach(b=>b.onclick=()=>link(state.records.find(r=>r.id===b.getAttribute('data-link-'+kind)),kind));
+    all('[data-selected]').forEach(e=>e.onchange=()=>{if(e.checked)selectedIds.add(e.dataset.selected);else selectedIds.delete(e.dataset.selected);updateBatch();});
+    for(const action of ['order','receive'])all('[data-'+action+']').forEach(b=>b.onclick=()=>{
+     const {record,p}=records.find(x=>x.record.id===b.getAttribute('data-'+action));
+     if(action==='order'&&isOperationalOrderQa(record.sheet,record.code))return status('驗收專用品項不會加入營運訂貨草稿');
+     const quantity=action==='order'?p.toOrder:p.outstanding;
+     if(quantity>0)handoff(action,[{...record,quantity}]);
+    });
+    all('[data-alternatives]').forEach(b=>b.onclick=()=>{
+     alternativeSource=state.records.find(r=>r.id===b.dataset.alternatives);
+     returnFilters={query,brand,category,filter};query=brand=category=filter='';tab='substitutions';draw();
+    });
+    all('[data-filter]').forEach(b=>b.setAttribute('aria-pressed',String(filter===b.dataset.filter)));
+    updateBatch();
+   }
+   all('[data-history]').forEach(b=>b.onclick=()=>history({id:b.dataset.history}));
+  }
+  list();
  }
  load();return()=>{alive=false;};
 }

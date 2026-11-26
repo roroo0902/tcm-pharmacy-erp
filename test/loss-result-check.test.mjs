@@ -28,6 +28,25 @@ test('same ID edited during lookup rejects stale result',async()=>{
  s.set({...s.record,draft:{...draft,actor:'changed'}});resolve(data);await pending;
  assert.equal(s.counts.writes,0);assert.equal(s.reports[0].state,'error');
 });
+test('removing a slip in another tab while its cloud result waits for the lock cannot recreate it',async()=>{
+ let releaseLock,signalWaiting;
+ const lockHeld=new Promise(resolve=>{releaseLock=resolve;});
+ const waiting=new Promise(resolve=>{signalWaiting=resolve;});
+ const s=setup(undefined,{withSlipLock:async callback=>{
+  signalWaiting();
+  await lockHeld;
+  return callback();
+ }});
+ const checking=s.check();
+ await waiting;
+ s.set(null);
+ releaseLock();
+ await checking;
+ assert.equal(s.record,null);
+ assert.equal(s.counts.writes,0);
+ assert.equal(s.counts.changes,0);
+ assert.match(s.reports[0].detail,/已變更或移除/);
+});
 test('leaving page suppresses stale updates and still closes loading',async()=>{
  let resolve,left=false;const s=setup(()=>new Promise(r=>resolve=r),{disposed:()=>left});const pending=s.check();left=true;resolve(data);await pending;assert.equal(s.counts.writes,0);assert.equal(s.reports.length,0);assert.equal(s.counts.closes,1);
 });

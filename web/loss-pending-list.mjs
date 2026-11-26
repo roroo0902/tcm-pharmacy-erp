@@ -26,7 +26,7 @@ export function lossSlips(storage,legacyKey){
   if(get(legacy.id))storage.removeItem(legacyKey);
  }
  const list=()=>Object.keys(storage).filter(k=>k.startsWith(prefix)).map(read).filter(Boolean);
- return {get,save,list,unreadable,remove:id=>storage.removeItem(prefix+id)};
+ return {get,save,list,unreadable,ownsKey:key=>typeof key==='string'&&key.startsWith(prefix),remove:id=>storage.removeItem(prefix+id)};
 }
 
 const slipStyle=`<style>
@@ -83,47 +83,36 @@ export function showLossSlips({records,esc,check,remove}){
     (completionOnly?' · 正常品項完成登錄':'<ul>'+items.map(l=>'<li><span>• '+esc(l.name)+(l.code?'（'+esc(l.code)+'）':'')+'</span><strong>累計 '+esc(l.total)+' 瓶</strong></li>').join('')+'</ul>')+'</div>';
   }).join('');
  }
- function card(record,i,confirming=false){
-  const d=record.draft,more=!confirming&&d.lines.length>3;
+ function card(record,i){
+  const d=record.draft,more=d.lines.length>3;
   const date=esc(d.date.replaceAll('-','/'))+' · '+d.lines.length+' 個品項';
   const sheets=lossSheets(d);
   const heading=sheets.length===1?sheetLabel(sheets[0]):sheets.map(sheetLabel).join('、');
-  const label=confirming?heading:'<label><input type="radio" name="loss-slip" value="'+i+'" '+(i===selected?'checked':'')+'>'+heading+'</label>';
+  const label='<label><input type="radio" name="loss-slip" value="'+i+'" '+(i===selected?'checked':'')+'>'+heading+'</label>';
   return '<article data-i="'+i+'" class="'+(i===selected?'selected':'')+'"><div class="slip-meta"><div>'+label+'<span class="slip-date">'+date+'</span></div><small>'+(record.phase==='draft'?'🪶 未送出草稿':'⌛ 入帳待核對')+'</small></div>'+
    groups(d,more?d.lines.slice(0,3):d.lines)+(more?'<details><summary>展開全部 '+d.lines.length+' 項</summary>'+groups(d,d.lines.slice(3))+'</details>':'')+'</article>';
  }
- function render(confirming=false){
-  const record=records[selected];
-  dialog.innerHTML=slipStyle+'<header><h2 id="slip-heading"><img src="./web/assets/loss-ledger.png" alt="">'+(confirming?'確認刪除本筆耗損單？':'待處理耗損單')+'</h2><span>共 '+(confirming?1:records.length)+' 筆</span></header><div class="slip-list">'+
-   (confirming?card(record,selected,true):records.map((r,i)=>card(r,i)).join(''))+'</div><p role="status"></p><footer>'+
-   (confirming?'<button data-back>返回</button><button data-confirm>確認刪除草稿</button>':'<button data-check>查詢同步結果</button><button data-delete>刪除本筆耗損單</button><button data-later>稍後處理</button>')+'</footer>';
-  const find=s=>dialog.querySelector(s);
-  if(confirming){
-   find('[data-back]').onclick=()=>render();
-   find('[data-confirm]').onclick=()=>{dialog.close();remove([record]);};
-   return;
-  }
-  function select(i){
-   selected=i;
-   for(const el of dialog.querySelectorAll('article'))el.classList.toggle('selected',Number(el.dataset.i)===i);
-   dialog.querySelectorAll('input')[i].checked=true;
-   find('[role=status]').textContent='';
-  }
-  for(const el of dialog.querySelectorAll('article')){
-   el.onclick=()=>select(Number(el.dataset.i));
-   el.onchange=()=>select(Number(el.dataset.i));
-  }
-  function lookup(){dialog.close();check(records[selected]);}
-  find('[data-check]').onclick=()=>{
-   if(records[selected].phase==='draft')find('[role=status]').textContent='這筆耗損單尚未送出。';
-   else lookup();
-  };
-  find('[data-delete]').onclick=()=>{
-   if(records[selected].phase==='draft')render(true);
-   else lookup();
-  };
-  find('[data-later]').onclick=()=>dialog.close();
+ dialog.innerHTML=slipStyle+'<header><h2 id="slip-heading"><img src="./web/assets/loss-ledger.png" alt="">待處理耗損單</h2><span>共 '+records.length+' 筆</span></header><div class="slip-list">'+
+  records.map(card).join('')+'</div><p role="status"></p><p id="slip-remove-help">移除只會清除本機待處理紀錄。已送出的耗損仍可能入帳。</p><footer>'+
+  '<button type="button" data-check>查詢同步結果</button><button type="button" data-delete aria-describedby="slip-remove-help">移除選取的耗損單</button><button type="button" data-later>稍後處理</button></footer>';
+ const find=s=>dialog.querySelector(s);
+ function select(i){
+  selected=i;
+  for(const el of dialog.querySelectorAll('article'))el.classList.toggle('selected',Number(el.dataset.i)===i);
+  dialog.querySelectorAll('input')[i].checked=true;
+  find('[role=status]').textContent='';
  }
- render();document.body.append(dialog);
+ for(const el of dialog.querySelectorAll('article')){
+  el.onclick=()=>select(Number(el.dataset.i));
+  el.onchange=()=>select(Number(el.dataset.i));
+ }
+ find('[data-check]').onclick=()=>{
+  const record=records[selected];
+  if(record.phase==='draft'){find('[role=status]').textContent='這筆耗損單尚未送出。';return;}
+  dialog.close();check(record);
+ };
+ find('[data-delete]').onclick=()=>{dialog.close();remove(records[selected]);};
+ find('[data-later]').onclick=()=>dialog.close();
+ document.body.append(dialog);
  dialog.addEventListener('close',()=>dialog.remove(),{once:true});dialog.showModal();return dialog;
 }

@@ -50,7 +50,7 @@ async function mountForm({direct=true}={}){
   runDirect:async(method)=>{assert.equal(method,'readDailyLossGrid');return {sources:rows,rows,completion:{}};},
   directEnabled:()=>direct,operationResult:()=>'',showLossSlips:()=>({close:noop}),
   directReview:(draft,_ask,onSuccess,_message,options)=>previews.push({
-   draft,back:options.onReturn,
+   draft,back:options.onReturn,receiveReply:()=>onSuccess({message:'ok'}),
    async post({loseReply=false}={}){
     await options.beforeCommit(draft);
     posted.push(structuredClone(draft));
@@ -133,6 +133,47 @@ test('return does not overwrite or remove a draft edited in a different tab',asy
  assert.deepEqual(f.slips.get(local.id),changed);
  assert.match(f.$('#loss-summary').textContent,/已填 0 項/);
  assert.equal(f.posted.length,0);
+});
+
+test('a late posting reply does not recreate the removed slip or clear new input',async()=>{
+ const f=await mountForm(),preview=f.previews[0];
+ await preview.post({loseReply:true});
+ const submitted=f.slips.list().find(r=>r.id!==prior.id);
+ assert.equal(submitted.phase,'submitted');
+ f.slips.remove(submitted.id); // Removed by the other tab while the reply is in flight.
+ f.fill(0,'2');
+ f.fill(2,'5');
+ await preview.receiveReply();
+ assert.deepEqual(f.slips.list(),[prior]);
+ assert.equal(f.posted.length,1);
+ f.visible(0,'2');
+ f.visible(2,'5');
+});
+
+test('an unconfirmed submission can be removed inline on the first click in the same tab',async()=>{
+ const f=await mountForm();
+ await f.previews[0].post({loseReply:true});
+ await f.$('#loss-cancel').onclick();
+ assert.deepEqual(f.slips.list(),[prior]);
+ assert.equal(f.posted.length,1);
+});
+
+test('inline removal uses the displayed snapshot, preserves adjacent slips and independent inputs',async()=>{
+ const f=await mountForm();
+ const local=f.slips.list().find(r=>r.id!==prior.id);
+ const staleClick=f.$('#loss-cancel').onclick;
+ const edited={...local,draft:{...local.draft,actor:'另一位經手人'}};
+ f.slips.save(edited);
+ f.fill(2,'3');
+ await staleClick();
+ assert.deepEqual(f.slips.get(local.id),edited);
+ assert.match(f.$('#loss-remove-status').textContent,/已變更或移除/);
+ await f.$('#loss-cancel').onclick();
+ assert.deepEqual(f.slips.list(),[prior]);
+ await staleClick();
+ assert.deepEqual(f.slips.list(),[prior]);
+ assert.equal(f.posted.length,0);
+ f.visible(2,'3');
 });
 
 test('return from the external Google review prompt also preserves both quantities',async()=>{

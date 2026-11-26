@@ -27,11 +27,11 @@ const workbenchCss=`
 #content .actions:has(> :is(#og-summary,#receipt-summary,#loss-summary)) {
   gap:10px 12px;align-items:center;margin-block:14px;
 }
-#content :is(#og-submit,#receipt-submit,#loss-submit,#order-confirm):not(:disabled) {
+#content :is(#og-submit,#receipt-submit,#loss-submit-complete,#order-confirm):not(:disabled) {
   background:#efd08a;color:#2b2316;border-color:#795b30;
   box-shadow:0 2px 0 #795b30;font-weight:750;
 }
-#content :is(#og-submit,#receipt-submit,#loss-submit,#order-confirm):not(:disabled):hover {
+#content :is(#og-submit,#receipt-submit,#loss-submit-complete,#order-confirm):not(:disabled):hover {
   background:#ffe2a0;
 }
 #content :is(#order-grid,#receipt-grid,#loss-table,.order-grid) tbody tr:focus-within > td {

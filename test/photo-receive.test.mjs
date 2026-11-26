@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {matchRecognized, cleanRecognized, addToBasket, normalizeDrug} from '../src/photo-receive-data.mjs';
+import {matchRecognized, cleanRecognized, addToBasket, photoBasket, normalizeDrug} from '../src/photo-receive-data.mjs';
 const rows=[{id:'1',name:'科達單方',brand:'科達',category:'單方',code:'A-01',drug:'黃芩',bottles:8},{id:'2',name:'科達單方',brand:'科達',category:'單方',code:'B02',drug:'黃連',bottles:3}];
 test('normalizes full-width and punctuation',()=>assert.equal(normalizeDrug('Ａ－０１'),'A01'));
 test('exact code match but different name flags for review',()=>{
@@ -87,4 +87,14 @@ test('printed weight in OCR names preserves same-row codes and conflict review',
   assert.equal(matchRecognized(blank, receiptRows).row?.code, 'B1043');
   assert.equal(matchRecognized(conflict, receiptRows).row, null);
   assert.equal(matchRecognized({...correct,name:'甘麥大棗湯 濃縮細粒 100g'}, receiptRows).row, null);
+});
+
+test('rebuilding edited photos counts only the current quantities and preserves the price',()=>{
+ const photo=(quantity,unitPriceCents)=>({recognized:[{item:{key:'科達單方|A01',name:'黃芩',quantity,unitPriceCents}}]});
+ const original=photo(2,0),edited=photo(5,0);
+ assert.deepEqual(photoBasket([original,edited]).map(l=>[l.quantity,l.unitPriceCents]),[[7,0]]);
+ assert.equal(original.recognized[0].item.quantity,2);
+ assert.throws(()=>photoBasket([original,photo(1,undefined)]),/單價不同/);
+ edited.recognized[0].removed=true;
+ assert.equal(photoBasket([original,edited])[0].quantity,2);
 });

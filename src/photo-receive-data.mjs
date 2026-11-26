@@ -77,3 +77,22 @@ export function addToBasket(basket, pendingLines, candidates, brand) {
   if (next.length > 100) throw Error('每次最多 100 個不同品項');
   return next;
 }
+
+// Rebuild totals from the current revision of each photo, including repeat items.
+export function photoBasket(photos) {
+  const merged = new Map();
+  for (const photo of photos) {
+    for (const line of photo.recognized) {
+      if (line.removed) continue;
+      const item = line.item;
+      const prior = merged.get(item.key);
+      if (prior && prior.unitPriceCents !== item.unitPriceCents) {
+        throw Error(item.name + ' 的同批單價不同，請核對或分批入帳。');
+      }
+      const quantity = (prior?.quantity ?? 0) + item.quantity;
+      if (quantity > 1000000 || (!prior && merged.size >= 100)) throw Error('超過單批進貨上限');
+      merged.set(item.key, {...item, quantity});
+    }
+  }
+  return [...merged.values()];
+}

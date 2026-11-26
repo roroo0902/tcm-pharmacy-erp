@@ -1,12 +1,12 @@
+import {priceCents} from './receipt-pricing.mjs';
 import {itemRegistration} from './item-registration.mjs';
 import {protectDraft} from './page-safety.mjs';
 import {photoModelLabel} from './photo-model.mjs';
 import {loadReceiptCatalog} from './supplier-catalog.mjs';
-import {directEnabled,authorize,runDirect,directReview,directLog} from './direct-sync.mjs?v=release20261120r1';
+import {directEnabled,authorize,runDirect,directReview} from './direct-sync.mjs?v=release20261120r1';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
-import {csvRows} from './sheets-data.mjs';
 import {lookupPostedTransaction} from './pending-recovery.mjs';
-import {normalizeDrug,matchRecognized,cleanRecognized,addToBasket,receiptCandidates} from '../src/photo-receive-data.mjs?v=receiptweight20261120';
+import {normalizeDrug,matchRecognized,cleanRecognized,addToBasket,receiptCandidates,photoBasket} from '../src/photo-receive-data.mjs?v=photoReturn20261127';
 import {quantitySteppers} from './quantity-stepper.mjs';
 const KEY='tcm-cloud-pending-v1',DISCARDED='tcm-photo-receipt-last-discarded-v1';
 const todayTaipei=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
@@ -56,13 +56,14 @@ function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMes
    '<button type="button" data-new-drug hidden>＋新增庫存藥品</button><div data-registration hidden></div></div></div>'+
    '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)+'</small></td>'+
    '<td><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
+   '<td><input data-photo-price="'+id+'" aria-label="'+name+' 單價" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="未提供" value="'+esc(line.price??(found?.unitPriceCents==null?'':found.unitPriceCents/100))+'"></td>'+
    '<td><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已核對配對品項" '+(line.reviewed?'checked':'')+'></td>'+
    '<td><button type="button" data-remove="'+id+'" aria-label="排除 '+name+'" class="secondary small">排除</button></td></tr>';
  }).join('');
  return '<div class="ai-review-head"><h3>核對辨識結果</h3><span data-ai-review-count role="status"></span></div>'+
   '<p class="muted ai-review-note">請核對藥名、規格及數量。單據以盒、袋或包計量時，請填寫換算後的實際入庫瓶數。</p>'+
   '<div class="ai-review-wrap" tabindex="0" role="region" aria-label="核對辨識結果表格"><table class="ai-review-table"><thead><tr>'+
-  '<th scope="col">藥品／原始編號</th><th scope="col">規格／單據數量</th><th scope="col">配對庫存藥品</th><th scope="col">入庫瓶數</th><th scope="col">已核對</th><th scope="col">操作</th>'+
+  '<th scope="col">藥品／原始編號</th><th scope="col">規格／單據數量</th><th scope="col">配對庫存藥品</th><th scope="col">入庫瓶數</th><th scope="col">單價（元／瓶）</th><th scope="col">已核對</th><th scope="col">操作</th>'+
   '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function updatePhotoReviewCount(root,lines){
@@ -77,7 +78,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   '<p class="notice">AI 辨識結果只是草稿。必須選到現有藥品並逐項核對，最後會再次讀取 Google 即時庫存；未確認不會修改庫存。</p>'+
   '<div class="grid ai-entry-grid"><div class="full ai-suppliers"><span id="ai-source-label">廠商</span><div id="ai-source" class="order-tabs" role="group" aria-labelledby="ai-source-label"></div></div><label>進貨日期<input type="date" id="ai-date" max="'+todayTaipei()+'" value="'+todayTaipei()+'"></label><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">單據或備註（選填）<select id="ai-note"><option value="">不填寫備註</option><option>依送貨單進貨</option><option>補填入送到貨單</option><option>無附進貨單直接入庫</option><option>換貨補回</option><option>其他</option></select></label><div class="full" id="ai-note-other-field" hidden><label for="ai-note-other">其他說明（選填）</label><input type="text" id="ai-note-other" maxlength="490" placeholder="請填寫補充內容"><div class="actions"><button type="button" class="secondary" id="ai-note-back">返回上一個選項</button></div></div><label class="full">拍照或選擇照片<input id="ai-image" type="file" accept="image/*" capture="environment"><small id="ai-image-hint" role="status">也可選取此欄位後貼上圖片。</small></label></div>'+
   '<div class="actions"><button type="button" id="ai-scan">AI 解析照片</button><button type="button" class="secondary" id="ai-reload">更新現有藥品</button></div><p id="ai-status" role="status"></p>'+
-  '<div id="ai-result"></div><div class="actions"><button type="button" id="ai-add" disabled>核對後加入進貨清單</button></div><h3>本次進貨清單（尚未入庫）</h3><div id="ai-basket"></div><div class="actions"><button type="button" id="ai-preview" disabled>預覽庫存變化並確認同步</button></div><section id="ai-pending"></section></section>';
+  '<img id="ai-original" hidden alt="本張進貨原照片" style="max-width:100%;max-height:220px;object-fit:contain"><div id="ai-result" tabindex="-1"></div><div class="actions"><button type="button" id="ai-add" disabled>核對後加入進貨清單</button></div><h3>本次進貨清單（尚未入庫）</h3><div id="ai-basket"></div><div class="actions"><button type="button" id="ai-preview" disabled>預覽庫存變化並確認同步</button></div><section id="ai-pending"></section></section>';
  root.insertAdjacentHTML('beforeend', `
  <style>
  #ai-catalog-dialog{box-sizing:border-box;width:min(710px,94vw);max-height:90dvh;overflow:auto;padding:22px;color:#182f49;background:#fff7e5;border:5px double #9d772f;border-radius:4px;box-shadow:0 0 0 2px #193451,0 12px 40px #16263b55;text-align:center}
@@ -100,13 +101,21 @@ export function mountPhotoReceive({esc,fmt,ask}){
  <div id="ai-catalog-error" hidden><p role="alert"></p><button type="button">重新讀取</button> <button class="secondary" type="button">關閉</button></div>
  </div></div></dialog>`);
  const $=sel=>root.querySelector(sel);
+ let batches=[],editing=null,scanPhoto=null,photoUrl='',submission=null;
+ function displayPhoto(file){
+  if(photoUrl)URL.revokeObjectURL(photoUrl);
+  photoUrl=file?URL.createObjectURL(file):'';
+  const image=$('#ai-original');
+  image.hidden=!file;
+  if(file)image.src=photoUrl;else image.removeAttribute?.('src');
+ }
  let previousNote=$('#ai-note').value;
  const showOtherNote=()=>{$('#ai-note-other-field').hidden=$('#ai-note').value!=='其他';};
  $('#ai-note').onchange=()=>{if($('#ai-note').value!=='其他')previousNote=$('#ai-note').value;showOtherNote();};
  $('#ai-note-back').onclick=()=>{$('#ai-note').value=previousNote;showOtherNote();$('#ai-note').focus?.();};
  const noteValue=()=>$('#ai-note').value==='其他'?['其他',$('#ai-note-other').value.trim()].filter(Boolean).join('：'):$('#ai-note').value.trim();
  const status=text=>{if(alive)$('#ai-status').textContent=text;};
- const lockBusy=busy=>{loading=busy;if(!alive)return;$('#ai-scan').disabled=busy;$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!recognized.some(x=>!x.removed);};
+ const lockBusy=busy=>{loading=busy;if(!alive)return;$('#ai-scan').disabled=busy||!!submission;$('#ai-preview').disabled=busy||!basket.length||(editing!==null||recognized.some(line=>!line.removed));$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!editing&&!recognized.some(x=>!x.removed);};
  function currentRows(){return rows.filter(r=>r.brand===selected);}
  const catalogDialog=$('#ai-catalog-dialog');
  const catalogTitle=$('#ai-catalog-title');
@@ -246,19 +255,35 @@ export function mountPhotoReceive({esc,fmt,ask}){
    };
   });
   root.querySelectorAll('[data-qty]').forEach(el=>el.oninput=()=>{const line=recognized.find(x=>x.id===el.dataset.qty);line.quantity=el.value;line.reviewed=false;root.querySelector('[data-reviewed="'+line.id+'"]').checked=false;updatePhotoReviewCount(root,recognized);});
+  root.querySelectorAll('[data-photo-price]').forEach(el=>el.oninput=()=>{recognized.find(x=>x.id===el.dataset.photoPrice).price=el.value;});
   root.querySelectorAll('[data-reviewed]').forEach(el=>el.onchange=()=>{recognized.find(x=>x.id===el.dataset.reviewed).reviewed=el.checked;updatePhotoReviewCount(root,recognized);});
-  root.querySelectorAll('[data-remove]').forEach(el=>el.onclick=()=>{recognized.find(x=>x.id===el.dataset.remove).removed=true;drawResult();});
+  root.querySelectorAll('[data-remove]').forEach(el=>el.onclick=()=>{recognized.find(x=>x.id===el.dataset.remove).removed=true;drawResult();drawBasket();});
   quantitySteppers(root,'[data-qty]');
-  $('#ai-add').disabled=!list.length||!catalogReady||loading;
+  $('#ai-add').disabled=(!editing&&!list.length)||!catalogReady||loading;
+ }
+ function editBatch(batch){
+  if(submission)return;
+  editing=batch;selected=batch.brand;recognized=structuredClone(batch.recognized);scanPhoto=batch.file;
+  $('#ai-image').value='';pastedImage=scanPhoto;displayPhoto(scanPhoto);
+  drawBrandButtons([...new Set(sources.map(s=>s.brand))]);drawResult();drawBasket();
+  $('#ai-image-hint').textContent='已保留原照片，可直接修改辨識品項。';
+  $('#ai-result').focus?.();
  }
  function drawBasket(){
   if(!alive)return;
   $('#ai-basket').innerHTML=basket.length?'<div class="tablewrap"><table><thead><tr><th>藥品</th><th>原庫存</th><th>本次進貨</th><th>預估庫存</th><th>修改</th></tr></thead><tbody>'+
-  basket.map((line,i)=>{const r=rows.find(x=>x.name===line.sheet&&x.code===line.code&&x.drug===line.name);return '<tr><td>'+esc(line.sheet+' '+line.code+' '+line.name)+'</td><td>'+esc(r?.bottles??'待更新')+'</td><td>'+fmt(line.quantity)+'</td><td>'+esc(r?fmt(r.bottles+line.quantity):'待更新')+'</td><td><button type="button" class="secondary small" data-basket-remove="'+i+'">移除</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="muted">尚未加入品項。可依序上傳多張照片，將品項累積到同一進貨清單。</p>';
-  root.querySelectorAll('[data-basket-remove]').forEach(b=>b.onclick=()=>{basket.splice(Number(b.dataset.basketRemove),1);drawBasket();});
-  $('#ai-preview').disabled=!basket.length;
+  basket.map((line,i)=>{const r=rows.find(x=>x.name===line.sheet&&x.code===line.code&&x.drug===line.name);return '<tr><td>'+esc(line.sheet+' '+line.code+' '+line.name)+'</td><td>'+esc(r?.bottles??'待更新')+'</td><td>'+fmt(line.quantity)+'</td><td>'+esc(r?fmt(r.bottles+line.quantity):'待更新')+'</td><td><button type="button" class="secondary small" data-basket-remove="'+i+'" '+(recognized.length||submission?'disabled':'')+'>移除</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="muted">尚未加入品項。可依序上傳多張照片，將品項累積到同一進貨清單。</p>';
+  $('#ai-scan').disabled=loading||!!submission;
+  $('#ai-add').textContent=editing?'更新本張核對內容':'核對後加入進貨清單';
+  if(batches.length)$('#ai-basket').insertAdjacentHTML('beforeend',batches.map((batch,i)=>'<button type="button" class="secondary" data-edit-photo="'+i+'" '+(recognized.length||submission?'disabled':'')+'>修改第 '+(i+1)+' 張 · '+esc(batch.brand)+'</button>').join(''));
+  root.querySelectorAll('[data-edit-photo]').forEach(b=>b.onclick=()=>editBatch(batches[Number(b.dataset.editPhoto)]));
+  root.querySelectorAll('[data-basket-remove]').forEach(b=>b.onclick=()=>{if(recognized.length||submission)return;
+   const key=basket[Number(b.dataset.basketRemove)].key;
+   for(const batch of batches){for(const l of batch.recognized)if(l.basketKey===key)l.removed=true;}
+   batches=batches.filter(batch=>batch.recognized.some(l=>!l.removed));basket=basket.filter(l=>l.key!==key);drawBasket();});
+  $('#ai-preview').disabled=loading||!basket.length||(editing!==null||recognized.some(line=>!line.removed));
  }
- $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||loading||button.dataset.aiBrand===selected)return;selected=button.dataset.aiBrand;recognized=[];
+ $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||loading||button.dataset.aiBrand===selected)return;if(editing){status('請先更新本張核對內容，再切換廠商。');return;}selected=button.dataset.aiBrand;recognized=[];scanPhoto=null;displayPhoto(null);
   drawBrandButtons([...new Set(sources.map(source=>source.brand))]);drawResult();drawBasket();
   status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');};
  $('#ai-reload').onclick=async()=>{try{if(directEnabled())await authorize();await load({fresh:true});}catch(error){status(error.message);}};
@@ -272,7 +297,8 @@ export function mountPhotoReceive({esc,fmt,ask}){
   $('#ai-image-hint').textContent='已貼上圖片，可開始辨識。';
  };
  $('#ai-scan').onclick=async()=>{
-  if(loading)return;
+  if(loading||submission)return;
+  if(editing){status('請先更新本張核對內容，再辨識下一張。');return;}
   try{
    if(!directEnabled())throw Error('AI 拍照功能需要已授權的 Google 雲端入口');
    if(!catalogReady||!currentRows().length)throw Error('請先完成此廠商的藥品清單讀取');
@@ -286,31 +312,42 @@ export function mountPhotoReceive({esc,fmt,ask}){
    const result=await runDirect('recognizeReceipt',{brand:scanBrand,mimeType:'image/jpeg',base64});
    if(!alive||selected!==scanBrand||scanRun!==run){status('已切換廠商，上一張照片的辨識結果未套用。');return;}
    // Do not persist the image or raw API response in localStorage.
-   recognized=cleanRecognized(result);
+   recognized=cleanRecognized(result);scanPhoto=file;displayPhoto(file);
    for(const line of recognized){
     const match=matchLine(line);
     if(match.row){line.selected=String(match.row.id);line.reviewed=true;}
    }
    if(!recognized.length)throw Error('AI 未辨識到藥品項目，請重拍或改用一般進貨登錄');
-   drawResult();status('AI 辨識 '+recognized.length+' 項；'+photoModelLabel(result)+'；唯一配對已勾選，請核對瓶數並處理待配對品項。');
+   drawResult();drawBasket();status('AI 辨識 '+recognized.length+' 項；'+photoModelLabel(result)+'；唯一配對已勾選，請核對瓶數並處理待配對品項。');
   }catch(error){status(error.message);}finally{lockBusy(false);}
  };
  $('#ai-add').onclick=()=>{
   try{
+   if(submission)throw Error('請先核對已送出的本筆進貨。');
    if(!catalogReady||loading)throw Error('請等待完整名冊及辨識載入完成');
-   const active=recognized.filter(x=>!x.removed);const next=addToBasket(basket,active,currentRows(),selected);
-   basket=next;recognized=[];pastedImage=null;$('#ai-image').value='';$('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';drawResult();drawBasket();status('已加入清單；尚未同步。可切換廠商再拍下一張照片。');
+   if(!scanPhoto)throw Error('請先辨識照片');
+   const batch={brand:selected,file:scanPhoto,recognized:structuredClone(recognized)};
+   for(const line of batch.recognized.filter(l=>!l.removed)){
+    const [item]=addToBasket([], [line],currentRows(),selected);
+    const row=currentRows().find(r=>String(r.id)===line.selected);
+    const cents=priceCents(line.price??(row.unitPriceCents==null?'':row.unitPriceCents/100));
+    line.price??=cents===undefined?'':String(cents/100);
+    line.basketKey=item.key;line.item={...item,unitPriceCents:cents};
+   }
+   const next=editing?batches.map(old=>old===editing?batch:old):[...batches,batch];
+   basket=photoBasket(next);
+   batches=next.filter(photo=>photo.recognized.some(l=>!l.removed));editing=null;recognized=[];scanPhoto=null;pastedImage=null;displayPhoto(null);$('#ai-image').value='';$('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';drawResult();drawBasket();status('已加入清單；尚未同步。可切換廠商再拍下一張照片。');
   }catch(error){status(error.message);}
  };
  function showPending(){
   if(!alive)return;
   try{pending=JSON.parse(localStorage.getItem(KEY)||'null');}catch{pending=null;}
   const unresolved=pending&&pending.kind==='tcm-cloud'&&!pending.verified;
-  $('#ai-pending').innerHTML=unresolved?'<h3>上次有一筆待核對交易</h3><p>交易編號：'+esc(pending.id)+'</p><p class="muted">為防止重複入庫，在讀回或以同一交易重試前，不能建立另一筆新進貨。</p><button type="button" id="ai-retry" class="secondary">使用原交易重新核對</button><button type="button" id="ai-readback" class="secondary">查詢 Google 交易紀錄</button>'+(pending.action==='進貨'?'<button type="button" id="ai-discard" class="secondary">取消未入帳的待核對紀錄</button>':''):'';
+  $('#ai-pending').innerHTML=unresolved?'<h3>上次有一筆待核對交易</h3><p>交易編號：'+esc(pending.id)+'</p><p class="muted">為防止重複入庫，在讀回或以同一交易重試前，不能建立另一筆新進貨。</p><button type="button" id="ai-retry" class="secondary">使用原交易重新核對</button><button type="button" id="ai-readback" class="secondary">查詢 Google 交易紀錄</button>'+(pending.action==='進貨'&&!pending.photoSubmitted?'<button type="button" id="ai-discard" class="secondary">取消未入帳的待核對紀錄</button>':''):'';
   if(unresolved){
    $('#ai-retry').onclick=()=>{
     const draft=cloudDraft(pending);
-    if(draft.action!=='建檔')return send(draft);
+    if(draft.action!=='建檔')return send(draft,true);
     directReview(draft,ask,async()=>{
      const catalog=await loadReceiptCatalog({fresh:true}),item=draft.lines[0];
      if(!catalog.rows.some(row=>row.name===item.sheet&&row.code===item.code&&row.drug===item.name))throw Error('尚未讀回建檔品項');
@@ -331,31 +368,62 @@ export function mountPhotoReceive({esc,fmt,ask}){
       if(localStorage.getItem(KEY)!==saved)throw Error('待核對紀錄已變動，請重新查詢。');
       if(event)throw Error('Google 已有這筆入帳紀錄，請先核對入帳結果。');
       localStorage.setItem(DISCARDED,JSON.stringify({draft:JSON.parse(saved),cancelledAt:new Date().toISOString()}));
-      localStorage.removeItem(KEY);
+      localStorage.removeItem(KEY);if(submission?.id===draft.id)submission=null;
       showPending();status('Google 查無入帳，已取消這筆待核對紀錄並保留本機備份。');
      }catch(error){status(error.message);}
     },'查詢並取消待核對紀錄');
    };
-   $('#ai-readback').onclick=async()=>{try{await authorize();const response=await directLog('inventory');const record=csvRows(await response.text()).slice(1).find(r=>r[0]===pending.id);if(!record)throw Error('未發現該交易；請沿用原交易編號重新核對');const stored=JSON.parse(record[1]).draft;if(JSON.stringify(cloudDraft(stored))!==JSON.stringify(cloudDraft(pending)))throw Error('同編號內容與雲端不一致，請停止操作');localStorage.setItem(KEY,JSON.stringify({...pending,verified:true}));showPending();status('已查到相同交易的入庫紀錄');}catch(error){status(error.message);}};
+   $('#ai-readback').onclick=async()=>{try{
+    const saved=localStorage.getItem(KEY),draft=cloudDraft(JSON.parse(saved));
+    await authorize();const event=await lookupPostedTransaction(draft);
+    if(!event||JSON.stringify(cloudDraft(event.draft))!==JSON.stringify(draft))throw Error('尚未讀回相同交易，請沿用原交易編號核對');
+    finish(draft,saved);status('已查到相同交易的入庫紀錄');
+   }catch(error){status(error.message);}};
   }
  }
- function send(draft){
-  if(!directEnabled()){status('目前僅支援經授權的 Google 同步，尚未送出');return;}
-  directReview(draft,ask,async()=>{
-   localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));basket=[];drawBasket();showPending();await load();
-  },status,{beforeCommit:()=>{if(JSON.parse(localStorage.getItem(KEY)||'null')?.id!==draft.id)throw Error('待核對紀錄已變動，請重新預覽。');}});
+ function finish(draft,saved){
+  if(localStorage.getItem(KEY)===saved)localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
+  if(submission?.id===draft.id){
+   if(submission.basket===basket){basket=[];batches=[];}
+   submission=null;
+  }
+  if(alive){drawBasket();showPending();}
  }
- $('#ai-preview').onclick=()=>{
+ function send(draft,retry=false){
+  if(!directEnabled()){status('目前僅支援經授權的 Google 同步，尚未送出');return;}
+  const expected=localStorage.getItem(KEY),snapshot=basket;
+  let reserved;
+  return directReview(draft,ask,()=>finish(draft,reserved),status,{
+   beforeCommit:()=>{
+    if(!alive||localStorage.getItem(KEY)!==expected||(!retry&&snapshot!==basket))throw Error('進貨內容已變動，請重新預覽。');
+    reserved=JSON.stringify({...draft,photoSubmitted:true});localStorage.setItem(KEY,reserved);
+    if(!retry)submission={id:draft.id,basket:snapshot,draft};
+    drawBasket();showPending();
+   },
+   onReturn:!retry?()=>{
+    if(!alive||snapshot!==basket||!batches.length)return;
+    editBatch(batches[batches.length-1]);
+    status('已返回品項核對。修改後按「更新本張核對內容」，即可再次預覽。');
+   }:undefined
+  });
+ }
+ $('#ai-preview').onclick=async()=>{
   try{
-   if(!basket.length)throw Error('請先加入進貨清單');
-   const prior=JSON.parse(localStorage.getItem(KEY)||'null');
+   if(!basket.length||editing||recognized.some(line=>!line.removed))throw Error('請先完成本張品項核對');
+   const saved=localStorage.getItem(KEY),prior=JSON.parse(saved||'null');
+   if(submission){
+    const sent=submission;
+    await authorize();const event=await lookupPostedTransaction(sent.draft);
+    if(!alive||sent!==submission)return;
+    if(!event||JSON.stringify(cloudDraft(event.draft))!==JSON.stringify(sent.draft))throw Error('上一筆交易結果未明，請先核對原交易');
+    finish(sent.draft,prior?.id===sent.id?saved:undefined);status('已讀回上一筆入帳紀錄。');return;
+   }
    if(prior&&!prior.verified)throw Error('上一筆交易結果未明，請先核對原交易');
-   const draft=cloudDraft({kind:'tcm-cloud',version:1,id:'ERP-'+crypto.randomUUID(),action:'進貨',date:$('#ai-date').value,actor:$('#ai-actor').value.trim(),note:noteValue(),lines:basket.map(({sheet,code,name,quantity})=>({sheet,code,name,quantity}))});
-   // Persist the ID and exact draft before preview to keep retries idempotent.
-   localStorage.setItem(KEY,JSON.stringify(draft));showPending();send(draft);
+   const draft=cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id:'ERP-'+crypto.randomUUID(),action:'進貨',date:$('#ai-date').value,actor:$('#ai-actor').value.trim(),note:noteValue(),lines:basket.map(({sheet,code,name,quantity,unitPriceCents})=>({sheet,code,name,quantity,unitPriceCents}))});
+   await send(draft);
   }catch(error){status(error.message);}
  };
  window.addEventListener('erp-synced',onSync);
  drawResult();drawBasket();showPending();load();
- return protectDraft(()=>{alive=false;run++;if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',onSync);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
+ return protectDraft(()=>{alive=false;run++;if(photoUrl)URL.revokeObjectURL(photoUrl);if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',onSync);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
 }

@@ -92,7 +92,16 @@ export function mountPhotoReceive({esc,fmt,ask}){
  .ai-dialog-dots i:nth-child(2){animation-delay:.2s}.ai-dialog-dots i:nth-child(3){animation-delay:.4s}
  @keyframes ai-catalog-pulse{50%{opacity:.3}}@media(prefers-reduced-motion:reduce){.ai-dialog-dots i{animation:none}}
  #ai-catalog-dialog [hidden]{display:none}
+ #ai-photo-choice{box-sizing:border-box;width:min(38rem,94vw);max-height:86dvh;overflow:auto;padding:clamp(14px,3vw,24px);background:#fff7e5;color:#182f49;border:5px double #9d772f}
+ #ai-photo-choice::backdrop{background:#13263b88}
+ #ai-photo-choice h3{margin:0 0 12px}
+ #ai-photo-options{display:grid;gap:8px}
+ #ai-photo-options button{display:grid;grid-template-columns:60px minmax(0,1fr);align-items:center;gap:12px;text-align:left;width:100%;padding:8px}
+ #ai-photo-options img{width:60px;height:60px;object-fit:contain;background:#fff}
+ #ai-photo-options :is(strong,small){display:block;white-space:normal;overflow-wrap:anywhere}
  </style>
+ <dialog id="ai-photo-choice" aria-labelledby="ai-choice-title"><h3 id="ai-choice-title">選擇要修改的照片</h3>
+ <div id="ai-photo-options"></div><div class="actions"><button type="button" id="ai-choice-back" class="secondary">返回進貨清單</button></div></dialog>
  <dialog id="ai-catalog-dialog" aria-labelledby="ai-catalog-title"><div class="ai-dialog-content">
  <picture><source media="(prefers-reduced-motion: no-preference)" srcset="./web/assets/photo-wizard-rays.gif"><img src="./web/assets/photo-wizard.png" alt=""></picture><div>
  <div class="ai-dialog-caption">正在讀取已啟用的</div><h3 id="ai-catalog-title">廠商與藥品名冊</h3>
@@ -102,6 +111,33 @@ export function mountPhotoReceive({esc,fmt,ask}){
  </div></div></dialog>`);
  const $=sel=>root.querySelector(sel);
  let batches=[],editing=null,scanPhoto=null,photoUrl='',submission=null;
+ const chooser=$('#ai-photo-choice'),options=$('#ai-photo-options');
+ let thumbnails=[];
+ function clearChoices(){
+  thumbnails.forEach(url=>URL.revokeObjectURL(url));
+  thumbnails=[];
+  options.innerHTML='';
+ }
+ chooser.onclose=()=>{if(!chooser.open)clearChoices();};
+ $('#ai-choice-back').onclick=()=>chooser.close();
+ function choosePhoto(){
+  clearChoices();
+  options.innerHTML=batches.map((batch,index)=>{
+   const lines=batch.recognized.filter(line=>!line.removed);
+   const url=URL.createObjectURL(batch.file);
+   thumbnails.push(url);
+   const names=lines.slice(0,3).map(line=>line.item.name).join('、')+(lines.length>3?'…':'');
+   return '<button type="button" class="secondary" data-choose-photo="'+index+'"><img alt="" src="'+esc(url)+'"><span><strong>第 '+(index+1)+' 張 · '+esc(batch.brand)+'</strong><small>'+esc(batch.file.name||'進貨照片')+'</small><small>'+lines.length+' 項 · '+esc(names)+'</small></span></button>';
+  }).join('');
+  chooser.showModal();
+ }
+ options.onclick=event=>{
+  const button=event.target.closest('[data-choose-photo]');
+  if(!button||!chooser.open)return;
+  const batch=batches[Number(button.dataset.choosePhoto)];
+  chooser.close();
+  if(batch)editBatch(batch);
+ };
  function displayPhoto(file){
   if(photoUrl)URL.revokeObjectURL(photoUrl);
   photoUrl=file?URL.createObjectURL(file):'';
@@ -267,6 +303,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   $('#ai-image').value='';pastedImage=scanPhoto;displayPhoto(scanPhoto);
   drawBrandButtons([...new Set(sources.map(s=>s.brand))]);drawResult();drawBasket();
   $('#ai-image-hint').textContent='已保留原照片，可直接修改辨識品項。';
+  status('正在修改第 '+(batches.indexOf(batch)+1)+' 張照片。修改後按「更新本張核對內容」。');
   $('#ai-result').focus?.();
  }
  function drawBasket(){
@@ -402,8 +439,8 @@ export function mountPhotoReceive({esc,fmt,ask}){
    },
    onReturn:!retry?()=>{
     if(!alive||snapshot!==basket||!batches.length)return;
-    editBatch(batches[batches.length-1]);
-    status('已返回品項核對。修改後按「更新本張核對內容」，即可再次預覽。');
+    if(batches.length>1){choosePhoto();return;}
+    editBatch(batches[0]);
    }:undefined
   });
  }
@@ -425,5 +462,5 @@ export function mountPhotoReceive({esc,fmt,ask}){
  };
  window.addEventListener('erp-synced',onSync);
  drawResult();drawBasket();showPending();load();
- return protectDraft(()=>{alive=false;run++;if(photoUrl)URL.revokeObjectURL(photoUrl);if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',onSync);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
+ return protectDraft(()=>{alive=false;run++;if(photoUrl)URL.revokeObjectURL(photoUrl);if(chooser.open)chooser.close();clearChoices();if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',onSync);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
 }

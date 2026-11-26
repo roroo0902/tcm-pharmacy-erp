@@ -18,23 +18,26 @@ const draft=(id,quantity)=>cloudDraft({kind:'tcm-cloud',version:1,id,action:'進
 ]});
 const closeTick=()=>new Promise(setImmediate);
 
-async function fixture({initial}={}){
+async function fixture({initial,catalog=[row],direct=true}={}){
  const storage=new Map(initial?[[KEY,JSON.stringify(initial)]]:[]);
- const dom=new Map(),dialogs=[],warnings=[],writes=[],links=[];
+ const dom=new Map(),dialogs=[],warnings=[],writes=[],links=[],external=[];
  const $=sel=>{
   if(!dom.has(sel))dom.set(sel,{innerHTML:'',textContent:'',dataset:{},value:({'#receipt-date':'2026-01-19','#receipt-actor':'QA'})[sel]||'',
    events:new Map(),addEventListener(type,fn){this.events.set(type,fn);},insertAdjacentHTML(){},querySelector(){return {insertAdjacentHTML(){}}}});
   return dom.get(sel);
  };
- const qty=$('qty'),price=$('price'),key=receiptKey(row);
- qty.dataset.key=key;qty.parentElement={querySelector:()=>({insertAdjacentHTML(){}})};
- price.dataset.priceKey=key;price.closest=()=>({querySelector:()=>({textContent:''})});
- const host={querySelector:$,querySelectorAll:sel=>sel==='.receipt-qty'?[qty]:sel==='.receipt-price'?[price]:[]};
+ const inputs=catalog.map(r=>{
+  const key=receiptKey(r),qty=$('qty-'+key),price=$('price-'+key);
+  qty.dataset.key=key;qty.parentElement={querySelector:()=>({insertAdjacentHTML(){}})};
+  price.dataset.priceKey=key;price.closest=()=>({querySelector:()=>({textContent:''})});
+  return {qty,price};
+ });
+ const host={querySelector:$,querySelectorAll:sel=>sel==='.receipt-qty'?inputs.map(i=>i.qty):sel==='.receipt-price'?inputs.map(i=>i.price):[]};
  const localStorage={getItem:k=>storage.get(k)??null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
- let ledger=[],stock=4,afterWrite;
+ let ledger=[],stock=4,afterWrite,issued=0;
  const directLog=async()=>({text:async()=>JSON.stringify([ledgerHeader,...ledger.map(d=>[d.id,JSON.stringify({draft:d})])])});
  const directReview=async(d,ask,verified,status,opts)=>{
-  dialogs.push({initial:d,discard:opts.onDiscard,post:async(next,{confirm=true,fail=false}={})=>{
+  dialogs.push({initial:d,discard:opts.onDiscard,back:opts.onReturn,post:async(next,{confirm=true,fail=false}={})=>{
    if(next)opts.onDraftChange?.(next);
    if(!confirm)return;
    opts.beforeCommit?.(d);
@@ -48,15 +51,17 @@ async function fixture({initial}={}){
  const deps={cloudDraft,localStorage,directLog,directReview,csvRows:JSON.parse};
  const recover=new Function(...Object.keys(deps),sourceOf('pending-recovery.mjs')+'\nreturn {lookupPostedTransaction,recoverPendingTransaction}')( ...Object.values(deps));
  const mountDeps={receiptEntryDialog:()=>()=>{},...deps,...recover,receiptKey,receiptLines,sortReceiptRows,receiptPrice,priceCents,money,pricingTotal,
-  document:{querySelector:()=>host},window:{addEventListener(){},removeEventListener(){}},crypto:{randomUUID:()=>normalId.slice(4)},
-  createSupplierLoader:()=>async()=>({sources:[source],rows:[{...row,bottles:stock}]}),loadReceiptCatalog:()=>{},watchSupplierCatalog:()=>()=>{},
-  supplierSelection:()=>({source,brand:source.brand,category:source.category,brands:[source.brand],categories:[source.category]}),
+  document:{querySelector:()=>host,body:{append(){}},createElement:()=>({append(input){this.input=input;},submit(){external.push(JSON.parse(this.input.value));},remove(){}})},
+  navigator:{locks:{request:async(_key,fn)=>fn()}},LOSS_ENDPOINT:'https://example.invalid',window:{addEventListener(){},removeEventListener(){}},crypto:{randomUUID:()=>issued++?oldId.slice(4):normalId.slice(4)},
+  createSupplierLoader:()=>async()=>({sources:catalog,rows:catalog.map(r=>({...r,bottles:stock}))}),loadReceiptCatalog:()=>{},watchSupplierCatalog:()=>()=>{},
+  supplierSelection:(_sources,brand)=>{const selected=catalog.find(r=>r.brand===brand)||catalog[0];return {source:selected,brand:selected.brand,category:selected.category,brands:catalog.map(r=>r.brand),categories:[selected.category]};},
   beginProcessing:()=>({close(){}}),isProcessing:()=>false,showReceiptReviewWarning:x=>warnings.push(x),createRefreshStatus:()=>({start(){},finish(){}}),
   supplyLayout:'',protectDraft:(fn,dirty)=>Object.assign(fn,{hasUnsavedChanges:dirty}),operationResult:()=>'',quantitySteppers(){},sheetUrl:()=> '#',
-  seedShortage:()=>null,shortageLinks:()=>links.slice(),clearShortage:()=>links.splice(0),reconcileOrderInputs(){},today:()=> '2026-01-19',directEnabled:()=>true};
+  seedShortage:()=>null,shortageLinks:()=>links.slice(),clearShortage:()=>links.splice(0),reconcileOrderInputs(){},today:()=> '2026-01-19',directEnabled:()=>direct};
  const mount=new Function(...Object.keys(mountDeps),sourceOf('receive-grid.mjs')+'\nreturn mountReceiptGrid;')(...Object.values(mountDeps));
  const prompts=[];const close=mount({esc:String,fmt:String,ask:(...args)=>prompts.push(args)});await closeTick();
- return {storage,dialogs,prompts,close,warnings,writes,$,qty:v=>{qty.value=v;qty.oninput();},price:v=>{price.value=v;price.oninput();},links,
+ return {storage,dialogs,prompts,close,warnings,writes,$,external,
+  qty:(v,i=0)=>{const {qty}=inputs[i];qty.value=v;qty.oninput();},price:(v,i=0)=>{const {price}=inputs[i];price.value=v;price.oninput();},links,
   submit:()=>$('#receipt-form').onsubmit({preventDefault(){}}),recover:()=>$('#receipt-process').onclick(),ledger:d=>ledger.push(d),stock:()=>stock,race:f=>{afterWrite=f}};
 }
 
@@ -162,4 +167,108 @@ test('discard clears the current receipt only after confirmation',async()=>{
  f.prompts[0][1]();assert.equal(f.close.hasUnsavedChanges(),false);
  assert.deepEqual(JSON.parse(f.storage.get(KEY)),previous);
  assert.equal(f.stock(),4);assert.equal(f.writes.length,0);
+});
+
+test('return keeps date, actor, cross-brand manual and blank prices, catalog price sources and preview quantities',async()=>{
+ const catalog=['科達','天明','富田','自訂'].map((brand,i)=>({...row,name:brand+'單方',brand,code:'QA-'+i,unitPriceCents:9900}));
+ const previous={...draft(oldId,1),verified:true};
+ const f=await fixture({catalog,initial:previous});
+ f.$('#receipt-date').value='2026-01-18';
+ f.$('#receipt-actor').value='驗收員';
+ catalog.forEach((_,i)=>f.qty('2',i));
+ f.price('12.50',0);f.price('0',1);f.price('',2);
+ await f.submit();
+ const preview=f.dialogs[0],changes=structuredClone(preview.initial);
+ changes.lines[2].quantity=5;
+ await preview.post(changes,{confirm:false});await preview.back();
+ assert.equal(f.$('#receipt-date').value,'2026-01-18');
+ assert.equal(f.$('#receipt-actor').value,'驗收員');
+ for(const [i,brandRow] of catalog.entries()){
+  f.$('#receipt-brands').onclick({target:{closest:()=>({dataset:{brand:brandRow.brand}})}});
+  const html=f.$('#receipt-grid tbody').innerHTML;
+  assert.match(html,new RegExp('class="receipt-qty"[^>]*value="'+(i===2?'5':'2')+'"'));
+  assert.match(html,new RegExp('class="receipt-price"[^>]*value="'+['12.50','0','','99'][i]+'"'));
+  assert.equal(html.includes('本次輸入'),i!==3);
+ }
+ assert.deepEqual(JSON.parse(f.storage.get(KEY)),previous);
+ await assert.rejects(()=>preview.post(),/預覽或待核對狀態已變動/);
+ assert.equal(f.writes.length,0);
+ f.qty('3');await f.submit();const edited=f.dialogs[1];
+ assert.deepEqual(edited.initial.lines.map(l=>[l.quantity,l.unitPriceCents]),[[3,1250],[2,0],[5,undefined],[2,9900]]);
+ await edited.post();await assert.rejects(()=>edited.post(),/預覽或待核對狀態已變動/);
+ assert.equal(f.writes.length,1);
+ assert.equal(f.close.hasUnsavedChanges(),false);
+});
+
+test('return keeps another tab’s pending record and invalidates the old confirm callback',async()=>{
+ const f=await fixture();f.qty('2');await f.submit();
+ const other=draft(oldId,7);f.storage.set(KEY,JSON.stringify(other));
+ await f.dialogs[0].back();
+ assert.deepEqual(JSON.parse(f.storage.get(KEY)),other);
+ assert.match(f.$('#receipt-pending-status').textContent,/狀態已變動/);
+ assert.match(f.$('#receipt-summary').textContent,/已填 1 項.*2 瓶/);
+ await assert.rejects(()=>f.dialogs[0].post(),/預覽或待核對狀態已變動/);
+ assert.equal(f.writes.length,0);
+});
+
+test('resubmitting a sent form reads back its original receipt instead of starting a second receipt',async()=>{
+ for(const otherTabVerified of [true,false]){
+  const f=await fixture();f.qty('2');await f.submit();const preview=f.dialogs[0];
+  await preview.post(null,{fail:true});
+  const posted=draft(normalId,2);
+  if(otherTabVerified)f.storage.set(KEY,JSON.stringify({...posted,verified:true}));
+  else f.ledger(posted);
+  await preview.back();await f.submit();
+  assert.equal(f.writes.length,0);
+  assert.equal(f.dialogs.length,1);
+  assert.equal(JSON.parse(f.storage.get(KEY)).verified,true);
+  assert.equal(f.close.hasUnsavedChanges(),false);
+ }
+});
+
+test('external Google review allows a direct return without opening a tab or reserving a transaction',async()=>{
+ const f=await fixture({direct:false});f.qty('2');f.price('0');
+ await f.submit();const [html,expired,label,backLabel,back]=f.prompts[0];
+ assert.equal(label,'開啟 Google 核對頁');assert.equal(backLabel,'返回修改');
+ assert.match(html,/科達單方.*合成進貨品項.*2 瓶/);
+ await back();await expired();
+ assert.equal(f.external.length,0);assert.equal(f.storage.has(KEY),false);
+ f.qty('3');await f.submit();await f.prompts[1][1]();await f.prompts[1][1]();
+ assert.equal(f.external.length,1);assert.equal(f.external[0].lines[0].quantity,3);
+ assert.equal(f.external[0].lines[0].unitPriceCents,0);
+ assert.equal(JSON.parse(f.storage.get(KEY)).id,f.external[0].id);
+});
+
+test('a late edit or discard from a closed preview cannot change the returned form',async()=>{
+ const f=await fixture();f.qty('4');await f.submit();const preview=f.dialogs[0];
+ preview.discard();const discard=f.prompts[0];
+ await discard[4]();
+ await preview.post(draft(normalId,9),{confirm:false});discard[1]();
+ assert.match(f.$('#receipt-summary').textContent,/1 項.*4 瓶/);
+ await assert.rejects(()=>preview.post(),/預覽或待核對狀態已變動/);
+ assert.equal(f.writes.length,0);
+});
+
+test('a displaced receipt checks its own ID on the next preview while preserving the other tab’s transaction',async()=>{
+ const f=await fixture();f.qty('2');await f.submit();
+ const other=draft(oldId,8);
+ f.race(()=>f.storage.set(KEY,JSON.stringify(other)));
+ await f.dialogs[0].post();
+ assert.equal(f.writes.length,1);assert.equal(f.close.hasUnsavedChanges(),true);
+ await f.submit();
+ assert.equal(f.dialogs.length,1);assert.equal(f.writes.length,1);
+ assert.equal(f.close.hasUnsavedChanges(),false);
+ assert.deepEqual(JSON.parse(f.storage.get(KEY)),other);
+ assert.match(f.$('#receipt-pending-status').textContent,/本筆進貨已入帳/);
+});
+
+test('an unverified displaced receipt keeps its original ID on a safe retry',async()=>{
+ const f=await fixture();f.qty('2');await f.submit();
+ await f.dialogs[0].post(null,{fail:true});
+ const other=draft(oldId,8);
+ f.storage.set(KEY,JSON.stringify(other));await f.submit();
+ assert.equal(f.dialogs.length,1);assert.deepEqual(JSON.parse(f.storage.get(KEY)),other);
+ f.storage.set(KEY,JSON.stringify({...other,verified:true}));await f.submit();
+ assert.equal(f.dialogs[1].initial.id,normalId);await f.dialogs[1].post();
+ assert.equal(f.writes.length,1);assert.equal(f.stock(),6);
 });

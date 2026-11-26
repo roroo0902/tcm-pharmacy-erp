@@ -26,7 +26,7 @@ const sameDraft=(a,b)=>JSON.stringify(cloudDraft(a))===JSON.stringify(cloudDraft
 export function mountReceiptGrid({esc,fmt,ask}){
  const c=document.querySelector('#content'),$=s=>c.querySelector(s),abort=new AbortController(),quantities=new Map(),prices=new Map();
  // Ownership is scoped to this mounted form, never written into a pending transaction.
- let ownedNormalReceipt=null;
+ let ownedNormalReceipt=null,activePreview=null;
  let rows=[],sources=[],source=null,brand='',category='',sort='code',direction='asc',alive=true,loading=false,loadFailed=false,ticket=0,pending=null,checkingPending=false;
  let shortageSeeded=false,shortageHandoff=null;const readCatalog=createSupplierLoader(loadReceiptCatalog);
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
@@ -236,7 +236,6 @@ export function mountReceiptGrid({esc,fmt,ask}){
  }
  function consumeOwnedNormal(original,posted,alreadyPosted){
   const owned=ownedNormalReceipt;
-  if(owned?.id===original.id)ownedNormalReceipt=null;
   if(!matchesOwnedNormal(original.id,owned))return false;
   try{
    if(JSON.stringify(cloudDraft(original))!==owned.pending)return false;
@@ -244,53 +243,97 @@ export function mountReceiptGrid({esc,fmt,ask}){
    const stored=savedTransaction(KEY);
    if(stored?.verified!==true||stored.id!==original.id||!sameDraft(stored,posted))return false;
   }catch{return false;}
-  clearCurrent();
+  ownedNormalReceipt=null;clearCurrent();
   return true;
+ }
+ async function checkDisplacedReceipt(owned,prior,separate){
+  const original=JSON.parse(owned.pending);
+  checkingPending=true;
+  pendingStatus('正在依原交易編號核對本筆進貨…');
+  try{
+   const event=await lookupPostedTransaction(original);
+   if(!alive||ownedNormalReceipt!==owned||!matchesOwnedNormal(original.id,owned))return;
+   if(event){
+    if(!sameDraft(event.draft,original))throw Error('原交易編號的入帳內容不同，請核對交易紀錄。');
+    ownedNormalReceipt=null;clearCurrent();draw();showPending();
+    pendingStatus('本筆進貨已入帳。其他分頁的交易已保留。');
+    return;
+   }
+   if(localStorage.getItem(KEY)!==prior||localStorage.getItem(SEPARATE)!==separate||
+    [prior,separate].some(raw=>raw&&!JSON.parse(raw).verified)){
+    showPending();pendingStatus('原交易仍待核對，請先處理另一筆待確認操作。');return;
+   }
+   // The prior request may still be in flight. Even after a negative read, retry only its original ID.
+   await send(original);
+  }finally{checkingPending=false;}
  }
  function send(d,plan){
   const priorRecord=localStorage.getItem(KEY),separateRecord=localStorage.getItem(SEPARATE);
   const currentOnly=!plan||(plan.input&&!plan.merge);
+  const key=plan?.key||KEY,preview={};
+  activePreview=preview;
+  let submitted;
+  const recordSubmission=reviewed=>{
+   if(!alive||activePreview!==preview||localStorage.getItem(KEY)!==priorRecord||localStorage.getItem(SEPARATE)!==separateRecord)throw Error('進貨預覽或待核對狀態已變動，請回到表單重新核對。');
+   submitted=JSON.stringify({...reviewed,...(plan?.input?{receiptInput:plan.input}:{}),...(plan?.merge?{receiptMerge:true}:{})});
+   const owned=!plan?{id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(reviewed)}:null;
+   localStorage.setItem(key,submitted);
+   activePreview=null;
+   if(owned)ownedNormalReceipt=owned;
+   showPending();
+  };
+  const returnToForm=()=>{
+   if(!alive||activePreview!==preview)return;
+   activePreview=null;
+   showPending();draw();
+   if(priorRecord!==localStorage.getItem(KEY)||separateRecord!==localStorage.getItem(SEPARATE)){
+    pendingStatus('進貨狀態已變動。表單輸入已保留，請先核對同步結果。');
+   }else{
+    pendingStatus('已返回進貨表單，日期、經手人、各廠牌數量與單價已保留。');
+   }
+   const input=[...c.querySelectorAll('.receipt-qty')].find(el=>quantities.has(el.dataset.key))||$('#receipt-submit');
+   input.focus?.();
+  };
   if(directEnabled()){
-   const key=plan?.key||KEY;
-   let submitted;
    return directReview(d,ask,async result=>{
     const receiptEvent={draft:d,lines:result.lines||[],time:result.time};
-    if(plan?localStorage.getItem(key)===submitted:savedTransaction(key)?.id===d.id){
+    if(localStorage.getItem(key)===submitted){
      if(key===SEPARATE)localStorage.removeItem(key);
      else localStorage.setItem(key,JSON.stringify({...d,verified:true,receiptEvent}));
     }
-    if(!plan){ownedNormalReceipt=null;clearCurrent();}
+    if(!plan)consumeOwnedNormal(d,d,false);
     else if(plan.input)consumeCurrent(plan.input);
     if(alive){showPending();await load();}
-   },plan?pendingStatus:status,{requireUnposted:!!plan,onPreviewError:warnPreview,receiptRows:()=>rows,beforeCommit:plan?reviewed=>{
-    if(plan.prior!==localStorage.getItem(KEY)||plan.separate!==localStorage.getItem(SEPARATE))throw Error('待核對進貨已變動，請回到進貨登錄重新確認。');
-    submitted=JSON.stringify({...reviewed,...(plan.input?{receiptInput:plan.input}:{}),...(plan.merge?{receiptMerge:true}:{})});
-    localStorage.setItem(key,submitted);
-    showPending();
-   }:reviewed=>{
-    if(!alive||localStorage.getItem(KEY)!==priorRecord||localStorage.getItem(SEPARATE)!==separateRecord)throw Error('待核對進貨已變動，請重新預覽。');
-    const owned={id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(reviewed)};
-    localStorage.setItem(KEY,owned.pending);
-    ownedNormalReceipt=owned;
-    showPending();
-   },onDiscard:currentOnly?()=>{
+   },plan?pendingStatus:status,{requireUnposted:!!plan,onPreviewError:warnPreview,receiptRows:()=>rows,beforeCommit:recordSubmission,onReturn:returnToForm,onDiscard:currentOnly?()=>{
+    if(!alive||activePreview!==preview||submitted)return;
     ask('<h3>確定放棄本次進貨草稿？</h3><p>放棄後會清除這次填寫的實收內容。</p>',()=>{
-     if(!alive)return;
+     if(!alive||activePreview!==preview||submitted)return;
+     if(priorRecord!==localStorage.getItem(KEY)||separateRecord!==localStorage.getItem(SEPARATE)){returnToForm();return;}
+     activePreview=null;
      clearCurrent();rows=rows.filter(r=>!r.pendingCreate);draw();status('已放棄本次進貨草稿。');
-    },'確認放棄','保留並返回修改');
+    },'確認放棄','保留並返回修改',returnToForm);
    }:undefined,onDraftChange:next=>{
+    if(!alive||activePreview!==preview)return;
     if(!currentOnly){Object.assign(d,next);return;}
     for(const l of next.lines.filter(l=>l.create)){if(!rows.some(r=>r.name===l.sheet&&r.code===l.code)){const s=sources.find(s=>s.name===l.sheet);if(s)rows.push({...s,code:l.code,drug:l.name,bottles:0,pendingCreate:true,unitPriceCents:l.unitPriceCents});}}
-    Object.assign(d,next);
-    for(const l of d.lines){
+    for(const l of next.lines){
      const key=receiptKey({name:l.sheet,code:l.code,drug:l.name});
-     quantities.set(key,String(l.quantity));
-     prices.set(key,l.unitPriceCents===undefined?'':String(l.unitPriceCents/100));
+     const existing=d.lines.find(old=>old.sheet===l.sheet&&old.code===l.code&&old.name===l.name);
+     if(!existing||existing.quantity!==l.quantity)quantities.set(key,String(l.quantity));
+     // Quantity edits must keep the exact price input, including its catalog/manual source.
+     if(!existing)prices.set(key,l.unitPriceCents===undefined?'':String(l.unitPriceCents/100));
     }
+    Object.assign(d,next);
     if(alive){draw();showPending();}
    }});
   }
-  const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(d);form.append(input);document.body.append(form);form.submit();form.remove();status('已開啟 Google 核對頁，請以同一交易核對結果。');
+  const items=d.lines.map(l=>`<li>${esc(l.sheet)}｜${esc(l.name)}：${esc(l.quantity)} 瓶 · 單價 ${l.unitPriceCents===undefined?'未提供':money(l.unitPriceCents)}</li>`).join('');
+  ask(`<p>${esc(d.date)} · ${esc(d.actor)}</p><ul>${items}</ul><p>請至 Google 核對庫存並確認入帳。</p>`,async()=>{
+   try{
+    await navigator.locks.request(KEY,()=>recordSubmission(d));
+    const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(d);form.append(input);document.body.append(form);form.submit();form.remove();status('已開啟 Google 核對頁，請以同一交易核對結果。');
+   }catch(e){status(e.message);}
+  },'開啟 Google 核對頁','返回修改',returnToForm);
  }
  async function reviewWithPrevious(d,prior,separate){
   checkingPending=true;
@@ -305,6 +348,10 @@ export function mountReceiptGrid({esc,fmt,ask}){
    if(event){
     localStorage.setItem(KEY,JSON.stringify({...event.draft,verified:true,receiptEvent:event}));
     showPending();
+    if(sameDraft({...d,id:previous.id},event.draft)){
+     pendingStatus('工作表已查到相同內容的進貨。請核對入帳明細，再決定是否另登一批。');
+     return;
+    }
     pendingStatus('上一筆已入帳，接著預覽本次進貨。');
     await send(d,{key:KEY,prior:localStorage.getItem(KEY),separate,input:d});
     return;
@@ -354,6 +401,20 @@ export function mountReceiptGrid({esc,fmt,ask}){
   try{
    const previousRecord=localStorage.getItem(KEY),separateRecord=localStorage.getItem(SEPARATE);
    const prior=JSON.parse(previousRecord||'null'),separate=JSON.parse(separateRecord||'null');
+   if(ownedNormalReceipt&&prior?.id!==ownedNormalReceipt.id&&matchesOwnedNormal(ownedNormalReceipt.id,ownedNormalReceipt)){
+    await checkDisplacedReceipt(ownedNormalReceipt,previousRecord,separateRecord);
+    return;
+   }
+   if(prior&&ownedNormalReceipt?.id===prior.id){
+    showPending();
+    if(prior.verified){
+     const cleared=consumeOwnedNormal(prior,prior,true);draw();
+     pendingStatus(cleared?'本筆進貨已入帳，請查看入帳明細。':'入帳紀錄與表單內容不同，請先核對交易明細。');
+    }else if(directEnabled()){
+     await checkPending(true);
+    }else pendingStatus('本筆已開啟 Google 核對頁，請先核對同一筆進貨的結果。');
+    return;
+   }
    if((separate&&!separate.verified)||(prior?.receiptMerge&&!prior.verified)){
     showPending();
     pendingStatus('請先核對已送出的進貨。本次填寫內容已保留。');
@@ -372,8 +433,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
    }
    const d=currentDraft();
    pendingStatus('');
-   if(!directEnabled()){localStorage.setItem(KEY,JSON.stringify(d));showPending();}
-   send(d);
+   await send(d);
   }catch(e){status(e.message);warnPreview(e.message);}
  };
  const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);load(false,{showDialog:true}).then(()=>{if(alive)openEntry();});return protectDraft(()=>{alive=false;closeEntry?.();closeCatalogScreen();stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0);

@@ -38,7 +38,11 @@ export function calculateOrderRows(grid,source,options){
  return {rows,days,missing,assumption:'無年份表頭依所選期間解讀；週日排除',options:{...options,targetDays:target,shippingDays:shipping,holidayDays:holiday}};
 }
 export function makeOrder(snapshot,quantities,actor,confirmed,id,createdAt){
- if(!snapshot?.rows?.length)throw Error('請先計算耗損');if(!String(actor).trim())throw Error('請填經手人');if(!confirmed)throw Error('請確認已核對庫存、缺漏資料與訂量');
+ if(!confirmed)throw Error('請確認已核對庫存、缺漏資料與訂量');
+ return previewOrder(snapshot,quantities,actor,id,createdAt);
+}
+export function previewOrder(snapshot,quantities,actor,id,createdAt){
+ if(!snapshot?.rows?.length)throw Error('請先計算耗損');if(!String(actor??'').trim())throw Error('請填經手人');
  const lines=[];for(const r of snapshot.rows){const raw=quantities[r.id];if(raw===undefined||raw==='')continue;const n=numberOrNull(raw);if(n===null||n<0||!Number.isInteger(n)||n>100000)throw Error(r.name+' 訂量須為非負整瓶數');if(n>0){if(isOperationalOrderQa(r.sheet,r.code))throw Error(r.code+' 為驗收專用，請清除營運訂量');lines.push({...r,quantity:n});}}
  if(!lines.length)throw Error('至少填寫一項大於0的訂貨量');
  return {kind:'tcm-purchase-order',version:2,id,createdAt,actor:String(actor).trim(),status:'已確認草稿・未送出',options:snapshot.options,lines};

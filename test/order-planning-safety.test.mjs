@@ -72,12 +72,10 @@ test('real planning handlers block stale apply/confirmation, retain manual entry
   assert.equal($('#order-confirm').disabled,false);
   assert.match($('#order-table').innerHTML,/驗收專用・不帶入/);
   const manual=$('qty:'+id('KEEP'));manual.value='3';manual.oninput();
-  $('#order-reviewed').checked=true;
   let reject;h.reply(()=>new Promise((_resolve,fail)=>{reject=fail;}));
   const loading=$('#order-load').onclick();
   assert.equal($('#order-suggest').disabled,true);
   assert.equal($('#order-confirm').disabled,true);
-  assert.equal($('#order-reviewed').checked,false);
   $('#order-suggest').onclick();
   reject(Error('fixture offline'));await loading;
   assert.match($('#order-state').textContent,/fixture offline/);
@@ -120,7 +118,13 @@ test('order planning detects unsaved edits including zero and clears them only o
   assert.equal(h.unmount.hasUnsavedChanges(),false);
   const input=$('qty:'+normal.id);input.value='0';input.oninput();
   assert.equal(h.unmount.hasUnsavedChanges(),true);
-  await $('#order-save').onclick();
+  assert.doesNotMatch($('#content').innerHTML,/order-reviewed|id="order-save"|儲存本機草稿/);
+  input.value='2';input.oninput();
+  $('#order-confirm').onclick();
+  assert.equal(JSON.parse(h.store.get('tcm-purchase-v2')).orders.length,0);
+  assert.equal(h.unmount.hasUnsavedChanges(),true);
+  await h.modals.at(-1).run();
+  assert.equal(JSON.parse(h.store.get('tcm-purchase-v2')).orders[0].lines[0].quantity,2);
   assert.equal(h.unmount.hasUnsavedChanges(),false);
   $('#order-days').value='8';
   assert.equal(h.unmount.hasUnsavedChanges(),true);
@@ -196,7 +200,7 @@ test('planning pager retains quantities and prices across pages and clears the w
    $('#order-next').onclick();assert.match($('#order-page').textContent,/–33/);
   }
   assert.equal($('#order-total').textContent,'已填 2 項（含其他分頁） · 6 瓶 · 訂貨合計：NT$ 75');
-  $('#order-reviewed').checked=true;$('#order-confirm').onclick();
+  $('#order-confirm').onclick();
   assert.match(h.modals.at(-1).html,/N00.*N10.*NT\$ 75/);
   $('#order-clear').onclick();h.modals.at(-1).run();
   assert.equal($('#order-total').textContent,'已填 0 項（含其他分頁） · 0 瓶 · 訂貨合計：NT$ 0');

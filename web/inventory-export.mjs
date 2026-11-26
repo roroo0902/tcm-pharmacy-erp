@@ -1,8 +1,8 @@
 import {createXlsx} from './xlsx-export.mjs';
 import {sortSheetRows} from './sheets-sort.mjs';
-export const inventoryLabels={all:'符合品項',zero:'零庫存',warning:'待核對'};
+export const inventoryLabels={all:'符合品項',filled:'已填瓶數合計',zero:'零庫存',warning:'待核對'};
 export function filterInventory(rows,f={}){return rows.filter(r=>(!f.brand||r.brand===f.brand)&&(!f.category||r.category===f.category)&&[r.drug,r.code].join(' ').toLowerCase().includes(String(f.q||'').toLowerCase()));}
-export function selectInventory(rows,f={}){return sortSheetRows(filterInventory(rows,f).filter(r=>f.status==='zero'?r.bottles===0:f.status==='warning'?Boolean(r.warning):true),f.sortKey,f.sortDirection,f.sortYear);}
+export function selectInventory(rows,f={}){return sortSheetRows(filterInventory(rows,f).filter(r=>f.status==='filled'?Number.isFinite(r.bottles):f.status==='zero'?r.bottles===0:f.status==='warning'?Boolean(r.warning):true),f.sortKey,f.sortDirection,f.sortYear);}
 export function exportInventory(rows,f={},sources=[],now=new Date()){
  const selected=selectInventory(rows,f);if(!selected.length)throw Error('目前沒有符合條件的品項');
  const stamp=now.toLocaleString('sv-SE',{timeZone:'Asia/Taipei'}),label=inventoryLabels[f.status]||inventoryLabels.all;

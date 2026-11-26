@@ -10,3 +10,12 @@ test('inventory export applies combined filters and all three views without trun
 test('inventory workbook keeps missing values and price precision with real XLSX packaging',()=>{
  const f=exportInventory([{...rows[0],code:'00123',drug:'=1+1',bottles:null,stockRaw:'未盤點',unitPriceCents:undefined,priceRaw:'待報價',priceWarning:'格式待核對'}],{status:'warning'});const text=new TextDecoder().decode(f.bytes);assert.equal(text.slice(0,2),'PK');assert.ok(text.includes('00123')&&text.includes('未盤點')&&text.includes('待報價'));assert.ok(!text.includes('<f>'));assert.ok(text.includes('匯出條件'));const priced=new TextDecoder().decode(exportInventory(rows.slice(0,1)).bytes);assert.ok(priced.includes('<v>123.45</v>'));
 });
+
+test('filled bottles detail and export include recorded zero and exclude missing or invalid counts',()=>{
+ const sample=[0,4,null,null].map((bottles,i)=>({...rows[i],bottles,stockRaw:['0','4','','待盤'][i]}));
+ const selected=selectInventory(sample,{status:'filled'});
+ assert.deepEqual(selected.map(r=>r.bottles),[0,4]);
+ const file=exportInventory(sample,{status:'filled'});
+ assert.equal(file.count,2);
+ assert.match(file.filename,/已填瓶數合計/);
+});

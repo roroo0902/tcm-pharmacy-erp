@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createMailSendGate} from '../web/mail-send-gate.mjs';
+import {prepareOrderOutputDraft} from '../web/order-output-draft.mjs';
+import {orderScrollStyle} from '../web/order-scroll-style.mjs';
 const source=readFileSync(new URL('../web/order-pdf-editor.mjs',import.meta.url),'utf8')
  .replace(/^import[^\n]*$/gm,'').replace(/^export /gm,'');
 const result=(id='QA-order')=>({id,sheets:[{title:'合成科達',count:1,url:'http://127.0.0.1:1111/#orders'}],message:'合成列印已讀回'});
@@ -26,7 +28,7 @@ function fixture(){
   assert.equal(operation,'erpPrintConfirmedOrder');
   return new Promise((resolve,reject)=>calls.push({input,resolve,reject}));
  };
- const open=new Function('document','localStorage','createMailSendGate',source+'\nreturn openOrderPdfEditor;')(document,{setItem:(k,v)=>store.set(k,v),getItem:k=>store.get(k)},createMailSendGate);
+ const open=new Function('document','localStorage','createMailSendGate','prepareOrderOutputDraft','orderScrollStyle',source+'\nreturn openOrderPdfEditor;')(document,{setItem:(k,v)=>store.set(k,v),getItem:k=>store.get(k)},createMailSendGate,prepareOrderOutputDraft,orderScrollStyle);
  async function editor(id='QA-order',mergeIds=[]){
   await open({id,mergeIds,rpc,output:'print'});const dialog=dialogs.at(-1),body=dialog.querySelector('[data-body]'),status=dialog.querySelector('[role=status]');
   await body.querySelector('[data-stage]').querySelector('[data-review]').onclick();
@@ -90,11 +92,10 @@ test('preview opened before another write must be reviewed anew even after that 
 });
 
 test('catalog additions merge at preview time and removing them preserves original quantities',()=>{
- const fn=source.slice(source.indexOf(' function outputDraft()'),source.indexOf(' const snapshot='));
  const original={key:'科達單方|A1004',brand:'科達',category:'單方',code:'A1004',name:'大黃',quantity:60,manual:false};
  const extra={...original,catalog:true,quantity:'2'};
  const rows=[original,extra];
- const draft=new Function('source','snapshot',fn+';return outputDraft')({rows:[original]},()=>({rows:structuredClone(rows)}));
+ const draft=()=>prepareOrderOutputDraft({rows:structuredClone(rows)},{rows:[original]});
  assert.equal(draft().rows[0].quantity,62);
  extra.quantity='3';assert.equal(draft().rows[0].quantity,63);
  rows.pop();assert.equal(draft().rows[0].quantity,60);

@@ -101,7 +101,8 @@ export function mountPhotoReceive({esc,fmt,ask}){
  #ai-photo-options :is(strong,small){display:block;white-space:normal;overflow-wrap:anywhere}
  </style>
  <dialog id="ai-photo-choice" aria-labelledby="ai-choice-title"><h3 id="ai-choice-title">選擇要修改的照片</h3>
- <div id="ai-photo-options"></div><div class="actions"><button type="button" id="ai-choice-back" class="secondary">返回進貨清單</button></div></dialog>
+ <div id="ai-photo-options"></div><div class="actions"><button type="button" id="ai-choice-back" class="secondary">返回進貨清單</button>
+ <button type="button" id="ai-choice-preview">全部改好，預覽整批</button></div></dialog>
  <dialog id="ai-catalog-dialog" aria-labelledby="ai-catalog-title"><div class="ai-dialog-content">
  <picture><source media="(prefers-reduced-motion: no-preference)" srcset="./web/assets/photo-wizard-rays.gif"><img src="./web/assets/photo-wizard.png" alt=""></picture><div>
  <div class="ai-dialog-caption">正在讀取已啟用的</div><h3 id="ai-catalog-title">廠商與藥品名冊</h3>
@@ -120,14 +121,21 @@ export function mountPhotoReceive({esc,fmt,ask}){
  }
  chooser.onclose=()=>{if(!chooser.open)clearChoices();};
  $('#ai-choice-back').onclick=()=>chooser.close();
- function choosePhoto(){
+ $('#ai-choice-preview').onclick=()=>{
+  if(!chooser.open)return;
+  chooser.close();
+  $('#ai-preview').click();
+ };
+ function choosePhoto(updatedBatch=null){
   clearChoices();
+  $('#ai-choice-title').textContent=updatedBatch?'本張已更新，選擇下一張照片':'選擇要修改的照片';
   options.innerHTML=batches.map((batch,index)=>{
    const lines=batch.recognized.filter(line=>!line.removed);
    const url=URL.createObjectURL(batch.file);
    thumbnails.push(url);
    const names=lines.slice(0,3).map(line=>line.item.name).join('、')+(lines.length>3?'…':'');
-   return '<button type="button" class="secondary" data-choose-photo="'+index+'"><img alt="" src="'+esc(url)+'"><span><strong>第 '+(index+1)+' 張 · '+esc(batch.brand)+'</strong><small>'+esc(batch.file.name||'進貨照片')+'</small><small>'+lines.length+' 項 · '+esc(names)+'</small></span></button>';
+   const marker=batch===updatedBatch?'（剛更新）':'';
+   return '<button type="button" class="secondary" data-choose-photo="'+index+'"><img alt="" src="'+esc(url)+'"><span><strong>第 '+(index+1)+' 張 · '+esc(batch.brand)+marker+'</strong><small>'+esc(batch.file.name||'進貨照片')+'</small><small>'+lines.length+' 項 · '+esc(names)+'</small></span></button>';
   }).join('');
   chooser.showModal();
  }
@@ -371,9 +379,13 @@ export function mountPhotoReceive({esc,fmt,ask}){
     line.price??=cents===undefined?'':String(cents/100);
     line.basketKey=item.key;line.item={...item,unitPriceCents:cents};
    }
-   const next=editing?batches.map(old=>old===editing?batch:old):[...batches,batch];
+   const wasEditing=editing!==null;
+   const continueChoosing=wasEditing&&batches.length>1;
+   const next=wasEditing?batches.map(old=>old===editing?batch:old):[...batches,batch];
    basket=photoBasket(next);
-   batches=next.filter(photo=>photo.recognized.some(l=>!l.removed));editing=null;recognized=[];scanPhoto=null;pastedImage=null;displayPhoto(null);$('#ai-image').value='';$('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';drawResult();drawBasket();status('已加入清單；尚未同步。可切換廠商再拍下一張照片。');
+   batches=next.filter(photo=>photo.recognized.some(l=>!l.removed));editing=null;recognized=[];scanPhoto=null;pastedImage=null;displayPhoto(null);$('#ai-image').value='';$('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';drawResult();drawBasket();
+   status(wasEditing?'已更新本張核對內容。':'已加入清單；尚未同步。可切換廠商再拍下一張照片。');
+   if(continueChoosing&&batches.length)choosePhoto(batch);
   }catch(error){status(error.message);}
  };
  function showPending(){

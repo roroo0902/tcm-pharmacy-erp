@@ -15,20 +15,29 @@ dialog:has(#sub-edit) label, dialog:has(#shortage-edit) label, dialog:has(#alloc
 .shortage-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px }
 .shortage-cards { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 16px 0 20px }
 #content .shortage-cards > button {
-  display: flex; justify-content: center; align-items: center; gap: clamp(8px,1vw,18px);
+  position: relative; display: flex; justify-content: center; align-items: center; gap: clamp(8px,1vw,18px);
   padding: 16px 12px; min-width: 0; min-height: 108px; text-align: start; background: var(--quest-paper);
   color: var(--quest-ink); border: 1px solid #cfb889; line-height: 1.35;
 }
-.shortage-cards img { flex: none; width: clamp(56px,4vw,72px); height: auto; object-fit: contain; image-rendering: pixelated }
-.sh-metric-copy { display: grid; min-width: 0; gap: 3px; font-size: clamp(1rem,1.1vw,1.2rem); font-weight: 700 }
+.shortage-cards img { flex: none; width: clamp(56px,5vw,80px); height: 60px; object-fit: contain; image-rendering: pixelated }
+.sh-metric-copy { display: grid; min-width: 0; gap: 3px; border-inline-start: 1px solid #bfaa7e; padding-inline-start: clamp(6px,1vw,16px); font-size: clamp(1rem,1.1vw,1.2rem); font-weight: 700 }
 .sh-metric-value { font-size: .9rem; white-space: nowrap }
 .sh-metric-value strong { margin-inline-end: .15em; font-size: clamp(1.8rem,2.3vw,2.4rem); line-height: 1.1 }
 .shortage-cards button:disabled .sh-metric-value { white-space: normal; overflow-wrap: anywhere }
 #content .shortage-cards button:disabled .sh-metric-value strong { margin: 0; font-size: 1rem; line-height: 1.35 }
-#content .shortage-cards button[aria-pressed=true], #content .shortage-cards button:hover:enabled {
-  background: #fbf2d9; border-color: #a5813c; color: #172b48;
+#content .shortage-cards button[aria-pressed=false]:hover:enabled {
+  background: #fbf2d9; border-color: #a5813c;
 }
-#content .shortage-cards button[aria-pressed=true] { box-shadow: inset 0 0 0 1px #a5813c, 0 2px 0 #ad925e }
+#content .shortage-cards button[aria-pressed=true] {
+  background: #142f49; color: #fff; border-color: #a88036;
+  box-shadow: inset 0 0 0 3px #edc56d;
+}
+#content .shortage-cards button[aria-pressed=true] strong { color: inherit }
+#content .shortage-cards button[aria-pressed=true]::after {
+  content: '✓'; position: absolute; inset-block-start: 5px; inset-inline-end: 5px;
+  display: grid; place-items: center; width: 18px; height: 18px;
+  background: #ffda85; color: #142f49; border-radius: 50%; font: bold 14px/1 sans-serif;
+}
 .shortage-panel .panelhead { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px }
 .shortage-panel .panelhead h2 { margin: 0; text-align: left }
 .shortage-panel .panelhead .actions { margin: 0 }

@@ -15,11 +15,16 @@ dialog:has(#sub-edit) label, dialog:has(#shortage-edit) label, dialog:has(#alloc
 .shortage-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px }
 .shortage-cards { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 16px 0 20px }
 #content .shortage-cards > button {
-  padding: 12px 8px; min-width: 0; text-align: center; background: var(--quest-paper);
+  display: flex; justify-content: center; align-items: center; gap: clamp(8px,1vw,18px);
+  padding: 16px 12px; min-width: 0; min-height: 108px; text-align: start; background: var(--quest-paper);
   color: var(--quest-ink); border: 1px solid #cfb889; line-height: 1.35;
 }
-.shortage-cards img { width: 28px; height: 28px; margin-inline-end: 8px; vertical-align: middle; object-fit: contain; image-rendering: pixelated }
-.shortage-cards strong { display: block; font-size: 30px; line-height: 1.15; margin: 5px 0 2px }
+.shortage-cards img { flex: none; width: clamp(56px,4vw,72px); height: auto; object-fit: contain; image-rendering: pixelated }
+.sh-metric-copy { display: grid; min-width: 0; gap: 3px; font-size: clamp(1rem,1.1vw,1.2rem); font-weight: 700 }
+.sh-metric-value { font-size: .9rem; white-space: nowrap }
+.sh-metric-value strong { margin-inline-end: .15em; font-size: clamp(1.8rem,2.3vw,2.4rem); line-height: 1.1 }
+.shortage-cards button:disabled .sh-metric-value { white-space: normal; overflow-wrap: anywhere }
+#content .shortage-cards button:disabled .sh-metric-value strong { margin: 0; font-size: 1rem; line-height: 1.35 }
 #content .shortage-cards button[aria-pressed=true], #content .shortage-cards button:hover:enabled {
   background: #fbf2d9; border-color: #a5813c; color: #172b48;
 }
@@ -59,8 +64,11 @@ dialog:has(#sub-edit) label, dialog:has(#shortage-edit) label, dialog:has(#alloc
   .shortage-row { grid-template-columns: repeat(3,minmax(0,1fr)) }
   .shortage-row .sh-actions { grid-column: 1/-1; justify-content: flex-start }
 }
+@media (max-width: 1050px) {
+  .shortage-cards { grid-template-columns: repeat(2,minmax(0,1fr)) }
+}
 @media (max-width: 760px) {
-  .shortage-cards { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px }
+  .shortage-cards { gap: 8px }
   .shortage-filters { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px }
   .shortage-row { grid-template-columns: repeat(2,minmax(0,1fr)); padding: 12px; gap: 8px }
   .sh-item { grid-column: 1/-1 }
@@ -69,7 +77,9 @@ dialog:has(#sub-edit) label, dialog:has(#shortage-edit) label, dialog:has(#alloc
 }
 @media (max-width: 450px) {
   .shortage-row { font-size: 14px }
-  .shortage-cards img { width: 24px; height: 24px; margin-inline-end: 4px }
+  #content .shortage-cards > button { min-height: 84px; gap: 6px; padding: 10px 6px }
+  .shortage-cards img { width: 44px }
+  .sh-metric-copy { font-size: .875rem }
   .sh-batch button { width: 100% }
 }
 </style>`;

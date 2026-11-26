@@ -4,7 +4,7 @@ import {runDirect,authorize,directReview} from './direct-sync.mjs?v=release20261
 import {loadSupplierCatalog} from './supplier-catalog.mjs?v=googlesync20261114';
 import {shortageProgress,normalizeShortage,normalizeSubstitution} from '../src/shortage.mjs?v=release20261120r1';
 import {queueShortage} from './shortage-handoff.mjs?v=release20261120r1';
-import {shortageStyle} from './shortage-style.mjs';
+import {shortageStyle} from './shortage-style.mjs?v=shortageCards2';
 export function mountShortage({esc,ask}){
  const c=document.querySelector('#content');let alive=true,busy=false,readState='loading',readError='',state={records:[],substitutions:[],events:[],orders:[],receipts:[]},rows=[],tab='records',filter='',query='',brand='',category='',alternativeSource=null,returnFilters=null;const selectedIds=new Set();
  const labels={pending:'待確認缺藥',confirmed:'已確認缺藥',sufficient:'開封中足夠',closed:'已結案',cancelled:'取消補貨',deferred:'暫不補貨',unknown:'待回覆',available:'可供貨',unavailable:'廠商缺貨'};
@@ -50,7 +50,10 @@ export function mountShortage({esc,ask}){
   const recordTab=tab==='records',ready=readState==='ready';
   const card=(k,title)=>{
    const count=records.filter(x=>includesMetric(x,k)).length+(k==='pending'?implicit.length:0);
-   return `<button type="button" aria-pressed="${filter===k}" data-filter="${k}"${ready?'':' disabled'}><img src="./web/assets/shortage-${k}.png" width="28" height="28" alt="">${title}<strong>${ready?count:readState==='error'?'無法取得':'待讀取'}</strong>${ready?'項':''}</button>`;
+   return `<button type="button" aria-pressed="${filter===k}" data-filter="${k}"${ready?'':' disabled'}>
+    <img src="./web/assets/shortage-${k}.png?v=shortageCards2" width="64" height="64" alt="">
+    <span class="sh-metric-copy"><span>${title}</span><span class="sh-metric-value"><strong>${ready?count:readState==='error'?'無法取得':'待讀取'}</strong>${ready?'項':''}</span></span>
+   </button>`;
   };
   const options=(entries,current)=>entries.map(([v,label])=>`<option value="${esc(v)}" ${current===v?'selected':''}>${esc(label)}</option>`).join('');
   const brands=[...new Set(rows.map(r=>r.brand))],categories=[...new Set(rows.map(r=>r.category).filter(Boolean))];

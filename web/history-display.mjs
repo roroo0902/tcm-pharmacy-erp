@@ -59,7 +59,11 @@ export function renderHistory(entries,filters={}){
    const cells=[l.name||'未記錄藥品',l.code||'未填編號',...(sheets.length!==1?[supplierLabel(l).join('・')]:[]),quantityLabel(e,l),...(receipt?[l.beforeText,l.afterText,l.priceText,l.amountText]:[])];
    return '<tr>'+cells.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>';
   }).join('');
-  return `<details class="txn"><summary><span>${esc(stamp==='時間未記錄'?(e.date||'日期未記錄')+'（時間未記錄）':stamp.slice(0,16))}</span><strong>${esc(e.label)}${e.marked?' · 測試紀錄':''}</strong><span class="txn-product">${esc(summary)}</span><span>${esc(e.status)}</span><span>${esc(e.actor||'未記錄')}</span><span class="txn-toggle"><span>展開 ▾</span><span>收合 ▴</span></span></summary><div class="txn-detail">${products?`<div class="tablewrap"><table><thead><tr>${columns.map(c=>'<th>'+c+'</th>').join('')}</tr></thead><tbody>${products}</tbody></table></div>`:''}<p>交易編號：${esc(e.displayId)}</p>${e.reverses?`<p>對應原交易：${esc(e.displayReverses)}</p>`:''}<p>記錄時間：${esc(stamp)}</p><p>備註：${esc(e.note||'無')}</p>${e.marked?'<p>測試標記來自品項編號、備註、經手人或對應原交易；標記本身不代表已還原。</p>':''}${receipt?`<div class="history-explanation">${esc(receipt.totalText)}</div><p class="muted">入庫前後瓶數為本次交易當時的紀錄；後續進貨、耗損或沖銷會影響目前庫存。</p>`:''}${e.type==='耗損'?`<p>此筆入帳後庫存：${esc(e.stock??'待核對')} 瓶（歷史數字，不是目前庫存）</p>`:''}<p>原始狀態：${esc(e.rawStatus||(e.type==='耗損'?'耗損更正紀錄':'未記錄'))}</p><a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/${esc(e.source.id)}/edit#gid=${esc(e.source.gid)}">查看原始工作表 ↗</a>${e.valid&&e.action==='訂貨'&&!e.reversed&&!e.marked?orderPrintControl(e.id):''}${e.canReverse?`<p><button type="button" class="secondary" data-reverse="${esc(e.id)}">${e.action==='訂貨'?'取消這筆訂貨':'沖銷這筆進貨'}</button></p>`:''}</div></details>`;
+  const cards=receipt?lines.map(l=>{
+   const fields=[['編號',l.code||'未填編號'],['進貨數量',quantityLabel(e,l)],['入庫前瓶數',l.beforeText],['入庫後瓶數',l.afterText],['單價',l.priceText],['小計',l.amountText]];
+   return `<article class="receipt-item-card"><h3>${esc(l.name||'未記錄藥品')}</h3>${sheets.length!==1?`<p>${esc(l.sheet||'未記錄')}</p>`:''}<dl>${fields.map(([label,value])=>`<div><dt>${label}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl></article>`;
+  }).join(''):'';
+  return `<details class="txn"><summary><span>${esc(stamp==='時間未記錄'?(e.date||'日期未記錄')+'（時間未記錄）':stamp.slice(0,16))}</span><strong>${esc(e.label)}${e.marked?' · 測試紀錄':''}</strong><span class="txn-product">${esc(summary)}</span><span>${esc(e.status)}</span><span>${esc(e.actor||'未記錄')}</span><span class="txn-toggle"><span>展開 ▾</span><span>收合 ▴</span></span></summary><div class="txn-detail">${products?`<div class="tablewrap${receipt?' receipt-item-table':''}"><table><thead><tr>${columns.map(c=>'<th>'+c+'</th>').join('')}</tr></thead><tbody>${products}</tbody></table></div>`:''}${cards?`<div class="receipt-item-cards">${cards}</div>`:''}<p>交易編號：${esc(e.displayId)}</p>${e.reverses?`<p>對應原交易：${esc(e.displayReverses)}</p>`:''}<p>記錄時間：${esc(stamp)}</p><p>備註：${esc(e.note||'無')}</p>${e.marked?'<p>測試標記來自品項編號、備註、經手人或對應原交易；標記本身不代表已還原。</p>':''}${receipt?`<div class="history-explanation">${esc(receipt.totalText)}</div><p class="muted">入庫前後瓶數為本次交易當時的紀錄；後續進貨、耗損或沖銷會影響目前庫存。</p>`:''}${e.type==='耗損'?`<p>此筆入帳後庫存：${esc(e.stock??'待核對')} 瓶（歷史數字，不是目前庫存）</p>`:''}<p>原始狀態：${esc(e.rawStatus||(e.type==='耗損'?'耗損更正紀錄':'未記錄'))}</p><a target="_blank" rel="noopener" href="https://docs.google.com/spreadsheets/d/${esc(e.source.id)}/edit#gid=${esc(e.source.gid)}">查看原始工作表 ↗</a>${e.valid&&e.action==='訂貨'&&!e.reversed&&!e.marked?orderPrintControl(e.id):''}${e.canReverse?`<p><button type="button" class="secondary" data-reverse="${esc(e.id)}">${e.action==='訂貨'?'取消這筆訂貨':'沖銷這筆進貨'}</button></p>`:''}</div></details>`;
  }).join('');
  return `<style>
  .txn-list{border:1px solid #d5ceb4;background:#fffdf3;color:#243e56;border-radius:6px;overflow:hidden}
@@ -70,6 +74,15 @@ export function renderHistory(entries,filters={}){
  .txn-list details[open]>summary,.txn-list summary:hover{background:#e8efe6}
  .txn-toggle{color:#165879}.txn-toggle span+span,.txn[open]>summary .txn-toggle span:first-child{display:none}.txn[open]>summary .txn-toggle span+span{display:inline}
  .txn-detail{padding:12px 18px}.txn-detail p{margin:5px 0}.txn-detail table{width:100%;min-width:0}.txn-detail th,.txn-detail td{text-align:left;padding:7px}
+ .receipt-item-cards{display:none}
+ @media(max-width:700px){
+ .txn-detail .receipt-item-table{display:none}
+ .receipt-item-cards{display:grid;gap:8px;color:#233d53}
+ .receipt-item-card{min-width:0;border:1px solid #d5ceb4;border-radius:6px;background:#fffdf5;padding:10px 12px;overflow-wrap:anywhere}
+ .receipt-item-card h3{margin:0 0 6px;font-size:1rem;color:#223c55}
+ .receipt-item-card dl{margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px}
+ .receipt-item-card dt{font-size:.8rem;color:#526474}.receipt-item-card dd{margin:0;font-weight:600}
+ }
  @media(max-width:700px){.txn-head{display:none}.txn-list .txn>summary{grid-template-columns:1fr auto;gap:5px 10px}.txn-product{grid-column:1/-1}.txn-toggle{text-align:right}.txn-detail{padding:8px}.txn-detail .tablewrap{overflow-x:auto}}
  </style><p role="status">顯示 ${shown.length} 筆，共 ${entries.length} 筆；${entries.filter(e=>e.marked).length} 筆有測試標記。</p><div class="txn-list"><div class="txn-head"><span>登錄時間（台北）</span><span>類型</span><span>品項摘要</span><span>結果</span><span>經手人</span><span>明細</span></div>${rows||'<p>沒有符合條件的紀錄</p>'}</div>`;
 }

@@ -56,7 +56,73 @@ export function mountReceiptGrid({esc,fmt,ask}){
 #receipt-page-options label{display:flex;align-items:center;gap:8px;margin:0}
 #receipt-page-size{width:auto;margin:0}
 #receipt-pagination[hidden]{display:none}
-</style><section class="panel"><div class="panelhead"><div><h2>登錄本次進貨</h2><span class="muted">依工作表列出全部品項 · 請填本次實收瓶數，留白不進貨 · 可跨廠牌整批入帳</span></div><a class="secondary" href="#items">＋ 新增品項</a></div><label>廠商</label><div class="order-tabs" id="receipt-brands" role="group" aria-label="進貨廠商"></div><label>類別</label><div class="order-tabs" id="receipt-categories" role="group" aria-label="進貨單方或複方"></div><form id="receipt-form"><div class="grid"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div><div class="panelhead receive-tools"><input id="receipt-search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" id="receipt-refresh" class="secondary">同步工作表庫存與單價</button></div><p id="receipt-state" role="status">正在讀取共用廠商與品項…</p><div id="receipt-page-options"><label>每頁顯示<select id="receipt-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><span id="receipt-page-range" role="status"></span></div><div class="tablewrap"><table id="receipt-grid"><thead><tr><th><button type="button" class="sort-heading" data-sort="code">藥品／編號 ↑</button></th><th>廠牌／類別</th><th class="num"><button type="button" class="sort-heading" data-sort="bottles">未拆封瓶數 ↕</button></th><th class="receipt-quantity"><button type="button" class="sort-heading" data-sort="quantity">本次實收 ↕</button></th><th class="receipt-price-cell">單價（元／瓶）</th><th class="num">進貨小計（元）</th><th class="num">入庫後瓶數</th><th><button type="button" class="sort-heading" data-sort="updated">原表更新欄 ↕</button></th><th>缺藥標記／率</th><th>原表</th></tr></thead><tbody></tbody></table></div><nav id="receipt-pagination" aria-label="藥品清單分頁" hidden><button type="button" class="secondary" id="receipt-prev">上一頁</button><span id="receipt-current-page" role="status"></span><button type="button" class="secondary" id="receipt-next">下一頁</button></nav><div class="actions"><span id="receipt-summary" role="status"></span><button type="button" class="secondary" id="receipt-clear">清除本次輸入</button><span id="receipt-pending-status" role="status"></span><button type="button" id="receipt-process" hidden>處理上一筆進貨</button><button id="receipt-submit" disabled>確認並預覽整批進貨</button></div></form><div id="receipt-pending"></div><p class="muted">先在站內核對各品項原庫存、進貨量與入庫後瓶數，再按「確認入帳」。進貨只增加本次填入數量。按「同步工作表庫存與單價」會以最新 E 欄取代所有本次手動單價，保留已填數量。單價由原表 E 欄帶入；確認入帳後，有填單價的進貨品項會同步更新 E 欄。留白不清除原表價格，0 為零元。金額依輸入單價計算，未另計稅額、折扣或運費。</p></section>`;
+
+#receipt-panel{min-width:0;background:#fffdf5}
+#receipt-panel .receipt-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#receipt-panel .receipt-heading h2{display:inline-flex;align-items:center;gap:10px;margin:0;padding:8px 17px;color:#fff2cb;background:#19354c;border:4px double #cea35a;border-radius:7px;box-shadow:0 2px 0 #685233;font-family:Georgia,"PMingLiU",serif;letter-spacing:.07em}
+#receipt-panel .receipt-heading h2::before{display:none}
+.receipt-crates{position:relative;width:28px;height:26px;flex:none}
+.receipt-crates i,.receipt-crates::before,.receipt-crates::after{content:"";position:absolute;width:12px;height:12px;box-sizing:border-box;background:linear-gradient(90deg,#d6a052 39%,#fae2a2 39% 60%,#bd8338 60%);border:1px solid #8c602d;box-shadow:inset 0 2px #f9db91,inset -2px -2px #ab7534}
+.receipt-crates i{left:8px;top:1px}.receipt-crates::before{left:1px;bottom:1px}.receipt-crates::after{right:1px;bottom:1px}
+#content #receipt-panel #receipt-summary{display:block;border:0;padding:0;margin:16px 0 8px;background:none;color:#19354c;font:700 clamp(16px,2vw,22px)/1.5 Georgia,"PMingLiU",serif}
+#receipt-panel .receive-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+#receipt-panel #receipt-search{width:min(100%,360px);margin:0}
+#receipt-panel .receipt-filters,#receipt-panel .receipt-filters>div{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+#receipt-panel .receipt-filters{margin:14px 0;gap:12px 30px}
+#receipt-panel .receipt-filters .order-tabs{margin:0}
+#receipt-panel .receipt-note{grid-column:1/-1}
+#receipt-panel .receipt-record-details{margin:.4em auto 0;font-size:12px;color:#456075;line-height:1.5;text-align:center}
+#receipt-panel .receipt-record-details dl{margin:6px 0;display:grid;grid-template-columns:auto auto;gap:3px 10px;text-align:left}#receipt-panel dd{margin:0}
+#receipt-panel #receipt-grid{width:100%}
+#receipt-panel #receipt-grid th{min-width:0;text-align:center}
+#receipt-panel #receipt-grid .receipt-price-cell{min-width:90px}
+#receipt-panel #receipt-grid .receipt-drug{width:auto}
+#receipt-panel #receipt-submit{background:#1e3b55;color:#fff2cf;border:2px solid #cba354}
+#receipt-panel .receipt-footer{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;margin:16px 0}
+#receipt-panel .receipt-footer .actions{margin:0}
+#receipt-panel #receipt-mobile-sort{width:auto;margin:0}
+@media(min-width:761px){
+ #content #receipt-panel #receipt-grid td.receipt-quantity,#content #receipt-panel #receipt-grid td.receipt-price-cell{vertical-align:middle;padding-block:35px}
+ #receipt-panel #receipt-grid .receipt-price-cell{position:relative}
+ #receipt-panel #receipt-grid .receipt-price-cell small{position:absolute;top:calc(50% + 19px);left:0;right:0;text-align:center}
+}
+@media(max-width:760px){
+ #content #receipt-panel{padding:14px;min-width:0}
+ #receipt-panel .receipt-heading h2{padding:6px 9px;font-size:18px}
+ #receipt-panel .receipt-heading a{white-space:nowrap;padding:8px}
+ #receipt-panel .receipt-filters{display:grid}
+ #receipt-panel .receipt-filters>div{gap:5px 8px}
+ #receipt-panel .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ #receipt-panel .grid label,#receipt-panel .grid input,#receipt-panel .grid select{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
+ #content #receipt-panel .tablewrap:has(#receipt-grid){overflow:visible;border:0;background:transparent}
+ #content #receipt-panel #receipt-grid{border:0;background:transparent}
+ #receipt-panel #receipt-grid thead{display:none}
+ #content #receipt-panel #receipt-grid tbody tr{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:8px 6px;padding:12px;border:1px solid #ccb994;border-radius:8px}
+ #content #receipt-panel #receipt-grid tbody td[data-label]{display:block!important;text-align:left!important;padding:4px 0!important;margin:0;background:transparent;position:static}
+ #content #receipt-panel #receipt-grid tbody td::before{display:none}
+ #receipt-panel #receipt-grid tbody td:nth-child(2){justify-self:end;align-self:start}
+ #receipt-panel #receipt-grid .receipt-drug-icon{display:none}
+ #receipt-panel #receipt-grid .receipt-drug-text b{font-size:16px}
+ #receipt-panel .receipt-record-details{text-align:left}
+ #content #receipt-panel #receipt-grid td.receipt-quantity::before,#content #receipt-panel #receipt-grid td.receipt-price-cell::before{content:attr(data-label);display:block;position:static;margin:0 0 5px;padding:0;line-height:1.4}
+ #content #receipt-panel #receipt-grid .quantity-stepper{width:100%!important;max-width:158px;grid-template-columns:minmax(24px,32px) minmax(34px,1fr) minmax(24px,32px)!important;gap:4px!important;margin:0!important}
+ #content #receipt-panel #receipt-grid .quantity-adjust{width:100%;min-width:0;min-height:40px}
+ #content #receipt-panel #receipt-grid .quantity-clear{width:100%!important;min-height:28px;height:28px}
+ #receipt-panel #receipt-grid .quantity-unit{display:none}
+ #receipt-panel #receipt-grid .receipt-price-control{justify-content:flex-start}
+ #receipt-panel #receipt-grid .receipt-price{width:100%;min-width:0;flex:1;height:40px;font-size:16px}
+ #content #receipt-panel #receipt-grid tbody td.receipt-amount{grid-column:1/-1;display:flex!important;justify-content:space-between;border-top:1px solid #dccfb8;padding-top:8px!important;font-weight:700}
+ #content #receipt-panel #receipt-grid td.receipt-amount::before{display:inline;content:"小計"}
+ #receipt-panel .receipt-footer #receipt-submit{width:100%}
+ #receipt-panel #receipt-page-options{justify-content:flex-start}
+}
+</style><section class="panel" id="receipt-panel">
+ <div class="receipt-heading"><h2><span class="receipt-crates" aria-hidden="true"><i></i></span>進貨登錄</h2><a class="secondary" href="#items">＋ 新增品項</a></div>
+ <p id="receipt-summary" role="status"></p><p id="receipt-state" role="status">正在讀取共用廠商與品項…</p>
+ <div class="panelhead receive-tools"><input id="receipt-search" type="search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" id="receipt-refresh" class="secondary">重新讀取工作表</button></div>
+ <div class="receipt-filters"><div><strong>廠商</strong><div class="order-tabs" id="receipt-brands" role="group" aria-label="進貨廠商"></div></div><div><strong>類別</strong><div class="order-tabs" id="receipt-categories" role="group" aria-label="進貨類別"></div></div></div>
+ <form id="receipt-form"><div class="grid"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="receipt-note">備註<input id="receipt-note" maxlength="500" placeholder="請輸入備註（選填）"></label></div>
+ <div id="receipt-page-options"><label>每頁顯示<select id="receipt-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><label>排序<select id="receipt-mobile-sort">${[['code','藥品編號'],['quantity','進貨數量'],['bottles','未拆封瓶數'],['updated','原表更新欄']].map(([key,label])=>['asc','desc'].map(dir=>`<option value="${key}:${dir}">${label} ${dir==='asc'?'↑':'↓'}</option>`).join('')).join('')}</select></label><span id="receipt-page-range" role="status"></span></div><div class="tablewrap"><table id="receipt-grid"><thead><tr><th><button type="button" class="sort-heading" data-sort="code">藥品／編號 ↑</button></th><th>廠牌／類別</th><th class="receipt-quantity"><button type="button" class="sort-heading" data-sort="quantity">進貨數量 ↕</button></th><th class="receipt-price-cell">單價（元／瓶）</th><th class="num">小計</th></tr></thead><tbody></tbody></table></div><nav id="receipt-pagination" aria-label="藥品清單分頁" hidden><button type="button" class="secondary" id="receipt-prev">上一頁</button><span id="receipt-current-page" role="status"></span><button type="button" class="secondary" id="receipt-next">下一頁</button></nav><div class="receipt-footer"><button id="receipt-submit" disabled>預覽本次進貨</button><div class="actions"><button type="button" class="secondary" id="receipt-clear">清除本次輸入</button><span id="receipt-pending-status" role="status"></span><button type="button" id="receipt-process" hidden>處理上一筆進貨</button></div></div></form><div id="receipt-pending"></div><p class="muted">先在站內核對各品項原庫存、進貨量與入庫後瓶數，再按「確認入帳」。進貨只增加本次填入數量。重新讀取工作表會更新庫存與原表單價，保留已填數量及手動單價。單價由原表 E 欄帶入；確認入帳後，有填單價的進貨品項會同步更新 E 欄。留白不清除原表價格，0 為零元。金額依輸入單價計算，未另計稅額、折扣或運費。</p></section>`;
  const warnPreview=(message,onReview)=>{
   if(alive&&!isProcessing())showReceiptReviewWarning(message,onReview);
  };
@@ -71,12 +137,13 @@ export function mountReceiptGrid({esc,fmt,ask}){
   page=Math.min(page,pageCount);
   const start=(page-1)*pageSize;
   const end=Math.min(start+pageSize,list.length);
+  $('#receipt-mobile-sort').value=sort+':'+direction;
   $('#receipt-page-range').textContent=list.length?`顯示第 ${start+1}–${end} 項，共 ${list.length} 項`:'共 0 項';
   $('#receipt-current-page').textContent=`第 ${page} / ${pageCount} 頁`;
   $('#receipt-pagination').hidden=pageCount===1;
   $('#receipt-prev').disabled=page===1;
   $('#receipt-next').disabled=page===pageCount;
-  $('#receipt-grid tbody').innerHTML=list.slice(start,end).map(r=>{const reference=shortageHandoff?.records.find(x=>x.sheet===r.name&&x.code===r.code&&x.name===r.drug&&Number.isSafeInteger(x.quantity)&&x.quantity>0);return `<tr data-category="${esc(r.category)}"><td data-label="藥品／編號"><span class="receipt-drug"><span class="receipt-drug-icon" aria-hidden="true"></span><span class="receipt-drug-text"><b>${esc(r.drug)}</b><div class="muted">${esc(r.code)}</div>${r.warning?`<div class="muted">${esc(r.warning)}</div>`:''}</span></span></td><td data-label="廠牌／類別">${esc(r.brand)}<div class="muted">${esc(r.category)}</div></td><td data-label="未拆封瓶數" class="num">${r.bottles===null?'待核對':fmt(r.bottles)+' 瓶'}</td><td data-label="本次實收" class="receipt-quantity"><input class="receipt-qty" data-key="${esc(receiptKey(r))}" aria-label="${esc(r.code)} ${esc(r.drug)} 本次實收瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="${esc(quantities.get(receiptKey(r))??'')}" placeholder="未進貨">${reference?`<small class="muted">帶入時待到 ${esc(reference.quantity)} 瓶（僅供參考）</small>`:''}</td><td data-label="單價（元／瓶）" class="receipt-price-cell"><span class="receipt-price-control"><input class="receipt-price" data-price-key="${esc(receiptKey(r))}" aria-label="${esc(r.code)} ${esc(r.drug)} 單價" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" value="${esc(receiptPrice(r,prices))}" placeholder="未提供"><span class="receipt-price-unit">元</span></span><small>${esc(prices.has(receiptKey(r))?'本次輸入':r.priceWarning||'')}</small></td><td data-label="進貨小計（元）" class="num receipt-amount" data-amount="${esc(receiptKey(r))}">—</td><td data-label="入庫後瓶數" class="num" data-after="${esc(receiptKey(r))}">—</td><td data-label="原表更新欄">${esc(r.updated||'—')}</td><td data-label="缺藥標記／率">${esc([r.stockout,r.shortage].filter(Boolean).join('／')||'—')}</td><td data-label="原表"><a href="${sheetUrl(r)}" target="_blank" rel="noopener">查看 ↗</a></td></tr>`;}).join('')||'<tr><td colspan="10">沒有符合的品項</td></tr>';
+  $('#receipt-grid tbody').innerHTML=list.slice(start,end).map(r=>{const reference=shortageHandoff?.records.find(x=>x.sheet===r.name&&x.code===r.code&&x.name===r.drug&&Number.isSafeInteger(x.quantity)&&x.quantity>0);return `<tr data-category="${esc(r.category)}"><td data-label="藥品／編號"><span class="receipt-drug"><span class="receipt-drug-icon" aria-hidden="true"></span><span class="receipt-drug-text"><b>${esc(r.drug)}</b><div class="muted">${esc(r.code)}</div>${r.warning?`<div class="muted">${esc(r.warning)}</div>`:''}</span></span><details class="receipt-record-details"><summary>庫存明細</summary><dl><dt>未拆封瓶數</dt><dd>${r.bottles===null?'待核對':fmt(r.bottles)+' 瓶'}</dd><dt>入庫後瓶數</dt><dd data-after="${esc(receiptKey(r))}">—</dd><dt>原表更新欄</dt><dd>${esc(r.updated||'—')}</dd><dt>缺藥標記／率</dt><dd>${esc([r.stockout,r.shortage].filter(Boolean).join('／')||'—')}</dd></dl><a href="${sheetUrl(r)}" target="_blank" rel="noopener">查看原表 ↗</a></details></td><td data-label="廠牌／類別">${esc(r.brand)}<div class="muted">${esc(r.category)}</div></td><td data-label="進貨數量（瓶）" class="receipt-quantity"><input class="receipt-qty" data-key="${esc(receiptKey(r))}" aria-label="${esc(r.code)} ${esc(r.drug)} 本次實收瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="${esc(quantities.get(receiptKey(r))??'')}" placeholder="未進貨">${reference?`<small class="muted">帶入時待到 ${esc(reference.quantity)} 瓶（僅供參考）</small>`:''}</td><td data-label="單價（元／瓶）" class="receipt-price-cell"><span class="receipt-price-control"><input class="receipt-price" data-price-key="${esc(receiptKey(r))}" aria-label="${esc(r.code)} ${esc(r.drug)} 單價" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" value="${esc(receiptPrice(r,prices))}" placeholder="未提供"><span class="receipt-price-unit">元</span></span><small>${esc(prices.has(receiptKey(r))?'本次輸入':r.priceWarning||'')}</small></td><td data-label="進貨小計（元）" class="num receipt-amount" data-amount="${esc(receiptKey(r))}">—</td></tr>`;}).join('')||'<tr><td colspan="5">沒有符合的品項</td></tr>';
   c.querySelectorAll('[data-sort]').forEach(b=>{const active=b.dataset.sort===sort;b.parentElement.setAttribute('aria-sort',active?(direction==='asc'?'ascending':'descending'):'none');b.textContent=b.textContent.replace(/[↑↓↕]$/,active?(direction==='asc'?'↑':'↓'):'↕');});
   c.querySelectorAll('.receipt-qty').forEach(el=>el.oninput=()=>{ownedNormalReceipt=null;if(el.value==='')quantities.delete(el.dataset.key);else quantities.set(el.dataset.key,el.value);summary();});
   c.querySelectorAll('.receipt-price').forEach(el=>el.oninput=()=>{ownedNormalReceipt=null;prices.set(el.dataset.priceKey,el.value);el.closest('.receipt-price-cell').querySelector('small').textContent='本次輸入';summary();});
@@ -99,10 +166,10 @@ export function mountReceiptGrid({esc,fmt,ask}){
  const refreshStatus=createRefreshStatus($('#receipt-refresh'));
  let catalogScreen;
  const closeCatalogScreen=()=>{catalogScreen?.close();catalogScreen=null;};
- async function load(syncPrices=false,{showDialog=false,compact=true,fresh=false}={}){
+ async function load(refresh=false,{showDialog=false,compact=true,fresh=false}={}){
   closeCatalogScreen();
   let readAt;const run=++ticket;loading=true;refreshStatus.start();loadFailed=false;status('正在讀取 '+(brand+category||'共用廠商與品項')+'…');$('#receipt-submit').disabled=true;
-  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:"正在讀取廠商與品項…"});const data=await loadReceiptCatalog({fresh:fresh||syncPrices===true});if(!alive||run!==ticket)return;readAt=data.readAt;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){shortageHandoff=seedShortage('receive',rows,quantities,receiptKey)||null;shortageSeeded=true;}if(syncPrices===true)prices.clear();draw();catalogStatus();}
+  try{if(showDialog&&!isProcessing())catalogScreen=beginProcessing({reading:true,receiptGuild:!compact,receiptCompact:compact,catalogMessage:"正在讀取廠商與品項…"});const data=await loadReceiptCatalog({fresh:fresh||refresh===true});if(!alive||run!==ticket)return;readAt=data.readAt;reconcileOrderInputs(rows,data.rows,quantities,prices);sources=data.sources;rows=data.rows;if(!shortageSeeded){shortageHandoff=seedShortage('receive',rows,quantities,receiptKey)||null;shortageSeeded=true;}draw();catalogStatus();}
   catch(e){if(alive&&run===ticket){loadFailed=true;status(e.message+'；已填數量仍保留，請重新讀取工作表重試');}}
   finally{if(alive&&run===ticket){closeCatalogScreen();loading=false;refreshStatus.finish(!loadFailed,readAt);summary();$('#receipt-submit').disabled=loadFailed||$('#receipt-submit').disabled;}}
  }
@@ -216,11 +283,12 @@ export function mountReceiptGrid({esc,fmt,ask}){
  }
  function currentDraft(id='ERP-'+crypto.randomUUID()){
   const lines=receiptLines(rows,quantities,prices),priced=lines.some(l=>l.unitPriceCents!==undefined);
-  return cloudDraft({kind:'tcm-cloud',version:priced?2:1,...(priced?{currency:'TWD'}:{}),id,action:'進貨',date:$('#receipt-date').value,actor:$('#receipt-actor').value,note:'',lines,shortageLinks:shortageLinks('receive',lines)});
+  return cloudDraft({kind:'tcm-cloud',version:priced?2:1,...(priced?{currency:'TWD'}:{}),id,action:'進貨',date:$('#receipt-date').value,actor:$('#receipt-actor').value,note:$('#receipt-note').value,lines,shortageLinks:shortageLinks('receive',lines)});
  }
  function clearCurrent(){
   clearShortage('receive');
   shortageHandoff=null;
+  $('#receipt-note').value='';
   quantities.clear();
   prices.clear();
  }
@@ -304,7 +372,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
     if(!plan)consumeOwnedNormal(d,d,false);
     else if(plan.input)consumeCurrent(plan.input);
     if(alive){showPending();await load();}
-   },plan?pendingStatus:status,{requireUnposted:!!plan,onPreviewError:warnPreview,receiptRows:()=>rows,beforeCommit:recordSubmission,onReturn:returnToForm,onDiscard:currentOnly?()=>{
+   },plan?pendingStatus:status,{requireUnposted:!!plan,onPreviewError:warnPreview,reviewIntro:reviewed=>reviewed.note?`<p>備註：${esc(reviewed.note)}</p>`:'',receiptRows:()=>rows,beforeCommit:recordSubmission,onReturn:returnToForm,onDiscard:currentOnly?()=>{
     if(!alive||activePreview!==preview||submitted)return;
     ask('<h3>確定放棄本次進貨草稿？</h3><p>放棄後會清除這次填寫的實收內容。</p>',()=>{
      if(!alive||activePreview!==preview||submitted)return;
@@ -380,14 +448,15 @@ export function mountReceiptGrid({esc,fmt,ask}){
  }
  $('#receipt-prev').onclick=()=>turnPage(-1);
  $('#receipt-next').onclick=()=>turnPage(1);
+ $('#receipt-mobile-sort').onchange=e=>{[sort,direction]=e.target.value.split(':');resetPage();};
  $('#receipt-page-size').onchange=e=>{pageSize=Number(e.target.value);resetPage();};
  const selected=()=>{$('#receipt-search').value='';resetPage();if(!loading&&!loadFailed)catalogStatus();};
  $('#receipt-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selected();}};
  $('#receipt-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selected();}};
  $('#receipt-search').oninput=resetPage;$('#receipt-refresh').onclick=()=>{if(!loading)load(true,{showDialog:true,compact:true});};
  // User edits invalidate earlier-form ownership even if the value is later re-entered identically.
- for(const field of ['#receipt-date','#receipt-actor'])for(const event of ['input','change'])$(field).addEventListener(event,()=>{ownedNormalReceipt=null;});
- $('#receipt-clear').onclick=()=>{ownedNormalReceipt=null;quantities.clear();prices.clear();draw();status('已清除本次輸入，未修改工作表。');};
+ for(const field of ['#receipt-date','#receipt-actor','#receipt-note'])for(const event of ['input','change'])$(field).addEventListener(event,()=>{ownedNormalReceipt=null;});
+ $('#receipt-clear').onclick=()=>{ownedNormalReceipt=null;$('#receipt-note').value='';quantities.clear();prices.clear();draw();status('已清除本次輸入，未修改工作表。');};
  c.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{direction=sort===b.dataset.sort&&direction==='asc'?'desc':'asc';sort=b.dataset.sort;resetPage();});
  $('#receipt-form').addEventListener('invalid',e=>{
   e.preventDefault();
@@ -441,5 +510,5 @@ export function mountReceiptGrid({esc,fmt,ask}){
    await send(d);
   }catch(e){status(e.message);warnPreview(e.message);}
  };
- const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);load(false,{showDialog:true}).then(()=>{if(alive)openEntry();});return protectDraft(()=>{alive=false;closeEntry?.();closeCatalogScreen();stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0);
+ const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>{load();};draw();showPending();window.addEventListener('erp-synced',sync);load(false,{showDialog:true}).then(()=>{if(alive)openEntry();});return protectDraft(()=>{alive=false;closeEntry?.();closeCatalogScreen();stopCatalogWatch();ticket++;abort.abort();window.removeEventListener('erp-synced',sync);},()=>quantities.size>0||prices.size>0||Boolean($('#receipt-note').value.trim()));
 }

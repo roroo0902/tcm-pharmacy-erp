@@ -7,6 +7,9 @@ test('pending receipt details are collapsed and leave recovery to the form actio
  const html=operationResult(receipt,'receipt',receipt.id);
  assert.match(html,/<details><summary>查看上一筆進貨明細<\/summary>.*進貨登入-時間未記錄.*進貨 2 瓶.*<\/details>/);
  assert.doesNotMatch(html,/<button|<details open/);
+ const completed=operationResult({...receipt,verified:true},'receipt');
+ assert.doesNotMatch(completed,/重新核對同步結果|receipt-check/);
+ assert.match(completed,/receipt-hide">隱藏此提示/);
  assert.doesNotMatch(operationResult({...receipt,verified:true},'receipt',receipt.id),/<details>/);
 });
 test('loss keeps its retry only while pending and hides identifiers in closed details',()=>{

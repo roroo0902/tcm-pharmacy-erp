@@ -1,8 +1,10 @@
 const reasons = ['重複訂貨', '訂錯廠商', '訂錯品項', '訂貨數量有誤', '庫存足夠，暫不訂購', '廠商缺貨，無法供貨'];
 
-export function orderCancelFields(actorId) {
+// The shared transaction format requires an actor even when nobody is selected.
+export const unspecifiedCancelActor = '未指定';
+
+export function orderCancelFields() {
   return `<form data-order-cancel-form>
-    <label>經手人<select id="${actorId}" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label>
     <label>取消原因<select name="reason" required>
       <option value="">請選擇取消原因</option>
       ${reasons.map(reason => `<option>${reason}</option>`).join('')}

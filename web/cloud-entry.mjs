@@ -1,4 +1,4 @@
-import {orderCancelFields,bindOrderCancelReason} from './order-cancel-reason.mjs';
+import {orderCancelFields,bindOrderCancelReason,unspecifiedCancelActor} from './order-cancel-reason.mjs';
 import {registrationKey,preserveLegacyRegistration} from './registration-pending.mjs';
 import {bindOrderPrint} from './order-print.mjs';
 import {exportHistory} from './history-export.mjs?v=release20261120r1';
@@ -74,10 +74,10 @@ export function mountCloudHistory({esc,ask}){
   }catch(e){status(e.message);return;}
   const isOrder=event.draft.action==='訂貨';
   let readReason;
-  ask((isOrder?'<h3>刪除本筆訂單</h3><p>訂單編號：'+esc(event.draft.id)+'</p>':'')+(isOrder?orderCancelFields('cloud-reverse-actor'):'<label>經手人<select id="cloud-reverse-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label>原因<input id="cloud-reverse-note" required></label>'),async()=>{
+  ask((isOrder?'<h3>刪除本筆訂單</h3><p>訂單編號：'+esc(event.draft.id)+'</p>':'')+(isOrder?orderCancelFields():'<label>經手人<select id="cloud-reverse-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label>原因<input id="cloud-reverse-note" required></label>'),async()=>{
    try{
     ensureSaved(saved);
-    const d=cloudDraft({...event.draft,id:'ERP-'+crypto.randomUUID(),action:event.draft.action==='訂貨'?'取消訂貨':'沖銷',reverses:event.draft.id,date:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}),actor:document.querySelector('#cloud-reverse-actor').value,note:isOrder?readReason():document.querySelector('#cloud-reverse-note').value});
+    const d=cloudDraft({...event.draft,id:'ERP-'+crypto.randomUUID(),action:event.draft.action==='訂貨'?'取消訂貨':'沖銷',reverses:event.draft.id,date:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}),actor:isOrder?unspecifiedCancelActor:document.querySelector('#cloud-reverse-actor').value,note:isOrder?readReason():document.querySelector('#cloud-reverse-note').value});
     let pendingRaw;
     const persist=reviewed=>{
      ensureSaved(saved);

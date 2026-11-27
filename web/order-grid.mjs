@@ -1,4 +1,4 @@
-import {orderCancelFields,bindOrderCancelReason} from './order-cancel-reason.mjs';
+import {orderCancelFields,bindOrderCancelReason,unspecifiedCancelActor} from './order-cancel-reason.mjs';
 import {preserveLegacyRegistration} from './registration-pending.mjs';
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
 import {chooseOrderFollowup,orderMergeTable} from './order-followup.mjs';
@@ -242,10 +242,10 @@ export function mountOrderGrid({esc,fmt,ask}){
  function cancelPostedOrder(order,expected){
   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
   let readReason;
-  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(order.id)}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p>${orderCancelFields('og-cancel-actor')}`,async()=>{
+  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(order.id)}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p>${orderCancelFields()}`,async()=>{
    try{
     if(localStorage.getItem(KEY)!==expected)throw Error(pendingChanged);
-    const draft=cloudDraft({...order,id:'ERP-'+crypto.randomUUID(),action:'取消訂貨',reverses:order.id,date:today(),actor:document.querySelector('#og-cancel-actor').value,note:readReason()});
+    const draft=cloudDraft({...order,id:'ERP-'+crypto.randomUUID(),action:'取消訂貨',reverses:order.id,date:today(),actor:unspecifiedCancelActor,note:readReason()});
     let submitted;
     await directReview(draft,ask,async()=>{
      const owned=savePendingIfCurrent(submitted,{...draft,verified:true});

@@ -1,3 +1,4 @@
+import {photoWorkbench} from './photo-workbench.mjs';
 import {priceCents} from './receipt-pricing.mjs';
 import {itemRegistration} from './item-registration.mjs';
 import {protectDraft} from './page-safety.mjs';
@@ -49,22 +50,22 @@ function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMes
   const options=candidates.map(row=>'<option value="'+esc(String(row.id))+'">'+esc(row.category+'｜'+row.code+'｜'+row.drug+(row.vendorCode?'｜廠商 '+row.vendorCode:''))+'</option>').join('');
   const name=esc(line.name||'未讀出藥名'),id=esc(line.id);
   line.sourceQuantity??=line.quantity;
-  return '<tr><td><strong>'+name+'</strong><small>原始編號 '+esc(line.code||'未讀出')+'</small></td>'+
-   '<td>'+esc(line.unit||'單位不明')+'／'+esc(line.sourceQuantity||'數量不明')+
+  return '<tr><td data-label="藥品／原始編號"><strong>'+name+'</strong><small>原始編號 '+esc(line.code||'未讀出')+'</small></td>'+
+   '<td data-label="規格／單據數量">'+esc(line.unit||'單位不明')+'／'+esc(line.sourceQuantity||'數量不明')+
    '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
-   '<td><div class="ai-review-match"><select class="ai-review-state"'+(found?' data-matched':'')+' style="width:auto;flex:0 0 auto" data-receipt-category="'+id+'" aria-label="'+name+' 庫存類別"><option value="">全部</option>'+categoryOptions+'</select>'+
+   '<td data-label="配對庫存藥品" data-wide><div class="ai-review-match"><select class="ai-review-state"'+(found?' data-matched':'')+' style="width:auto;flex:0 0 auto" data-receipt-category="'+id+'" aria-label="'+name+' 庫存類別"><option value="">全部</option>'+categoryOptions+'</select>'+
    '<div data-picker><div class="receipt-current-match">'+esc(found?found.code+'｜'+found.drug:'待配對')+'</div>'+(found?.vendorCell?'<a href="'+esc(found.vendorCell)+'" target="_blank" rel="noopener">'+esc(found.vendorCode?'廠商品號：'+found.vendorCode+'（修改）':'補登廠商品號')+'</a>':'')+'<input type="search" data-drug-search="'+id+'" aria-label="'+name+' 搜尋編號或藥名" placeholder="輸入編號或藥名" autocomplete="off">'+
    '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select>'+
    '<button type="button" data-new-drug hidden>＋新增庫存藥品</button><div data-registration hidden></div></div></div>'+
    '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)+'</small></td>'+
-   '<td><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
-   '<td><input data-photo-price="'+id+'" aria-label="'+name+' 單價" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="未提供" value="'+esc(line.price??(found?.unitPriceCents==null?'':found.unitPriceCents/100))+'"></td>'+
-   '<td><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已核對配對品項" '+(line.reviewed?'checked':'')+'></td>'+
-   '<td><button type="button" data-remove="'+id+'" aria-label="排除 '+name+'" class="secondary small">排除</button></td></tr>';
+   '<td data-label="入庫瓶數"><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
+   '<td data-label="單價（元／瓶）"><input data-photo-price="'+id+'" aria-label="'+name+' 單價" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="未提供" value="'+esc(line.price??(found?.unitPriceCents==null?'':found.unitPriceCents/100))+'"></td>'+
+   '<td data-label="已核對"><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已核對配對品項" '+(line.reviewed?'checked':'')+'></td>'+
+   '<td data-label="操作"><button type="button" data-remove="'+id+'" aria-label="排除 '+name+'" class="secondary small">排除</button></td></tr>';
  }).join('');
- return '<div class="ai-review-head"><h3>核對辨識結果</h3><span data-ai-review-count role="status"></span></div>'+
+ return '<div class="ai-review-head"><span data-ai-review-count role="status"></span></div>'+
   '<p class="muted ai-review-note">請核對藥名、規格及數量。單據以盒、袋或包計量時，請填寫換算後的實際入庫瓶數。</p>'+
-  '<div class="ai-review-wrap" tabindex="0" role="region" aria-label="核對辨識結果表格"><table class="ai-review-table"><thead><tr>'+
+  '<div class="ai-review-wrap" tabindex="0" role="region" aria-label="核對辨識結果表格"><table class="ai-table ai-review-table"><thead><tr>'+
   '<th scope="col">藥品／原始編號</th><th scope="col">規格／單據數量</th><th scope="col">配對庫存藥品</th><th scope="col">入庫瓶數</th><th scope="col">單價（元／瓶）</th><th scope="col">已核對</th><th scope="col">操作</th>'+
   '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
@@ -76,11 +77,7 @@ function updatePhotoReviewCount(root,lines){
 export function mountPhotoReceive({esc,fmt,ask}){
  const root=document.querySelector('#content');
  let alive=true,run=0,rows=[],sources=[],recognized=[],basket=[],pastedImage=null,loading=false,selected='',pending=null,catalogReady=false;
- root.innerHTML="<style>#photo-receive-panel{text-align:center}#photo-receive-panel label,#photo-receive-panel input,#photo-receive-panel select{text-align:center}#photo-receive-panel select{text-align-last:center}#photo-receive-panel .panelhead,#photo-receive-panel .actions,#photo-receive-panel .staff-controls{justify-content:center}#photo-receive-panel th,#photo-receive-panel td,body:has(#photo-receive-panel) .direct-review-table th,body:has(#photo-receive-panel) .direct-review-table td{text-align:center;vertical-align:middle}\nbody:has(#photo-receive-panel) aside{background:#102641}\nbody:has(#photo-receive-panel) aside nav a.active{border-color:#cda653;border-radius:0;box-shadow:inset 0 0 0 2px #182b45, inset 0 0 0 3px #b78e43;background:#203957}\n#photo-receive-panel .ai-review-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 18px;margin:18px 0 6px;text-align:left}\n#photo-receive-panel .ai-review-head h3{margin:0}\n#photo-receive-panel .ai-review-note{text-align:left;margin:0 0 10px}\n#photo-receive-panel .ai-review-wrap{overflow:auto;max-height:36rem;border:2px solid #755030;background:#f7e6c1;box-shadow:inset 0 0 0 2px #c4985b}\n#photo-receive-panel table.ai-review-table{width:100%;min-width:850px;border-collapse:separate;border-spacing:0;color:#3d2a1b}\n#photo-receive-panel .ai-review-table :is(th,td){padding:6px 9px;border-right:1px solid #c4a27366;border-bottom:1px solid #c4a27366;line-height:1.25}\n#photo-receive-panel .ai-review-table th{position:sticky;top:0;z-index:2;background:#e7c993;color:#392313;text-align:left;white-space:nowrap}\n#photo-receive-panel .ai-review-table td{background:linear-gradient(110deg,#fff8e6,#f5e2bc);text-align:left}\n#photo-receive-panel .ai-review-table tr:nth-child(even) td{background:linear-gradient(110deg,#fcf0d3,#f0d9ac)}\n#photo-receive-panel .ai-review-table :is(th,td):nth-child(n+4){text-align:center}\n#photo-receive-panel .ai-review-table small{display:block;font-size:12px;color:#614a35;margin-top:3px}\n#photo-receive-panel .ai-review-table details{font-size:12px;max-width:220px;margin-top:3px}\n#photo-receive-panel .ai-review-table summary{cursor:pointer}\n#photo-receive-panel .ai-review-table select{max-width:100%;width:100%;min-height:32px;margin:0;font-size:14px;text-align:left;text-align-last:left}\n#photo-receive-panel .ai-review-match{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:6px}\n#photo-receive-panel .ai-review-match [data-picker]{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:3px}#photo-receive-panel [data-picker]>:is(input,select){display:block;position:static;box-sizing:border-box;width:100%;min-width:0;max-width:100%;grid-column:1}#photo-receive-panel .receipt-current-match{font-weight:700;white-space:normal;overflow-wrap:anywhere}#photo-receive-panel [data-registration]:not([hidden]){display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:8px;padding:10px;border:1px solid #c4a273;box-sizing:border-box;min-width:0}#photo-receive-panel [data-registration] label{display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:3px;margin:0;min-width:0;text-align:left}#photo-receive-panel [data-registration] :is(input,select){box-sizing:border-box;width:100%;max-width:100%;min-width:0;margin:0}#photo-receive-panel [data-registration] :is(p,small,.registration-actions){grid-column:1/-1;margin:0}#photo-receive-panel .registration-actions{display:flex;flex-wrap:wrap;gap:6px}#photo-receive-panel [data-registration][hidden]{display:none}#photo-receive-panel .ai-review-state{padding:3px 6px;white-space:nowrap;background:#efd194;color:#65400f;border:1px solid #b98536;font-size:12px}\n#photo-receive-panel .ai-review-state[data-matched]{background:#dce8c0;border-color:#859a57;color:#314421}\n#photo-receive-panel .ai-review-table .quantity-stepper{width:138px;grid-template-columns:30px minmax(50px,1fr) 30px;gap:4px;margin:auto}\n#photo-receive-panel .ai-review-table .quantity-stepper input{min-height:32px;font-size:14px}\n#photo-receive-panel .ai-review-table .quantity-stepper .quantity-clear{display:none}\n#photo-receive-panel .ai-review-table input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:#285331}\n#photo-receive-panel :is(#ai-scan,#ai-reload,#ai-add,#ai-preview,[data-remove],.ai-review-table .quantity-adjust){background:linear-gradient(#f7db93,#d6a74b);color:#35220e;border:2px solid #805722;border-radius:3px;box-shadow:inset 0 0 0 1px #ffedb1,0 2px 0 #60401b}\n#photo-receive-panel .ai-review-table :is([data-remove],.quantity-adjust){min-height:32px;font-size:14px}\n#photo-receive-panel .ai-review-table .quantity-adjust{min-width:30px}\n#photo-receive-panel .ai-review-table [data-remove]{white-space:nowrap;padding:4px 8px}\n #photo-receive-panel .ai-entry-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#photo-receive-panel .ai-entry-grid>label{min-width:0}#photo-receive-panel [hidden]{display:none!important}#photo-receive-panel .ai-wizard{width:112px;height:140px;object-fit:contain;image-rendering:pixelated;flex-shrink:0}#photo-receive-panel .ai-wizard-heading{gap:18px}@media(max-width:480px){#photo-receive-panel .ai-wizard{width:80px;height:100px}#photo-receive-panel .ai-wizard-heading{gap:8px}#photo-receive-panel .ai-wizard-heading h2{font-size:20px}} #photo-receive-panel .ai-wizard-heading{display:grid;grid-template-columns:112px minmax(0,1fr) 112px;align-items:center;gap:18px}#photo-receive-panel .ai-wizard-heading>div{text-align:center}#photo-receive-panel .ai-suppliers{text-align:left;grid-column:1/-1}#photo-receive-panel .ai-entry-grid>.full{grid-column:1/-1}@media(max-width:600px){#photo-receive-panel .ai-wizard-heading{grid-template-columns:1fr;justify-items:center;gap:8px}} </style>"+'<section class="panel" id="photo-receive-panel"><div class="panelhead ai-wizard-heading"><img class="ai-wizard" src="./web/assets/photo-wizard.png" alt="手持發光法杖的藥庫魔法師" width="112" height="140"><div><h2>AI 拍照進貨</h2><span class="muted">選廠商 → 拍照 → AI 解析 → 人工核對 → 預覽 → 確認入庫</span></div></div>'+
-  '<p class="notice">AI 辨識結果只是草稿。必須選到現有藥品並逐項核對，最後會再次讀取 Google 即時庫存；未確認不會修改庫存。</p>'+
-  '<div class="grid ai-entry-grid"><div class="full ai-suppliers"><span id="ai-source-label">廠商</span><div id="ai-source" class="order-tabs" role="group" aria-labelledby="ai-source-label"></div></div><label>進貨日期<input type="date" id="ai-date" max="'+todayTaipei()+'" value="'+todayTaipei()+'"></label><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label><label class="full">單據或備註（選填）<select id="ai-note"><option value="">不填寫備註</option><option>依送貨單進貨</option><option>補填入送到貨單</option><option>無附進貨單直接入庫</option><option>換貨補回</option><option>其他</option></select></label><div class="full" id="ai-note-other-field" hidden><label for="ai-note-other">其他說明（選填）</label><input type="text" id="ai-note-other" maxlength="490" placeholder="請填寫補充內容"><div class="actions"><button type="button" class="secondary" id="ai-note-back">返回上一個選項</button></div></div><label class="full">拍照或選擇照片<input id="ai-image" type="file" accept="image/*" capture="environment"><small id="ai-image-hint" role="status">也可選取此欄位後貼上圖片。</small></label></div>'+
-  '<div class="actions"><button type="button" id="ai-scan">AI 解析照片</button><button type="button" class="secondary" id="ai-reload">更新現有藥品</button></div><p id="ai-status" role="status"></p>'+
-  '<img id="ai-original" hidden alt="本張進貨原照片" style="max-width:100%;max-height:220px;object-fit:contain"><div id="ai-result" tabindex="-1"></div><div class="actions"><button type="button" id="ai-add" disabled>核對後加入進貨清單</button></div><h3>本次進貨清單（尚未入庫）</h3><div id="ai-basket"></div><div class="actions"><button type="button" id="ai-preview" disabled>預覽庫存變化並確認同步</button></div><section id="ai-pending"></section></section>';
+ root.innerHTML=photoWorkbench(todayTaipei());
  root.insertAdjacentHTML('beforeend', `
  <style>
  #ai-catalog-dialog{box-sizing:border-box;width:min(710px,94vw);max-height:90dvh;overflow:auto;padding:22px;color:#182f49;background:#fff7e5;border:5px double #9d772f;border-radius:4px;box-shadow:0 0 0 2px #193451,0 12px 40px #16263b55;text-align:center}
@@ -115,7 +112,30 @@ export function mountPhotoReceive({esc,fmt,ask}){
  const $=sel=>root.querySelector(sel);
  let batches=[],editing=null,scanPhoto=null,photoUrl='',submission=null;
  const chooser=$('#ai-photo-choice'),options=$('#ai-photo-options');
+ const brandDrafts=new Map();
  let thumbnails=[];
+ const selectedFile=()=>$('#ai-image').files[0]||pastedImage;
+ function unfinished(){return editing!==null||recognized.some(line=>!line.removed);}
+ function awaitingPhoto(){return unfinished()||!!selectedFile();}
+ function otherUnfinished(){return [...brandDrafts.keys()];}
+ function switchBrand(brand){
+  if(selected===brand)return;
+  const file=selectedFile();
+  if(selected&&(file||recognized.length||editing))brandDrafts.set(selected,{recognized,editing,scanPhoto,file,hint:$('#ai-image-hint').textContent});
+  const draft=brandDrafts.get(brand);
+  brandDrafts.delete(brand);
+  selected=brand;recognized=draft?.recognized||[];editing=draft?.editing||null;
+  scanPhoto=draft?.scanPhoto||null;pastedImage=draft?.file||null;$('#ai-image').value='';
+  $('#ai-image-hint').textContent=draft?.hint||'也可選取此欄位後貼上圖片。';
+  displayPhoto(scanPhoto||pastedImage);
+ }
+ function updateSteps(){
+  $('#ai-reset-photo').hidden=!!editing||(!recognized.length&&!selectedFile());
+  const step=submission?5:unfinished()?3:loading?2:selectedFile()?2:basket.length?4:selected?1:0;
+  root.querySelectorAll('[data-ai-step]').forEach(el=>{
+   if(Number(el.dataset.aiStep)===step)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');
+  });
+ }
  function clearChoices(){
   thumbnails.forEach(url=>URL.revokeObjectURL(url));
   thumbnails=[];
@@ -143,7 +163,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
  }
  options.onclick=event=>{
   const button=event.target.closest('[data-choose-photo]');
-  if(!button||!chooser.open)return;
+  if(!button||!chooser.open||brandDrafts.size)return;
   const batch=batches[Number(button.dataset.choosePhoto)];
   chooser.close();
   if(batch)editBatch(batch);
@@ -152,7 +172,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   if(photoUrl)URL.revokeObjectURL(photoUrl);
   photoUrl=file?URL.createObjectURL(file):'';
   const image=$('#ai-original');
-  image.hidden=!file;
+  image.hidden=!file;$('#ai-photo-empty').hidden=!!file;
   if(file)image.src=photoUrl;else image.removeAttribute?.('src');
  }
  let previousNote=$('#ai-note').value;
@@ -161,7 +181,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
  $('#ai-note-back').onclick=()=>{$('#ai-note').value=previousNote;showOtherNote();$('#ai-note').focus?.();};
  const noteValue=()=>$('#ai-note').value==='其他'?['其他',$('#ai-note-other').value.trim()].filter(Boolean).join('：'):$('#ai-note').value.trim();
  const status=text=>{if(alive)$('#ai-status').textContent=text;};
- const lockBusy=busy=>{loading=busy;if(!alive)return;$('#ai-scan').disabled=busy||!!submission;$('#ai-preview').disabled=busy||!basket.length||(editing!==null||recognized.some(line=>!line.removed));$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!editing&&!recognized.some(x=>!x.removed);};
+ const lockBusy=busy=>{loading=busy;if(!alive)return;$('#ai-scan').disabled=busy||!!submission;$('#ai-camera').disabled=$('#ai-choose').disabled=busy||!!editing||!!submission;updateSteps();$('#ai-preview').disabled=busy||!basket.length||awaitingPhoto()||otherUnfinished().length>0;$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!editing&&!recognized.some(x=>!x.removed);};
  function currentRows(){return rows.filter(r=>r.brand===selected);}
  const catalogDialog=$('#ai-catalog-dialog');
  const catalogTitle=$('#ai-catalog-title');
@@ -188,15 +208,15 @@ export function mountPhotoReceive({esc,fmt,ask}){
  async function load({fresh=false}={}){
   if(!alive)return;
   const seq=++run;catalogReady=false;rows=[];
-  recognized.forEach(line=>{line.reviewed=false;});drawResult();
+  recognized.forEach(line=>{line.reviewed=false;});
+  for(const draft of brandDrafts.values())draft.recognized.forEach(line=>{line.reviewed=false;});
+  drawResult();
   showCatalogState();
   try{
    const catalog=await loadReceiptCatalog({fresh});
    if(seq!==run||!alive)return;
    const brands=[...new Set(catalog.sources.map(source=>source.brand))];
-   const previous=selected;
-   selected=brands.includes(selected)?selected:brands[0];
-   if(previous&&previous!==selected)recognized=[];
+   if(!brands.includes(selected))switchBrand(brands[0]);
    drawBrandButtons(brands);
    sources=catalog.sources;rows=catalog.rows;catalogReady=true;drawResult();drawBasket();catalogDialog.close();
    status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');
@@ -309,7 +329,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
  }
  function editBatch(batch){
   if(submission)return;
-  editing=batch;selected=batch.brand;recognized=structuredClone(batch.recognized);scanPhoto=batch.file;
+  switchBrand(batch.brand);editing=batch;recognized=structuredClone(batch.recognized);scanPhoto=batch.file;
   $('#ai-image').value='';pastedImage=scanPhoto;displayPhoto(scanPhoto);
   drawBrandButtons([...new Set(sources.map(s=>s.brand))]);drawResult();drawBasket();
   $('#ai-image-hint').textContent='已保留原照片，可直接修改辨識品項。';
@@ -318,29 +338,53 @@ export function mountPhotoReceive({esc,fmt,ask}){
  }
  function drawBasket(){
   if(!alive)return;
-  $('#ai-basket').innerHTML=basket.length?'<div class="tablewrap"><table><thead><tr><th>藥品</th><th>原庫存</th><th>本次進貨</th><th>預估庫存</th><th>修改</th></tr></thead><tbody>'+
-  basket.map((line,i)=>{const r=rows.find(x=>x.name===line.sheet&&x.code===line.code&&x.drug===line.name);return '<tr><td>'+esc(line.sheet+' '+line.code+' '+line.name)+'</td><td>'+esc(r?.bottles??'待更新')+'</td><td>'+fmt(line.quantity)+'</td><td>'+esc(r?fmt(r.bottles+line.quantity):'待更新')+'</td><td><button type="button" class="secondary small" data-basket-remove="'+i+'" '+(recognized.length||submission?'disabled':'')+'>移除</button></td></tr>';}).join('')+'</tbody></table></div>':'<p class="muted">尚未加入品項。可依序上傳多張照片，將品項累積到同一進貨清單。</p>';
-  $('#ai-scan').disabled=loading||!!submission;
+  const parked=otherUnfinished();
+  const busyDraft=awaitingPhoto()||parked.length>0;
+  const blockEdit=busyDraft||!!submission||loading;
+  $('#ai-total').textContent='共 '+fmt(basket.length)+' 項・'+fmt(basket.reduce((sum,line)=>sum+line.quantity,0))+' 瓶';
+  $('#ai-basket').innerHTML=basket.length?'<div class="ai-basket-wrap"><table class="ai-table"><thead><tr><th>藥品</th><th>原庫存</th><th>本次進貨</th><th>單價（元／瓶）</th><th>預估庫存</th><th>操作</th></tr></thead><tbody>'+
+  basket.map((line,i)=>{
+   const row=rows.find(r=>r.name===line.sheet&&r.code===line.code&&r.drug===line.name);
+   return '<tr><td data-label="藥品" data-wide>'+esc(line.sheet+' '+line.code+' '+line.name)+'</td><td data-label="原庫存">'+esc(row?.bottles??'待更新')+'</td><td data-label="本次進貨">'+fmt(line.quantity)+'</td><td data-label="單價（元／瓶）">'+(line.unitPriceCents==null?'未提供':esc(String(line.unitPriceCents/100)))+'</td><td data-label="預估庫存">'+esc(row?fmt(row.bottles+line.quantity):'待更新')+'</td><td data-label="操作"><button type="button" class="secondary small" data-basket-remove="'+i+'" '+(blockEdit?'disabled':'')+'>移除</button></td></tr>';
+  }).join('')+'</tbody></table></div>':'<p class="muted">尚未加入品項。可依序上傳多張照片，將品項累積到同一進貨清單。</p>';
+  if(parked.length)$('#ai-basket').insertAdjacentHTML('beforeend','<p class="muted">請切回 '+parked.map(esc).join('、')+' 完成本張品項核對，再預覽整批。</p>');
+  updateSteps();
+  $('#ai-camera').disabled=$('#ai-choose').disabled=loading||!!editing||!!submission;
+  $('#ai-scan').disabled=loading||!!submission||!!editing;
   $('#ai-add').textContent=editing?'更新本張核對內容':'核對後加入進貨清單';
-  if(batches.length)$('#ai-basket').insertAdjacentHTML('beforeend',batches.map((batch,i)=>'<button type="button" class="secondary" data-edit-photo="'+i+'" '+(recognized.length||submission?'disabled':'')+'>修改第 '+(i+1)+' 張 · '+esc(batch.brand)+'</button>').join(''));
+  if(batches.length)$('#ai-basket').insertAdjacentHTML('beforeend',batches.map((batch,i)=>'<button type="button" class="secondary" data-edit-photo="'+i+'" '+(blockEdit?'disabled':'')+'>修改第 '+(i+1)+' 張 · '+esc(batch.brand)+'</button>').join(''));
   root.querySelectorAll('[data-edit-photo]').forEach(b=>b.onclick=()=>editBatch(batches[Number(b.dataset.editPhoto)]));
-  root.querySelectorAll('[data-basket-remove]').forEach(b=>b.onclick=()=>{if(recognized.length||submission)return;
+  root.querySelectorAll('[data-basket-remove]').forEach(b=>b.onclick=()=>{if(blockEdit)return;
    const key=basket[Number(b.dataset.basketRemove)].key;
    for(const batch of batches){for(const l of batch.recognized)if(l.basketKey===key)l.removed=true;}
    batches=batches.filter(batch=>batch.recognized.some(l=>!l.removed));basket=basket.filter(l=>l.key!==key);drawBasket();});
-  $('#ai-preview').disabled=loading||!basket.length||(editing!==null||recognized.some(line=>!line.removed));
+  $('#ai-preview').disabled=loading||!basket.length||busyDraft;
  }
- $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||loading||button.dataset.aiBrand===selected)return;if(editing){status('請先更新本張核對內容，再切換廠商。');return;}selected=button.dataset.aiBrand;recognized=[];scanPhoto=null;displayPhoto(null);
+ $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||loading||button.dataset.aiBrand===selected)return;if(submission)return;switchBrand(button.dataset.aiBrand);
   drawBrandButtons([...new Set(sources.map(source=>source.brand))]);drawResult();drawBasket();
   status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');};
  $('#ai-reload').onclick=async()=>{try{if(directEnabled())await authorize();await load({fresh:true});}catch(error){status(error.message);}};
 
- $('#ai-image').onchange=()=>{pastedImage=null;$('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';};
- $('#ai-image').onpaste=event=>{
+ const fileInput=$('#ai-image');
+ $('#ai-reset-photo').onclick=()=>{
+  if(loading||editing||submission)return;
+  ask('<p>清除目前廠商的照片與尚未加入清單的品項？</p>',()=>{
+   recognized=[];scanPhoto=null;pastedImage=null;fileInput.value='';displayPhoto(null);
+   $('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';drawResult();drawBasket();
+  },'清除本張照片');
+ };
+ $('#ai-choose').onclick=()=>{fileInput.removeAttribute('capture');fileInput.click();};
+ $('#ai-camera').onclick=()=>{fileInput.setAttribute('capture','environment');fileInput.click();};
+ fileInput.onchange=()=>{
+  pastedImage=null;displayPhoto(scanPhoto||selectedFile());drawBasket();
+  $('#ai-image-hint').textContent=selectedFile()?'已選擇 '+selectedFile().name+'，可開始辨識。':'也可選取此欄位後貼上圖片。';
+ };
+ fileInput.onpaste=$('#ai-image-hint').onpaste=event=>{
+  if(loading||editing||submission)return;
   const image=[...(event.clipboardData?.files||[])].find(file=>file.type.startsWith('image/'));
   if(!image)return;
   event.preventDefault();
-  $('#ai-image').value='';pastedImage=image;
+  $('#ai-image').value='';pastedImage=image;displayPhoto(scanPhoto||image);drawBasket();
   $('#ai-image-hint').textContent='已貼上圖片，可開始辨識。';
  };
  $('#ai-scan').onclick=async()=>{
@@ -359,12 +403,13 @@ export function mountPhotoReceive({esc,fmt,ask}){
    const result=await runDirect('recognizeReceipt',{brand:scanBrand,mimeType:'image/jpeg',base64});
    if(!alive||selected!==scanBrand||scanRun!==run){status('已切換廠商，上一張照片的辨識結果未套用。');return;}
    // Do not persist the image or raw API response in localStorage.
-   recognized=cleanRecognized(result);scanPhoto=file;displayPhoto(file);
+   const next=cleanRecognized(result);
+   if(!next.length)throw Error('AI 未辨識到藥品項目，請重拍或改用一般進貨登錄');
+   recognized=next;scanPhoto=file;displayPhoto(file);
    for(const line of recognized){
     const match=matchLine(line);
     if(match.row){line.selected=String(match.row.id);line.reviewed=true;}
    }
-   if(!recognized.length)throw Error('AI 未辨識到藥品項目，請重拍或改用一般進貨登錄');
    drawResult();drawBasket();status('AI 辨識 '+recognized.length+' 項；'+photoModelLabel(result)+'；唯一配對已勾選，請核對瓶數並處理待配對品項。');
   }catch(error){status(error.message);}finally{lockBusy(false);}
  };
@@ -387,7 +432,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
    basket=photoBasket(next);
    batches=next.filter(photo=>photo.recognized.some(l=>!l.removed));editing=null;recognized=[];scanPhoto=null;pastedImage=null;displayPhoto(null);$('#ai-image').value='';$('#ai-image-hint').textContent='也可選取此欄位後貼上圖片。';drawResult();drawBasket();
    status(wasEditing?'已更新本張核對內容。':'已加入清單；尚未同步。可切換廠商再拍下一張照片。');
-   if(continueChoosing&&batches.length)choosePhoto(batch);
+   if(continueChoosing&&batches.length&&!brandDrafts.size)choosePhoto(batch);
   }catch(error){status(error.message);}
  };
  function showPending(){
@@ -471,7 +516,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
  }
  $('#ai-preview').onclick=async()=>{
   try{
-   if(!basket.length||editing||recognized.some(line=>!line.removed))throw Error('請先完成本張品項核對');
+   if(!basket.length||awaitingPhoto()||otherUnfinished().length)throw Error('請先完成本張品項核對');
    const saved=localStorage.getItem(KEY),prior=JSON.parse(saved||'null');
    if(submission){
     const sent=submission;
@@ -487,5 +532,5 @@ export function mountPhotoReceive({esc,fmt,ask}){
  };
  window.addEventListener('erp-synced',onSync);
  drawResult();drawBasket();showPending();load();
- return protectDraft(()=>{alive=false;run++;if(photoUrl)URL.revokeObjectURL(photoUrl);if(chooser.open)chooser.close();clearChoices();if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',onSync);},()=>loading||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
+ return protectDraft(()=>{alive=false;run++;if(photoUrl)URL.revokeObjectURL(photoUrl);if(chooser.open)chooser.close();clearChoices();if(catalogDialog.open)catalogDialog.close();window.removeEventListener('erp-synced',onSync);},()=>loading||brandDrafts.size>0||basket.length>0||recognized.some(line=>!line.removed)||Boolean(pastedImage)||Boolean($('#ai-image')?.files?.length)||Boolean($('#ai-note')?.value?.trim())||Boolean($('#ai-note-other')?.value?.trim()));
 }

@@ -1,3 +1,4 @@
+import {photoWorkbench} from '../web/photo-workbench.mjs';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import test from 'node:test';
@@ -7,8 +8,8 @@ const source=fs.readFileSync(new URL('../web/photo-receive.mjs',import.meta.url)
 async function fixture(){
  let detached=false,resolveAuth,rejectAuth,calls=0;
  const elements=new Map();
- const root={insertAdjacentHTML(){},querySelector(s){if(detached)return null;if(!elements.has(s))elements.set(s,{innerHTML:'',value:'',files:[],showModal(){this.open=true},close(){this.open=false},disabled:false,querySelector:()=>null});return elements.get(s)},querySelectorAll(){return []}};
- const context={document:{querySelector:()=>root},window:{addEventListener(){},removeEventListener(){}},localStorage:{getItem:()=>null},loadReceiptCatalog:async()=>({sources:[{brand:'QA'},{brand:'QB'},{brand:'QA'}],rows:[{brand:'QA',id:'1'}]}),quantitySteppers(){},directEnabled:()=>true,authorize:()=>new Promise((resolve,reject)=>{resolveAuth=resolve;rejectAuth=reject}),runDirect(){calls++;throw Error('unexpected external call')},protectDraft,Date,console};
+ const root={insertAdjacentHTML(){},querySelector(s){if(detached)return null;if(!elements.has(s))elements.set(s,{innerHTML:'',value:'',files:[],insertAdjacentHTML(placement,markup){this.innerHTML+=markup},showModal(){this.open=true},close(){this.open=false},disabled:false,querySelector:()=>null});return elements.get(s)},querySelectorAll(){return []}};
+ const context={photoWorkbench,URL:{createObjectURL:()=>'blob:qa',revokeObjectURL(){}},document:{querySelector:()=>root},window:{addEventListener(){},removeEventListener(){}},localStorage:{getItem:()=>null},loadReceiptCatalog:async()=>({sources:[{brand:'QA'},{brand:'QB'},{brand:'QA'}],rows:[{brand:'QA',id:'1'}]}),quantitySteppers(){},directEnabled:()=>true,authorize:()=>new Promise((resolve,reject)=>{resolveAuth=resolve;rejectAuth=reject}),runDirect(){calls++;throw Error('unexpected external call')},protectDraft,Date,console};
  vm.createContext(context);vm.runInContext(source+'\nthis.mount=mountPhotoReceive;',context);
  const cleanup=context.mount({esc:String,fmt:String,ask(){}});await new Promise(r=>setImmediate(r));
  root.querySelector('#ai-image');root.querySelector('#ai-note');
@@ -68,4 +69,19 @@ test('other note returns to previous selection repeatedly without clearing text 
  note.value='其他';note.onchange();assert.equal(other.value,'保留補充');
  note.value='換貨補回';note.onchange();note.value='其他';note.onchange();back.onclick();assert.equal(note.value,'換貨補回');
  note.value='';note.onchange();note.value='其他';note.onchange();back.onclick();assert.equal(note.value,'');assert.equal(f.calls(),0);
+});
+
+test('switching brands retains a pasted photo only under its original supplier',async()=>{
+ const f=await fixture(),input=f.elements.get('#ai-image'),buttons=f.elements.get('#ai-source');
+ const select=brand=>buttons.onclick({target:{closest:()=>({dataset:{aiBrand:brand}})}});
+ input.onpaste({clipboardData:{files:[{type:'image/png'}]},preventDefault(){}});
+ select('QB');
+ assert.equal(f.elements.get('#ai-original').hidden,true);
+ assert.equal(f.cleanup.hasUnsavedChanges(),true);
+ await f.elements.get('#ai-scan').onclick();
+ assert.equal(f.elements.get('#ai-status').textContent,'請先完成此廠商的藥品清單讀取');
+ select('QA');
+ assert.equal(f.elements.get('#ai-original').hidden,false);
+ assert.equal(f.elements.get('#ai-image-hint').textContent,'已貼上圖片，可開始辨識。');
+ assert.equal(f.calls(),0);
 });

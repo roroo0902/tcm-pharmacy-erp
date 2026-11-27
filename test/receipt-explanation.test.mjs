@@ -21,5 +21,7 @@ test('mismatched saved item does not supply historical stock',()=>{
 test('verified receipt shows readable detail, timestamp and escaped fields',()=>{
  const h=operationResult({...draft,verified:true,receiptEvent:event},'receipt');
  for(const text of ['本次進貨已入庫，並完成核對','查看本次進貨紀錄','8 瓶','10 瓶','520 元','備註：無','紀錄位置：藥庫_同步紀錄','入帳時間：'])assert.ok(h.includes(text),text);
+ assert.match(h,/進貨登入-2026-11-04 10:00:00/);
+ assert.ok(!h.includes(draft.id));
  assert.doesNotMatch(operationResult({...draft,actor:'<script>',verified:true},'receipt'),/<script>/);
 });

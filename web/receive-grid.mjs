@@ -275,7 +275,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
   let submitted;
   const recordSubmission=reviewed=>{
    if(!alive||activePreview!==preview||localStorage.getItem(KEY)!==priorRecord||localStorage.getItem(SEPARATE)!==separateRecord)throw Error('進貨預覽或待核對狀態已變動，請回到表單重新核對。');
-   submitted=JSON.stringify({...reviewed,...(plan?.input?{receiptInput:plan.input}:{}),...(plan?.merge?{receiptMerge:true}:{})});
+   submitted=JSON.stringify({...reviewed,receiptSubmittedAt:new Date().toISOString(),...(plan?.input?{receiptInput:plan.input}:{}),...(plan?.merge?{receiptMerge:true}:{})});
    const owned=!plan?{id:d.id,form:normalReceiptSignature(d.id),pending:JSON.stringify(reviewed)}:null;
    localStorage.setItem(key,submitted);
    activePreview=null;

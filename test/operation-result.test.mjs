@@ -5,7 +5,7 @@ test('unrelated unresolved receipt operation retains lookup but no retry',()=>{c
 test('pending receipt details are collapsed and leave recovery to the form action',()=>{
  const receipt={id:'ERP-TEST',action:'進貨',date:d.date,actor:d.actor,lines:[{...d.lines[0],quantity:2}]};
  const html=operationResult(receipt,'receipt',receipt.id);
- assert.match(html,/<details><summary>查看上一筆進貨明細<\/summary>.*ERP-TEST.*進貨 2 瓶.*<\/details>/);
+ assert.match(html,/<details><summary>查看上一筆進貨明細<\/summary>.*進貨登入-時間未記錄.*進貨 2 瓶.*<\/details>/);
  assert.doesNotMatch(html,/<button|<details open/);
  assert.doesNotMatch(operationResult({...receipt,verified:true},'receipt',receipt.id),/<details>/);
 });

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
+import {orderLabel} from '../src/order-label.mjs';
 import * as pricing from '../web/receipt-pricing.mjs';
 import * as orders from '../src/orders.mjs';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
@@ -52,7 +53,7 @@ function mountHarness({historical=[], directReview}={}){
    const node=$('qty:'+m[1]);node.dataset={qty:m[1]};node.value=m[2];return node;
   });
  };
- const deps={...pricing,...orders,...sort,protectDraft,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
+ const deps={orderLabel,...pricing,...orders,...sort,protectDraft,document:{querySelector:$},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},navigator:{locks:{request:async(_k,f)=>f()}},planningLayout:'',installPlanningMobile:()=>{},
   SOURCES:[source],ORDER_ENDPOINT:'fixture-disabled',today:()=>date,SHEET_ID:'other',cloudDraft,directReview,directEnabled:()=>Boolean(directReview),
   fetch:async()=>({ok:true,headers:{get:()=> 'text/csv'},text:async()=>''}),csvRows:()=>[['','編號']],
   runDirect:(name)=>{assert.equal(name,'readLossPlanning');return reply();}};
@@ -221,20 +222,26 @@ test('confirmed draft exposes exactly two actions and approves the original orde
 
 test('clearing a confirmed draft shows its counts and removes only that draft on confirmation',async()=>{
  const snapshot=orders.calculateOrderRows(grid(),source,options), row=snapshot.rows[1];
- const create=(id,qty)=>orders.makeOrder(snapshot,{[row.id]:String(qty)},'QA',true,id,date);
+ const create=(id,qty)=>orders.makeOrder(snapshot,{[row.id]:String(qty)},'QA',true,id,'2026-11-26T16:08:09.123Z');
  const selected=create('PO-planning-0001',3),other=create('PO-planning-0002',7);
  const h=mountHarness({historical:[selected,other]});
  const savedIds=()=>JSON.parse(h.store.get('tcm-purchase-v2')).orders.map(o=>o.id);
  try{
+  const label='訂貨登入-2026-11-27 00:08:09';
+  assert.equal(h.$('#order-history').innerHTML.split('<b>'+label+'</b>').length-1,2);
   h.$('clearOrder:'+selected.id).onclick();
   const dialog=h.modals.at(-1);
   assert.match(dialog.html,/科達/);
   assert.match(dialog.html,/1\s*項/);
   assert.match(dialog.html,/3\s*瓶/);
+  assert.ok(dialog.html.includes(label));
+  assert.ok(!dialog.html.includes(selected.id));
   assert.equal(dialog.confirmLabel,'確認清除');
   assert.deepEqual(savedIds(),[selected.id,other.id]);
   await dialog.run();
   assert.deepEqual(savedIds(),[other.id]);
+  assert.ok(h.$('#order-state').textContent.includes(label));
+  assert.ok(!h.$('#order-state').textContent.includes(selected.id));
   assert.match(h.$('#order-history').innerHTML,/PO-planning-0002/);
   assert.doesNotMatch(h.$('#order-history').innerHTML,/PO-planning-0001/);
  }finally{h.unmount();}

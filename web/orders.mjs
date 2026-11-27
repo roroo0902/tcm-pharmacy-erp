@@ -8,6 +8,7 @@ import {ORDER_ENDPOINT} from './order-endpoint.mjs?v=cloud20261029';
 import {SOURCES,SHEET_ID,csvRows,dailyExportUrl} from './sheets-data.mjs?v=qa20261029';
 import {calculateOrderRows,previewOrder,numberOrNull,validateOrderStore,isOperationalOrderQa} from '../src/orders.mjs?v=planning20261127';
 import {sheetPrice,pricingTotal,money} from './receipt-pricing.mjs';
+import {orderLabel} from '../src/order-label.mjs';
 import {today} from './store.mjs';
 const ORDER_SHEET='1YcO7XRhN4T8wrL6wn-jD45lqif--rYQF4HCuBE-Nju8',GIDS={'科達單方':1285090474,'科達複方':1055167901,'天明單方':969684362,'天明複方':800389619},KEY='tcm-purchase-v2';
 export function mountOrders({esc,fmt,ask:askBase}){
@@ -116,7 +117,7 @@ export function mountOrders({esc,fmt,ask:askBase}){
  function history(){
   const orders=stored().orders;
   $('#order-history').innerHTML=orders.length?orders.slice().reverse().map(o=>`<div class="order-history-row">
-   <div><b>${esc(o.id)}</b>${qaOrder(o)?'<div class="pill warn">驗收紀錄・無法送出訂貨</div>':''}<p class="muted">${esc(o.lines[0]?.sheet)} · ${esc(o.actor)} · ${esc(o.status)}<br>${esc(o.options.start)}～${esc(o.options.end)} · ${o.lines.length} 項／${fmt(orderBottles(o))} 瓶</p></div>
+   <div><b>${esc(orderLabel(o.createdAt))}</b>${qaOrder(o)?'<div class="pill warn">驗收紀錄・無法送出訂貨</div>':''}<p class="muted">${esc(o.lines[0]?.sheet)} · ${esc(o.actor)} · ${esc(o.status)}<br>${esc(o.options.start)}～${esc(o.options.end)} · ${o.lines.length} 項／${fmt(orderBottles(o))} 瓶</p></div>
    <div class="order-history-buttons">
     <button type="button" data-send="${esc(o.id)}">確認並進行訂貨</button>
     <button type="button" class="secondary" data-clear-order="${esc(o.id)}">清除這筆訂單</button>
@@ -125,14 +126,14 @@ export function mountOrders({esc,fmt,ask:askBase}){
   host.querySelectorAll('[data-clear-order]').forEach(button=>button.onclick=()=>{
   const id=button.dataset.clearOrder;
   const selected=orders.find(order=>order.id===id);
-  ask(`<h3>清除這筆訂單？</h3><p>${esc(id)}</p><p>${esc(selected.lines[0]?.sheet)} · ${selected.lines.length} 項／${fmt(orderBottles(selected))} 瓶</p><p>將從本機草稿清單移除這筆訂單。</p>`,async()=>{
+  ask(`<h3>清除這筆訂單？</h3><p>${esc(orderLabel(selected.createdAt))}</p><p>${esc(selected.lines[0]?.sheet)} · ${selected.lines.length} 項／${fmt(orderBottles(selected))} 瓶</p><p>將從本機草稿清單移除這筆訂單。</p>`,async()=>{
    try{
     await navigator.locks.request(KEY,()=>{
      const state=stored(),index=state.orders.findIndex(order=>order.id===id);
      if(index<0||JSON.stringify(state.orders[index])!==JSON.stringify(selected))throw Error('草稿已變動，請重新核對。');
      state.orders.splice(index,1);localStorage.setItem(KEY,JSON.stringify(state));
     });
-    history();status('已清除本機訂貨草稿 '+id);
+    history();status('已清除本機訂貨草稿 '+orderLabel(selected.createdAt));
    }catch(error){history();status(error.message,true);}
   },'確認清除','取消');
  });

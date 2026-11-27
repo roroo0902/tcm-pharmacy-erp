@@ -25,7 +25,7 @@ export function createLossResultCheck({readRecord,writeRecord,readCloud,begin,bl
     report({state:'pending',title:'本筆為未送出草稿',detail:'草稿仍在待處理清單，可稍後繼續核對。',context});
     return;
    }
-   screen=begin();
+   screen=begin(draft);
    try{
     const data=await Promise.race([readCloud(draft),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('查詢逾時，請稍後再試。')),timeoutMs);})]);
     if(disposed())return;

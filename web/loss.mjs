@@ -203,7 +203,7 @@ export function mountLoss({esc,fmt,ask,message}){
    });
   }catch(e){if(!disposed){showPending();status(e.message);}}
  }
- const checkPending=createLossResultCheck({withSlipLock,readRecord:readResult,writeRecord:record=>slips.save(record),readCloud:async draft=>{const data=await runDirect('readLossCatalog',{date:draft.date});if(draft.completionSheets)data.completion=await Promise.all(draft.completionSheets.map(sheet=>runDirect('readLossDay',{date:draft.date,sheet})));return data;},begin:()=>beginProcessing({reading:true}),blocked:isProcessing,disposed:()=>disposed,report:showLossCheckResult,changed:()=>{reuseResultId='';showPending();}});
+ const checkPending=createLossResultCheck({withSlipLock,readRecord:readResult,writeRecord:record=>slips.save(record),readCloud:async draft=>{const data=await runDirect('readLossCatalog',{date:draft.date});if(draft.completionSheets)data.completion=await Promise.all(draft.completionSheets.map(sheet=>runDirect('readLossDay',{date:draft.date,sheet})));return data;},begin:draft=>beginProcessing({reading:true,lossCheck:draft}),blocked:isProcessing,disposed:()=>disposed,report:showLossCheckResult,changed:()=>{reuseResultId='';showPending();}});
  function showPending(){
   if(disposed)return;
   const records=slips.list(),unverified=records.filter(r=>!r.verified);

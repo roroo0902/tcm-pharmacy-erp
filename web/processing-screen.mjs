@@ -84,7 +84,7 @@ const css=`
 export function showReceiptReviewWarning(message,onReview){
  return beginProcessing({reading:true,compact:true,notice:true,catalogMessage:message,receiptWarning:true,onReview});
 }
-export function beginProcessing({action='',reading=false,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false,inventorySync=false,notice=false,receiptWarning=false,onReview}={}){
+export function beginProcessing({action='',reading=false,lossCheck=null,catalogMessage='',receiptGuild=false,receiptCompact=false,compact=false,readOnly=false,inventorySync=false,notice=false,receiptWarning=false,onReview}={}){
  if(active)throw Error('上一筆仍在入帳，請稍候');
  // Non-DOM callers can exercise the transaction logic independently.
  if(!globalThis.document?.createElement)return {readback(){},close(){}};
@@ -108,6 +108,18 @@ export function beginProcessing({action='',reading=false,catalogMessage='',recei
   dialog.querySelector('.save-detail').textContent='正在等待 Google 完成寫入';
  }
  if(reading){dialog.dataset.stage='reading';dialog.querySelector('.save-banner').textContent='雲端資料核對中';dialog.querySelector('#save-heading').textContent='正在讀取最新雲端資料…';dialog.querySelector('.save-frame > p').textContent='請稍候，完成後會自動顯示下一步。';dialog.querySelector('.save-steps').hidden=true;dialog.querySelector('.save-detail').textContent='正在取得最新資料，尚未入帳';}
+ if(lossCheck){
+  const date=lossCheck.date.replaceAll('-','/'),lines=lossCheck.lines;
+  const completion=Boolean(lossCheck.completionSheets?.length);
+  const item=lines[0];
+  const quantity=lines.length===1?`${item.sheet}・${item.name}：本筆填寫 ${item.total} 瓶，正在與 Google 工作表的當日累計比對。`:
+   `正在將本筆 ${lines.length} 個品項的填寫瓶數，逐項與 Google 工作表的當日累計比對。`;
+  dialog.querySelector('.save-banner').textContent='每日耗損';
+  dialog.querySelector('#save-heading').textContent=lines.length?'正在核對當日耗損累計…':'正在核對當日登錄狀態…';
+  dialog.querySelector('.save-frame > p').textContent='耗損日期　'+date;
+  dialog.querySelector('#save-warning').textContent='本次只查詢，不會再次扣庫存。';
+  dialog.querySelector('.save-detail').textContent=(lines.length?quantity:'')+(completion?'正在查詢正常品項的完成登錄狀態。':'');
+ }
  if(catalogMessage){
   dialog.querySelector('.save-banner').textContent=receiptGuild?'補給資料讀取中':'每日耗損資料讀取中';
   if(receiptGuild)dialog.dataset.guild='true';
@@ -148,7 +160,7 @@ export function beginProcessing({action='',reading=false,catalogMessage='',recei
  const beforeUnload=e=>{e.preventDefault();e.returnValue='';};dialog.addEventListener('cancel',e=>e.preventDefault());doc.body.append(dialog);
  try{dialog.showModal();}catch(e){stopReadingScroll();dialog.remove();if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow=oldOverflow;throw e;}
  active=true;if(!catalogMessage)win.addEventListener('beforeunload',beforeUnload);
- const timer=notice?null:setTimeout(()=>{dialog.querySelector('.save-detail').textContent=catalogMessage?'Google 回應較慢，請稍候。':reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
+ const timer=notice?null:setTimeout(()=>{dialog.querySelector('.save-detail').textContent=lossCheck?'Google 工作表回應較慢，仍在核對這筆每日耗損。':catalogMessage?'Google 回應較慢，請稍候。':reading?'Google 讀取較慢，請稍候；目前尚未入帳。':'Google 回應較慢，仍在等待結果。請保持頁面開啟，勿重複送出。';},30000);
  let closed=false;const handle={readback(){dialog.dataset.stage='readback';dialog.querySelector('.step-write').classList.add('done');dialog.querySelector('.save-detail').textContent=order?(cancelOrder?'正在核對取消結果':'正在核對訂貨量'):'正在讀回工作表並更新畫面';},close(){if(closed)return;closed=true;clearTimeout(timer);active=false;win.removeEventListener('beforeunload',beforeUnload);stopReadingScroll();dialog.close();dialog.remove();if(scrollStyle&&!scrollWhileReading)scrollStyle.overflow=oldOverflow;if(previous?.isConnected)previous.focus({preventScroll:true});}};
  if(notice){
   const button=doc.createElement('button');button.type='button';button.textContent=receiptWarning?'返回核對':'查看待核對操作';button.style.cssText='white-space:normal;max-width:100%;margin-top:12px';

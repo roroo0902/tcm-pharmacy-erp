@@ -6,9 +6,11 @@ import {loadReceiptCatalog} from './supplier-catalog.mjs';
 import {directEnabled,authorize,runDirect,directReview} from './direct-sync.mjs?v=release20261120r1';
 import {cloudDraft} from '../src/cloud-transaction.mjs';
 import {lookupPostedTransaction} from './pending-recovery.mjs';
+import {operationResult} from './operation-result.mjs';
 import {normalizeDrug,matchRecognized,cleanRecognized,addToBasket,receiptCandidates,photoBasket} from '../src/photo-receive-data.mjs?v=photoReturn20261127';
 import {quantitySteppers} from './quantity-stepper.mjs';
 const KEY='tcm-cloud-pending-v1',DISCARDED='tcm-photo-receipt-last-discarded-v1';
+const HIDDEN_RESULT='tcm-photo-receipt-hidden-result-v1';
 const todayTaipei=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'});
 const unitMessage=unit=>(unit==='瓶'||unit==='罐')?'照片單位可能正確，仍需核對':'照片不是「瓶／罐」，請手動換算成實際入庫瓶數';
 
@@ -391,6 +393,13 @@ export function mountPhotoReceive({esc,fmt,ask}){
  function showPending(){
   if(!alive)return;
   try{pending=JSON.parse(localStorage.getItem(KEY)||'null');}catch{pending=null;}
+  if(pending?.verified&&pending.photoSubmitted&&pending.action==='進貨'){
+   const id=pending.id, panel=$('#ai-pending');
+   panel.innerHTML=localStorage.getItem(HIDDEN_RESULT)===id?'':operationResult(pending,'receipt');
+   const hide=panel.querySelector('#receipt-hide');
+   if(hide)hide.onclick=()=>{localStorage.setItem(HIDDEN_RESULT,id);showPending();};
+   return;
+  }
   const unresolved=pending&&pending.kind==='tcm-cloud'&&!pending.verified;
   $('#ai-pending').innerHTML=unresolved?'<h3>上次有一筆待核對交易</h3><p>交易編號：'+esc(pending.id)+'</p><p class="muted">為防止重複入庫，在讀回或以同一交易重試前，不能建立另一筆新進貨。</p><button type="button" id="ai-retry" class="secondary">使用原交易重新核對</button><button type="button" id="ai-readback" class="secondary">查詢 Google 交易紀錄</button>'+(pending.action==='進貨'&&!pending.photoSubmitted?'<button type="button" id="ai-discard" class="secondary">取消未入帳的待核對紀錄</button>':''):'';
   if(unresolved){
@@ -426,12 +435,16 @@ export function mountPhotoReceive({esc,fmt,ask}){
     const saved=localStorage.getItem(KEY),draft=cloudDraft(JSON.parse(saved));
     await authorize();const event=await lookupPostedTransaction(draft);
     if(!event||JSON.stringify(cloudDraft(event.draft))!==JSON.stringify(draft))throw Error('尚未讀回相同交易，請沿用原交易編號核對');
-    finish(draft,saved);status('已查到相同交易的入庫紀錄');
+    finish(draft,saved,event);status('已查到相同交易的入庫紀錄');
    }catch(error){status(error.message);}};
   }
  }
- function finish(draft,saved){
-  if(localStorage.getItem(KEY)===saved)localStorage.setItem(KEY,JSON.stringify({...draft,verified:true}));
+ function finish(draft,saved,result){
+  if(saved&&localStorage.getItem(KEY)===saved){
+   const completed={...JSON.parse(saved),verified:true};
+   if(draft.action==='進貨')completed.receiptEvent={draft,lines:result.lines||[],time:result.time};
+   localStorage.setItem(KEY,JSON.stringify(completed));
+  }
   if(submission?.id===draft.id){
    if(submission.basket===basket){basket=[];batches=[];}
    submission=null;
@@ -442,7 +455,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   if(!directEnabled()){status('目前僅支援經授權的 Google 同步，尚未送出');return;}
   const expected=localStorage.getItem(KEY),snapshot=basket;
   let reserved;
-  return directReview(draft,ask,()=>finish(draft,reserved),status,{
+  return directReview(draft,ask,result=>finish(draft,reserved,result),status,{
    beforeCommit:()=>{
     if(!alive||localStorage.getItem(KEY)!==expected||(!retry&&snapshot!==basket))throw Error('進貨內容已變動，請重新預覽。');
     reserved=JSON.stringify({...draft,photoSubmitted:true});localStorage.setItem(KEY,reserved);
@@ -465,7 +478,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
     await authorize();const event=await lookupPostedTransaction(sent.draft);
     if(!alive||sent!==submission)return;
     if(!event||JSON.stringify(cloudDraft(event.draft))!==JSON.stringify(sent.draft))throw Error('上一筆交易結果未明，請先核對原交易');
-    finish(sent.draft,prior?.id===sent.id?saved:undefined);status('已讀回上一筆入帳紀錄。');return;
+    finish(sent.draft,prior?.id===sent.id?saved:undefined,event);status('已讀回上一筆入帳紀錄。');return;
    }
    if(prior&&!prior.verified)throw Error('上一筆交易結果未明，請先核對原交易');
    const draft=cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id:'ERP-'+crypto.randomUUID(),action:'進貨',date:$('#ai-date').value,actor:$('#ai-actor').value.trim(),note:noteValue(),lines:basket.map(({sheet,code,name,quantity,unitPriceCents})=>({sheet,code,name,quantity,unitPriceCents}))});

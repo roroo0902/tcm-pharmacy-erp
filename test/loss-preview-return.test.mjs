@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {setImmediate as tick} from 'node:timers/promises';
+import {priceCents} from '../web/receipt-pricing.mjs';
+import {readLossForm,writeLossForm} from '../web/loss-form-drafts.mjs';
 import {lossDraft,lossCorrectionReason} from '../web/loss-cloud.mjs';
 import {lossSheets,lossSlips} from '../web/loss-pending-list.mjs';
 import {lossPage} from '../web/loss-pagination.mjs';
@@ -17,16 +19,19 @@ const rows=['科達','天明','富田'].map((brand,index)=>({
 const prior={id:'another-slip',phase:'submitted',verified:false,
  draft:{date:'2026-11-23',actor,lines:[{sheet:'科達單方',code:'QA',name:'測試藥',total:4}]}};
 
-async function mountForm({direct=true}={}){
+async function mountForm({direct=true,withPrices=false}={}){
  const storage=Object.create({
   getItem(key){return this[key]??null;},
   setItem(key,value){this[key]=value;},
   removeItem(key){delete this[key];}
  });
+ const priceStorage=new Map();
+ const sessionStorage={getItem:key=>priceStorage.get(key)??null,setItem:(key,value)=>priceStorage.set(key,value),removeItem:key=>priceStorage.delete(key)};
  const slips=lossSlips(storage,'tcm-loss-result-v1');
  slips.save(prior);
  const nodes=new Map(), previews=[], posted=[], messages=[];
  const quantities=rows.map(row=>({dataset:{id:row.id},value:''}));
+ const prices=rows.map(row=>({dataset:{id:row.id},value:'',setAttribute(){}}));
  function node(selector){
   if(!nodes.has(selector))nodes.set(selector,{
    value:'',textContent:'',innerHTML:'',validity:{valid:true},
@@ -36,12 +41,12 @@ async function mountForm({direct=true}={}){
  }
  const $=node;
  $('#loss-submit-complete').parentElement={parentElement:{querySelectorAll:()=>[{},{}]}};
- const document={querySelector:$,querySelectorAll:sel=>sel==='.loss-qty'?quantities:[],createElement:()=>({})};
+ const document={getElementById:node,querySelector:$,querySelectorAll:sel=>sel==='.loss-qty'?quantities:sel==='.loss-price'?prices:[],createElement:()=>({})};
  const noop=()=>{};
  const deps={
-  document,localStorage:storage,window:{addEventListener:noop,removeEventListener:noop},
+  document,localStorage:storage,window:{sessionStorage,addEventListener:noop,removeEventListener:noop},
   navigator:{locks:{request:(_key,fn)=>fn()}},
-  lossDraft,lossCorrectionReason,lossSheets,lossSlips,lossPage,lossReasons,supplierSelection,protectDraft,
+  priceCents,readLossForm,writeLossForm,lossDraft,lossCorrectionReason,lossSheets,lossSlips,lossPage,lossReasons,supplierSelection,protectDraft,
   today:()=>today,lossLayout:'',lossCompletionMarkup:'',LOSS_SHEET:'#',sheetUrl:()=>'#',
   alignOrderWord:()=>noop,watchSupplierCatalog:()=>noop,quantitySteppers:noop,sortSheetRows:list=>list,
   mountLossCompletion:()=>({show:noop,dispose:noop}),createLossResultCheck:()=>noop,showLossCheckResult:noop,
@@ -61,7 +66,9 @@ async function mountForm({direct=true}={}){
  const source=readFileSync(new URL('../web/loss.mjs',import.meta.url),'utf8')
   .replace(/^import [^\n]+;\r?\n/gm,'').replace(/^export /gm,'');
  const mount=new Function(...Object.keys(deps),source+'\nreturn mountLoss;')(...Object.values(deps));
+ let confirmEdit;
  const ask=(_html,_confirm,label,_backLabel,back)=>{
+  if(label==='載入並修改'){confirmEdit=_confirm;return;}
   assert.equal(direct,false,'unexpected extra dialog');
   assert.equal(label,'開啟 Google 核對頁');
   previews.push({back});
@@ -77,10 +84,13 @@ async function mountForm({direct=true}={}){
   assert.match($('#loss-table tbody').innerHTML,new RegExp('data-id="'+rows[index].id+'"[^>]*value="'+value+'"'));
  }
  const submit=async()=>{$('#loss-submit-complete').onclick();await tick();};
+ function setPrice(index,value){choose(rows[index].brand);prices[index].value=value;prices[index].oninput();}
+ if(withPrices){setPrice(0,'132.50');setPrice(1,'0');setPrice(2,'');}
  fill(0,'2');fill(1,'0');
  await submit();
  assert.equal(previews.length,1,messages.join('\n'));
- return {$,slips,previews,posted,fill,visible,submit};
+ const edit=async()=>{assert.ok($('#loss-edit').onclick);$('#loss-edit').onclick();assert.ok(confirmEdit);await confirmEdit();};
+ return {$,slips,previews,posted,fill,visible,submit,setPrice,sessionStorage,messages,edit};
 }
 
 test('return restores the original day, actor and quantities across brands including explicit zero',async()=>{
@@ -182,4 +192,70 @@ test('return from the external Google review prompt also preserves both quantiti
  f.visible(0,'2');f.visible(1,'0');
  assert.deepEqual(f.slips.list(),[prior]);
  assert.equal(f.posted.length,0);
+});
+
+test('per-brand price overrides including blank and zero survive review return, stay out of the loss payload and clear independently',async()=>{
+ const f=await mountForm({withPrices:true});
+ const draft=()=>readLossForm(f.sessionStorage,date);
+ assert.deepEqual([...draft().prices],[[rows[2].id,'']]);
+ assert(f.previews[0].draft.lines.every(line=>!Object.hasOwn(line,'unitPriceCents')&&!Object.hasOwn(line,'price')));
+ await f.previews[0].back();
+ assert.deepEqual([...draft().prices].sort(),[[rows[0].id,'132.50'],[rows[1].id,'0'],[rows[2].id,'']]);
+ assert.deepEqual([...draft().quantities].sort(),[[rows[0].id,'2'],[rows[1].id,'0']]);
+ f.$('#loss-clear').onclick();
+ assert.equal(draft().rows.size,0);
+});
+
+test('a late acknowledgment keeps a new price and quantity even if it matches the submitted quantity',async()=>{
+ const f=await mountForm({withPrices:true});
+ await f.previews[0].post({loseReply:true});
+ f.fill(0,'2');f.setPrice(0,'49.50');
+ await f.previews[0].receiveReply();
+ const d=readLossForm(f.sessionStorage,date);
+ assert.equal(d.quantities.get(rows[0].id),'2');
+ assert.equal(d.prices.get(rows[0].id),'49.50');
+});
+
+test('invalid unit price is flagged and blocks only entered loss lines',async()=>{
+ const f=await mountForm();
+ await f.previews[0].back();
+ f.setPrice(0,'-1');
+ await f.submit();
+ assert.match(f.messages.at(-1),/單價須為0或正數/);
+ assert.equal(f.previews.length,1);
+ f.setPrice(0,'123.456');
+ await f.submit();
+ assert.match(f.messages.at(-1),/最多兩位小數/);
+ assert.equal(f.previews.length,1);
+ f.setPrice(0,'0');
+ f.setPrice(2,'-25');
+ f.fill(0,'2');
+ await f.submit();
+ assert.equal(f.previews.length,2);
+ assert.deepEqual(f.previews[1].draft.completionSheets.sort(),[rows[0].name,rows[1].name].sort());
+ assert.equal(f.previews[1].draft.lines.some(line=>line.sheet===rows[2].name),false);
+});
+
+test('editing a saved slip retains its original completion sheets and other suppliers’ separate form inputs',async()=>{
+ const f=await mountForm({withPrices:true});
+ f.fill(2,'3');f.setPrice(2,'99.99');
+ await f.edit(); // The active supplier is still third; the saved slip covers only first and second.
+ await f.submit();
+ assert.equal(f.previews.length,2,f.messages.join(' '));
+ assert.deepEqual(f.previews[1].draft.completionSheets.sort(),[rows[0].name,rows[1].name].sort());
+ assert.deepEqual(f.previews[1].draft.lines.map(l=>l.sheet).sort(),[rows[0].name,rows[1].name].sort());
+ const d=readLossForm(f.sessionStorage,date);
+ assert.equal(d.prices.get(rows[2].id),'99.99');assert.equal(d.quantities.get(rows[2].id),'3');
+});
+
+test('editing cannot replace another tab’s updated pending price even when the ledger payload is the same',async()=>{
+ const f=await mountForm({withPrices:true});
+ await f.edit();
+ const local=f.slips.list().find(r=>r.id!==prior.id);
+ const changed={...local,formPrices:[{...local.formPrices[0],value:'80.00'}]};
+ f.slips.save(changed);
+ await f.submit();
+ assert.equal(f.previews.length,1);
+ assert.match(f.messages.at(-1),/原草稿已變更/);
+ assert.deepEqual(f.slips.get(local.id),changed);
 });

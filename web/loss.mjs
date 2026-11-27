@@ -1,13 +1,15 @@
 import {lossSlips,lossSheets,showLossSlips} from './loss-pending-list.mjs?v=lossRemove20261127';
+import {priceCents} from './receipt-pricing.mjs?v=compact20261030';
+import {readLossForm,writeLossForm} from './loss-form-drafts.mjs';
 import {lossPage} from './loss-pagination.mjs';
 import {lossReasons} from './loss-reasons.mjs';
-import {protectDraft} from './page-safety.mjs';
+import {protectDraft} from './page-safety.mjs?v=lossForm20261128';
 import {createLossResultCheck,showLossCheckResult} from './loss-result-check.mjs?v=lossRemove20261127';
 import {alignOrderWord} from './order-word-axis.mjs';
 import {isProcessing,beginProcessing} from './processing-screen.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
 import {lossCompletionMarkup,mountLossCompletion} from './loss-completion.mjs?v=dailylossread20261119';
-import {lossLayout} from './loss-layout.mjs';
+import {lossLayout} from './loss-layout.mjs?v=lossCards20261128';
 import {operationResult} from './operation-result.mjs?v=lossRemove20261127';
 import {verifiedLossCatalog,lossCalculation,createLossLoader,readLossWithTimeout} from './loss-readback.mjs?v=googlesync20261114';
 import {watchSupplierCatalog} from './catalog-events.mjs';
@@ -20,16 +22,50 @@ import {today} from './store.mjs';
 import {LOSS_ENDPOINT,LOSS_SHEET,lossPostedRows,lossDraft,lossCorrectionReason} from './loss-cloud.mjs?v=lossrevision20261120';
 const RESULT_KEY='tcm-loss-result-v1',HIDDEN_RESULT='tcm-loss-hidden-result-v1';
 export function mountLoss({esc,fmt,ask,message}){
- const $=s=>document.querySelector(s),cache=new Map(),drafts=new Map();let rowById=new Map(),completionBySheet=null,sources=[],selected=null,brand='',category='',loading=false,loadFailed=false,sort='code',direction='asc',page=1,pageSize=10,disposed=false,generation=0,date=today(),pending=null,reuseResultId='';
- const draftFor=day=>{if(!drafts.has(day))drafts.set(day,{quantities:new Map(),rows:new Map(),reason:'',reasonKind:''});return drafts.get(day);};
+ const $=s=>document.querySelector(s),cache=new Map(),drafts=new Map();let rowById=new Map(),completionBySheet=null,sources=[],selected=null,brand='',category='',loading=false,loadFailed=false,sort='code',direction='asc',page=1,pageSize=10,disposed=false,generation=0,date=today(),pending=null,reuseResultId='',editingSnapshot='';
+ let formStorage;
+ try{formStorage=window.sessionStorage;}catch{}
+ const draftFor=day=>{
+  if(!drafts.has(day)){
+   try{drafts.set(day,readLossForm(formStorage,day));}
+   catch{drafts.set(day,readLossForm(null,day));message('無法讀取此分頁暫存的耗損輸入，請重新核對。',true);}
+  }
+  return drafts.get(day);
+ };
  let dayDraft=draftFor(date);
+ function saveFormDraft(day=date){
+  const draft=drafts.get(day);
+  if(!draft)return;
+  try{writeLossForm(formStorage,day,draft);}
+  catch{message('此分頁暫存空間無法寫入，目前輸入仍保留在畫面中。',true);}
+ }
+ const catalogPrice=row=>row.unitPriceCents==null?'':String(row.unitPriceCents/100);
+ const lossPriceFor=row=>dayDraft.prices.get(row.id)??catalogPrice(row);
+ function lossPriceError(value){
+  try{priceCents(value);return '';}catch(e){return e.message;}
+ }
+ function showPriceError(input){
+  const error=lossPriceError(input.value);
+  input.setAttribute('aria-invalid',String(!!error));
+  const hint=document.getElementById('loss-price-msg-'+input.dataset.id);
+  if(hint){hint.textContent=error;hint.hidden=!error;}
+ }
  const slips=lossSlips(localStorage,RESULT_KEY);
  const withSlipLock=callback=>navigator.locks.request('tcm-loss-slip-update',callback);
  let currentId,slipDialog;
  const readResult=()=>slips.get(currentId);
  function clearSlipInputs(r){
   const d=drafts.get(r.draft.date);if(!d)return;
-  for(const [id,row] of d.rows)if(r.draft.lines.some(l=>l.sheet===row.name&&l.code===row.code&&l.name===row.drug&&Number(d.quantities.get(id))===l.total)){d.rows.delete(id);d.quantities.delete(id);}
+  for(const [id,row] of d.rows){
+   const line=r.draft.lines.find(line=>line.sheet===row.name&&line.code===row.code&&line.name===row.drug);
+   if(!line||!d.quantities.has(id)||Number(d.quantities.get(id))!==line.total)continue;
+   d.quantities.delete(id);
+   const snapshot=r.formPrices?.find(p=>p.sheet===row.name&&p.code===row.code&&p.name===row.drug);
+   if(snapshot&&d.prices.get(id)===snapshot.value)d.prices.delete(id);
+   if(!d.prices.has(id))d.rows.delete(id);
+  }
+  if(!d.quantities.size){d.reason='';d.reasonKind='';}
+  saveFormDraft(r.draft.date);
  }
  async function removePendingSlip(record){
   if(disposed||!record||record.verified)return;
@@ -63,7 +99,34 @@ export function mountLoss({esc,fmt,ask,message}){
    currentId=r.id;showPending();checkPending();
   }});
  }
- $('#content').innerHTML=`<section class="panel"><div class="panelhead"><div><h2>登錄當日累計耗損</h2><span class="muted">填今天累計耗損幾瓶（限整數）· 只登錄已填品項，留白保留已入帳累計 · 填 0 表示歸零</span></div><a class="secondary" href="${LOSS_SHEET}" target="_blank" rel="noopener">開啟耗損表 ↗</a></div><label>廠商</label><div class="order-tabs" id="loss-brands" role="group" aria-label="耗損廠商"></div><label>類別</label><div class="order-tabs" id="loss-categories" role="group" aria-label="耗損單方或複方"></div><div class="grid"><label>耗損日期<input id="loss-date" type="date" value="${date}" max="${date}"></label><label>經手人<select id="loss-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div><div class="panelhead loss-tools"><input id="loss-search" aria-label="搜尋耗損品項" placeholder="搜尋藥品名稱或編號"><button class="secondary" id="loss-refresh">重新讀取工作表</button></div><p id="loss-state" role="status"></p><p id="loss-qty-help" class="muted">留白：不改已入帳累計。填 0：當日累計歸零。調低已入帳累計時，請在預覽視窗選擇更正原因。</p><div class="tablewrap"><table id="loss-table"><thead><tr><th><button class="sort-heading" data-sort="code">藥品／編號 ↕</button></th><th>廠牌／類別</th><th><button class="sort-heading" data-sort="bottles">原表未拆封瓶數 ↕</button></th><th><button type="button" class="sort-heading" data-sort="posted" aria-label="依當日已入帳耗損排序">當日<br>已入帳耗損 ↕</button></th><th>本次填寫的當日累計</th><th>本次差額</th><th>登錄後瓶數</th><th>原表</th></tr></thead><tbody></tbody></table></div><div class="panelhead loss-pagination" role="group" aria-label="耗損清單分頁"><label>每頁 <select id="loss-page-size" aria-label="每頁顯示筆數"><option value="10">10 筆</option><option value="20">20 筆</option><option value="30">30 筆</option></select></label><span id="loss-page-info" role="status" aria-live="polite"></span><div><button type="button" class="secondary" id="loss-prev">上一頁</button> <button type="button" class="secondary" id="loss-next">下一頁</button></div></div><div class="actions"><span id="loss-summary"></span><button id="loss-clear" type="button" class="secondary">清除本次輸入</button><button type="button" id="loss-submit-complete" class="secondary">預覽並完成正常品項登錄</button></div>${lossCompletionMarkup}<p id="loss-storage-warning" role="status" hidden></p><div id="loss-pending"></div><div id="loss-remove-status" role="status"></div><p class="muted">以 Google 雲端紀錄為準，送出後仍須在 Google 預覽並確認。相同累計不重扣；確認前若有人更新庫存，系統會要求重新預覽。</p><p class="muted">新增品項請先至「藥品建帳」完成 Google 同步，再重新讀取。耗損存入獨立每日明細，不新增或覆寫原表日期欄。</p></section>`;
+ const reasonOptions=(selected='')=>lossReasons.map(([id,label])=>`<option value="${id}"${selected===id?' selected':''}>${esc(label)}</option>`).join('');
+ $('#content').innerHTML=`<section class="panel loss-workbench" aria-labelledby="loss-heading">
+  <div class="loss-panelhead">
+   <h2 id="loss-heading"><img src="./web/assets/loss-ledger.png" width="38" height="28" alt="">每日耗損</h2>
+   <a class="secondary" href="${LOSS_SHEET}" target="_blank" rel="noopener">開啟耗損表 ↗</a>
+  </div>
+  <h3 class="loss-subheading">登錄當日累計耗損</h3>
+  <p id="loss-qty-help">只登錄已填品項。留白保留已入帳累計，填 0 表示歸零。瓶數限整數。</p>
+  <div class="loss-selectors">
+   <div class="loss-selector"><span id="loss-brand-label">廠商</span><div class="order-tabs" id="loss-brands" role="group" aria-labelledby="loss-brand-label"></div></div>
+   <div class="loss-selector"><span id="loss-category-label">類別</span><div class="order-tabs" id="loss-categories" role="group" aria-labelledby="loss-category-label"></div></div>
+  </div>
+  <div class="loss-fields">
+   <label>耗損日期<input id="loss-date" type="date" value="${date}" max="${date}"></label>
+   <label>經手人<select id="loss-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label>
+   <label class="loss-full">更正原因（調低累計或歸零必填）<select id="loss-form-reason-kind"><option value="">請選擇更正原因</option>${reasonOptions()}</select></label>
+   <label id="loss-note-label" class="loss-full" hidden>補充說明（選填）<textarea id="loss-form-reason-note" maxlength="490" rows="2"></textarea></label>
+  </div>
+  <div class="loss-tools"><input id="loss-search" type="search" aria-label="搜尋耗損品項" placeholder="搜尋藥品名稱或編號"><button class="secondary" type="button" id="loss-refresh">重新讀取工作表</button></div>
+  <p id="loss-state" role="status"></p>
+  <div class="tablewrap loss-items"><table id="loss-table" aria-label="每日耗損品項"><thead><tr>
+   <th scope="col"><button type="button" class="sort-heading" data-sort="code">藥品名稱／編號 ↕</button></th>
+   <th scope="col"><button type="button" class="sort-heading" data-sort="bottles">未拆封庫存 ↕</button></th>
+   <th scope="col"><button type="button" class="sort-heading" data-sort="posted" aria-label="依當日已入帳耗損排序">已入帳累計 ↕</button></th>
+   <th scope="col">當日累計耗損</th><th scope="col">單價（元／瓶）</th><th scope="col">本次差額</th><th scope="col">登錄後瓶數</th><th scope="col">原表</th>
+  </tr></thead><tbody></tbody></table></div>
+  <p class="loss-price-note" id="loss-price-help">單價供本次核對，原表價格仍以工作表為準。</p>
+  <div class="panelhead loss-pagination" role="group" aria-label="耗損清單分頁"><label>每頁 <select id="loss-page-size" aria-label="每頁顯示筆數"><option value="10">10 筆</option><option value="20">20 筆</option><option value="30">30 筆</option></select></label><span id="loss-page-info" role="status" aria-live="polite"></span><div><button type="button" class="secondary" id="loss-prev">上一頁</button> <button type="button" class="secondary" id="loss-next">下一頁</button></div></div><div class="actions"><span id="loss-summary"></span><button id="loss-clear" type="button" class="secondary">清除本次輸入</button><button type="button" id="loss-submit-complete" class="secondary">預覽並完成正常品項登錄</button></div>${lossCompletionMarkup}<p id="loss-storage-warning" role="status" hidden></p><div id="loss-pending"></div><div id="loss-remove-status" role="status"></div><p class="muted">以 Google 雲端紀錄為準，送出後仍須在 Google 預覽並確認。相同累計不重扣；確認前若有人更新庫存，系統會要求重新預覽。</p><p class="muted">新增品項請先至「藥品建帳」完成 Google 同步，再重新讀取。耗損存入獨立每日明細，不新增或覆寫原表日期欄。</p></section>`;
  $('#content').insertAdjacentHTML('afterbegin',lossLayout);
  const stopWordAxis=alignOrderWord($('#loss-table'));
  const completion=mountLossCompletion($('#content'),{esc,context:()=>({date,sheet:selected?.name})});
@@ -72,23 +135,58 @@ export function mountLoss({esc,fmt,ask,message}){
   catch(e){if(!e.message.includes('不支援的操作'))throw e;return runDirect('readLossCatalog',{date});}
  }));
  const status=t=>{$('#loss-state').textContent=t;};
- function summary(){const count=dayDraft.quantities.size;$('#loss-clear').disabled=!count&&!dayDraft.reason.trim()&&!dayDraft.reasonKind;$('#loss-summary').textContent=`已填 ${count} 項（含其他分頁）`;
+ function summary(){const count=dayDraft.quantities.size;$('#loss-clear').disabled=!count&&!dayDraft.prices.size&&!dayDraft.reason.trim()&&!dayDraft.reasonKind;$('#loss-summary').textContent=`已填 ${count} 項（含其他分頁）`;
  document.querySelectorAll('[data-delta]').forEach(cell=>{const r=rowById.get(cell.dataset.delta),result=lossCalculation(dayDraft.quantities.get(r.id),r),after=$('[data-after="'+r.id+'"]');cell.textContent=result.delta;after.textContent=result.after;after.classList.toggle('loss-insufficient',result.insufficient);});}
 
- function draw(){if(disposed)return;const selection=supplierSelection(sources,brand,category);({brand,category,source:selected}=selection);
+ function renderFormReason(){
+  $('#loss-form-reason-kind').value=dayDraft.reasonKind;
+  $('#loss-form-reason-note').value=dayDraft.reason;
+  $('#loss-note-label').hidden=!dayDraft.reasonKind;
+ }
+ $('#loss-form-reason-kind').onchange=e=>{
+  dayDraft.reasonKind=e.target.value;
+  if(!dayDraft.reasonKind)dayDraft.reason='';
+  renderFormReason();saveFormDraft();summary();
+ };
+ $('#loss-form-reason-note').oninput=e=>{
+  dayDraft.reason=e.target.value;saveFormDraft();summary();
+ };
+ function draw(){if(disposed)return;renderFormReason();const selection=supplierSelection(sources,brand,category);({brand,category,source:selected}=selection);
  $('#loss-brands').innerHTML=selection.brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b)}</button>`).join('');
  $('#loss-categories').innerHTML=selection.categories.map(k=>`<button type="button" class="secondary ${k===category?'selected':''}" data-category="${esc(k)}" aria-pressed="${k===category}">${esc(k)}</button>`).join('');const q=$('#loss-search').value.trim().toLowerCase(),list=sortSheetRows((cache.get(selected?.gid)||[]).filter(r=>`${r.drug} ${r.code}`.toLowerCase().includes(q)),sort,direction);
  const paged=lossPage(list,page,pageSize);page=paged.page;
  $('#loss-page-size').value=String(pageSize);
  $('#loss-page-info').textContent=paged.total?'第 '+page+'／'+paged.pages+' 頁 · 第 '+paged.start+'–'+paged.end+' 筆，共 '+paged.total+' 筆':'共 0 筆';
  $('#loss-prev').disabled=page<=1;$('#loss-next').disabled=page>=paged.pages;
- $('#loss-table tbody').innerHTML=paged.rows.map(r=>`<tr data-category="${esc(r.category)}"><td data-label="藥品／編號"><span class="aligned-drug"><span class="aligned-drug-icon" aria-hidden="true"></span><span class="aligned-drug-text"><b>${esc(r.drug)}</b><div class="muted">${esc(r.code)}</div>${r.warning?`<div class="muted">${esc(r.warning)}</div>`:''}</span></span></td><td data-label="廠牌／類別">${esc(r.brand)}<div class="muted">${esc(r.category)}</div></td><td data-label="原表未拆封瓶數">${r.bottles===null?'待核對':fmt(r.bottles)+' 瓶'}</td><td data-label="當日已入帳耗損">${r.posted===null?esc(r.postedError||'待核對'):fmt(r.posted)+' 瓶'}</td><td data-label="當日累計耗損"><input aria-describedby="loss-qty-help" class="loss-qty" data-id="${r.id}" aria-label="${esc(r.code)} ${esc(r.drug)} 當日累計" type="number" min="0" step="1" max="1000000" inputmode="numeric" value="${esc(dayDraft.quantities.get(r.id)??'')}" placeholder="不修改"></td><td data-label="本次差額" data-delta="${r.id}"></td><td data-label="登錄後瓶數" data-after="${r.id}"></td><td data-label="原表"><a href="${sheetUrl(r)}" target="_blank" rel="noopener">查看 ↗</a></td></tr>`).join('')||'<tr><td colspan="8">沒有符合的品項</td></tr>';
+ $('#loss-table tbody').innerHTML=paged.rows.map(r=>`<tr data-category="${esc(r.category)}">
+  <td class="loss-product" data-label="藥品名稱／編號">
+   <div class="loss-item-name"><b>${esc(r.drug)}</b><span class="loss-code">${esc(r.code)}</span></div>
+   <small>${esc(r.brand)} · ${esc(r.category)}</small>${r.warning?`<small class="loss-warning">${esc(r.warning)}</small>`:''}
+  </td>
+  <td data-label="未拆封庫存">${r.bottles===null?'待核對':fmt(r.bottles)+' 瓶'}</td>
+  <td data-label="已入帳累計">${r.posted===null?esc(r.postedError||'待核對'):fmt(r.posted)+' 瓶'}</td>
+  <td class="loss-entry-cell" data-label="當日累計耗損"><input aria-describedby="loss-qty-help" class="loss-qty" data-id="${esc(r.id)}" aria-label="${esc(r.code)} ${esc(r.drug)} 當日累計" type="number" min="0" step="1" max="1000000" inputmode="numeric" value="${esc(dayDraft.quantities.get(r.id)??'')}" placeholder="不修改"></td>
+  <td class="loss-price-cell" data-label="單價（元／瓶）"><input class="loss-price" data-id="${esc(r.id)}" aria-label="${esc(r.code)} ${esc(r.drug)} 單價（元／瓶）" aria-describedby="loss-price-help loss-price-msg-${esc(r.id)}" type="text" inputmode="decimal" maxlength="18" value="${esc(lossPriceFor(r))}" placeholder="未填"><small class="loss-price-error" id="loss-price-msg-${esc(r.id)}" hidden></small></td>
+  <td data-label="本次差額" data-delta="${esc(r.id)}"></td><td data-label="登錄後瓶數" data-after="${esc(r.id)}"></td>
+  <td class="loss-source" data-label="原表"><a href="${sheetUrl(r)}" target="_blank" rel="noopener">查看 ↗</a></td>
+ </tr>`).join('')||'<tr><td colspan="8">沒有符合的品項</td></tr>';
  document.querySelectorAll('[data-sort]').forEach(b=>{b.parentElement.setAttribute('aria-sort',b.dataset.sort===sort?(direction==='asc'?'ascending':'descending'):'none');b.lastChild.nodeValue=b.lastChild.nodeValue.replace(/[↕↑↓]$/,b.dataset.sort===sort?(direction==='asc'?'↑':'↓'):'↕');});document.querySelectorAll('.loss-qty').forEach(i=>i.oninput=()=>{
   const id=i.dataset.id;
-  if(i.value===''){dayDraft.quantities.delete(id);dayDraft.rows.delete(id);}
+  if(i.value===''){dayDraft.quantities.delete(id);if(!dayDraft.prices.has(id))dayDraft.rows.delete(id);}
   else{dayDraft.quantities.set(id,i.value);dayDraft.rows.set(id,rowById.get(id));}
-  summary();
- });summary();quantitySteppers($('#loss-table'),'.loss-qty',{base:input=>rowById.get(input.dataset.id)?.posted??0});$('#loss-table').querySelectorAll('.loss-qty').forEach(input=>input.parentElement.querySelector('.quantity-clear').insertAdjacentHTML('beforebegin','<span class="quantity-unit">瓶</span>'));}
+  saveFormDraft();summary();
+ });
+ document.querySelectorAll('.loss-price').forEach(input=>{
+  showPriceError(input);
+  input.oninput=()=>{
+   const id=input.dataset.id,row=rowById.get(id);
+   if(!row)return;
+   dayDraft.prices.set(id,input.value);
+   dayDraft.rows.set(id,row);
+   showPriceError(input);saveFormDraft();summary();
+  };
+ });
+ summary();quantitySteppers($('#loss-table'),'.loss-qty',{base:input=>rowById.get(input.dataset.id)?.posted??0});$('#loss-table').querySelectorAll('.loss-qty').forEach(input=>input.parentElement.querySelector('.quantity-clear').insertAdjacentHTML('beforebegin','<span class="quantity-unit">瓶</span>'));}
  const refreshStatus=createRefreshStatus($('#loss-refresh'));
  let catalogScreen;
  const closeCatalogScreen=()=>{catalogScreen?.close();catalogScreen=undefined;};
@@ -111,7 +209,7 @@ export function mountLoss({esc,fmt,ask,message}){
    const nextById=new Map(items.map(row=>[row.id,row]));
    for(const [id,old] of dayDraft.rows){
     const next=nextById.get(id);
-    if(!next||next.code!==old.code||next.drug!==old.drug||next.name!==old.name)throw Error('品項位置變更，請先清除未送出數量再重新讀取');
+    if(!next||next.code!==old.code||next.drug!==old.drug||next.name!==old.name)throw Error('品項位置變更，請先清除未送出的數量與單價，再重新讀取');
    }
    sources=data.sources;rowById=nextById;completionBySheet=data.completion;cache.clear();
    for(const source of sources)cache.set(source.gid,items.filter(r=>r.name===source.name));
@@ -131,7 +229,7 @@ export function mountLoss({esc,fmt,ask,message}){
   date=next;page=1;reuseResultId='';dayDraft=draftFor(date);cache.clear();rowById.clear();completionBySheet=null;draw();
  }
  $('#loss-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;choose();}};$('#loss-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;choose();}};$('#loss-search').oninput=()=>{page=1;draw();};$('#loss-refresh').onclick=()=>{if(!loading)load({showDialog:true});};
- $('#loss-clear').onclick=()=>{dayDraft.quantities.clear();dayDraft.rows.clear();dayDraft.reason='';dayDraft.reasonKind='';draw();};
+ $('#loss-clear').onclick=()=>{dayDraft.quantities.clear();dayDraft.prices.clear();dayDraft.rows.clear();dayDraft.reason='';dayDraft.reasonKind='';saveFormDraft();draw();};
  $('#loss-date').onchange=()=>{
   const field=$('#loss-date'),next=field.value;
   if(!next||!field.validity.valid){field.value=date;message('請選擇有效的耗損日期',true);return;}
@@ -141,17 +239,41 @@ export function mountLoss({esc,fmt,ask,message}){
  $('#loss-page-size').onchange=e=>{pageSize=Number(e.target.value);page=1;draw();};
  const turnPage=step=>{page+=step;draw();$('#loss-table').scrollIntoView({block:'start',behavior:'auto'});};
  $('#loss-prev').onclick=()=>turnPage(-1);$('#loss-next').onclick=()=>turnPage(1);
- function submitLoss(complete){if(loading||loadFailed)return;try{const lines=[];for(const [id,v] of dayDraft.quantities){if(v==='')continue;const row=rowById.get(id);if(reuseResultId&&row&&!lossSheets(slips.get(reuseResultId)?.draft||{lines:[]}).includes(row.name))continue;if(row?.postedError)throw Error(row.drug+'：'+row.postedError);if(!row||row.warning?.includes('編號'))throw Error('請核對藥品編號');lines.push({row,total:Number(v)});}const corrections=lines.filter(({row,total})=>row.posted!=null && total<row.posted);
+ function submitLoss(complete){
+ if(loading||loadFailed)return;
+ try{
+  const lines=[];
+  const editingSlip=reuseResultId?slips.get(reuseResultId):null;
+  const editingSheets=editingSlip&&lossSheets(editingSlip.draft);
+  if(reuseResultId&&!editingSlip)throw Error('原草稿已變更，請重新核對');
+  for(const [id,value] of dayDraft.quantities){
+   if(value==='')continue;
+   const row=rowById.get(id);
+   if(editingSheets&&row&&!editingSheets.includes(row.name))continue;
+   if(row?.postedError)throw Error(row.drug+'：'+row.postedError);
+   if(!row||row.warning?.includes('編號'))throw Error('請核對藥品編號');
+   const priceError=lossPriceError(dayDraft.prices.get(id));
+   if(priceError)throw Error(row.drug+'（'+row.code+'）：'+priceError);
+   lines.push({row,total:Number(value)});
+  }
+  const corrections=lines.filter(({row,total})=>row.posted!=null&&total<row.posted);
  const proceed=async(reason='')=>{try{
-  const draft=lossDraft(lines,{date,actor:$('#loss-actor').value,reason,completionSheets:complete?[...new Set([selected.name,...lines.map(l=>l.row.name)])]:undefined});
+  const activeSheets=editingSlip
+   ? (editingSlip.draft.completionSheets??(editingSheets.includes(selected.name)?[selected.name]:[]))
+   : [selected.name];
+  const completionSheets=complete?[...new Set([...activeSheets,...lines.map(l=>l.row.name)])]:undefined;
+  const draft=lossDraft(lines,{date,actor:$('#loss-actor').value,reason,completionSheets});
+  const formPrices=lines.filter(({row})=>dayDraft.prices.has(row.id)).map(({row})=>({
+   sheet:row.name,code:row.code,name:row.drug,value:dayDraft.prices.get(row.id)
+  }));
   const editId=reuseResultId;
   const record=await withSlipLock(()=>{
    if(disposed)return;
    const prior=slips.list().find(r=>!r.verified&&r.id!==editId&&r.draft.date===draft.date&&lossSheets(r.draft).some(sheet=>lossSheets(draft).includes(sheet)));
    if(prior)throw Error('此日期與分類已有待處理耗損單，請開啟待處理清單。');
    const old=editId&&slips.get(editId);
-   if(editId&&(!old||old.verified||old.phase!=='draft'))throw Error('原草稿已變更，請重新核對');
-   const next={id:editId||'LOSS-'+crypto.randomUUID(),draft,verified:false,phase:'draft'};
+   if(editId&&(!old||old.verified||old.phase!=='draft'||JSON.stringify(old)!==editingSnapshot))throw Error('原草稿已變更，請重新核對');
+   const next={id:editId||'LOSS-'+crypto.randomUUID(),draft,verified:false,phase:'draft',...(formPrices.length?{formPrices}:{})};
    slips.save(next);return next;
   });
   if(disposed||!record)return;
@@ -159,12 +281,18 @@ export function mountLoss({esc,fmt,ask,message}){
  }catch(e){message(e.message,true);}};
  if(!corrections.length){proceed();return;}
  const items=corrections.map(({row,total})=>'<li>'+esc(row.name)+' · '+esc(row.drug)+'（'+esc(row.code)+'）　'+esc(row.posted)+' → '+esc(total)+' 瓶</li>').join('');
- const options=lossReasons.map(([id,label])=>'<option value="'+id+'">'+label+'</option>').join('');
- ask('<h3>每日耗損更正預覽</h3><p>'+esc(date)+' · 以下品項將調低當日累計</p><ul>'+items+'</ul><label>更正原因（必選）<select id="loss-reason-kind" required><option value="">請選擇更正原因</option>'+options+'</select></label><label>補充說明（選填）<textarea id="loss-reason" maxlength="490" rows="2"></textarea></label>',()=>{
- const label=lossReasons.find(([id])=>id===$('#loss-reason-kind').value)?.[1];
+ const options=reasonOptions(dayDraft.reasonKind);
+ ask('<h3>每日耗損更正預覽</h3><p>'+esc(date)+' · 以下品項將調低當日累計</p><ul>'+items+'</ul><label>更正原因（必選）<select id="loss-reason-kind" required><option value="">請選擇更正原因</option>'+options+'</select></label><label>補充說明（選填）<textarea id="loss-reason" maxlength="490" rows="2">'+esc(dayDraft.reason)+'</textarea></label>',()=>{
+ const kind=$('#loss-reason-kind').value;
+ const choice=lossReasons.find(([id])=>id===kind);
+ const label=choice?.[1];
  if(!label){message('請選擇更正原因',true);return;}
  const note=$('#loss-reason').value.trim();
- proceed(note?label+'：'+note:label);
+ dayDraft.reasonKind=kind;dayDraft.reason=note;
+ renderFormReason();saveFormDraft();summary();
+ let reason=label;
+ if(note)reason=note===choice[2]?note:label+'：'+note;
+ proceed(reason);
  },'繼續核對差額');
  }catch(e){message(e.message,true);}}
  $('#loss-submit-complete').onclick=()=>submitLoss(true);
@@ -178,10 +306,19 @@ export function mountLoss({esc,fmt,ask,message}){
   for(const {row,total} of entries){
    dayDraft.quantities.set(row.id,String(total));
    dayDraft.rows.set(row.id,row);
+   const price=record.formPrices?.find(p=>p.sheet===row.name&&p.code===row.code&&p.name===row.drug);
+   if(price&&!dayDraft.prices.has(row.id))dayDraft.prices.set(row.id,price.value);
   }
   $('#loss-actor').value=record.draft.actor;
-  dayDraft.reason=lossCorrectionReason(record.draft.reason);
-  dayDraft.reasonKind=lossReasons.find(([, ,text])=>text&&text===dayDraft.reason)?.[0]||(dayDraft.reason?'other':'');
+  const reason=lossCorrectionReason(record.draft.reason);
+  const choice=lossReasons.find(([,label,legacy])=>reason===label||reason.startsWith(label+'：')||(legacy&&reason===legacy));
+  dayDraft.reasonKind=choice?.[0]||(reason?'other':'');
+  dayDraft.reason=reason;
+  if(choice){
+   if(reason===choice[1])dayDraft.reason='';
+   else if(reason.startsWith(choice[1]+'：'))dayDraft.reason=reason.slice(choice[1].length+1);
+  }
+  saveFormDraft();
  }
  async function returnLossPreview(record){
   if(disposed)return;
@@ -227,7 +364,7 @@ export function mountLoss({esc,fmt,ask,message}){
    if(JSON.stringify(readResult())!==original){status('待登錄內容已變更，請重新核對');return;}
    selectDate(record.draft.date);$('#loss-date').value=date;await load();if(disposed||loadFailed||date!==record.draft.date)return;
    if(JSON.stringify(readResult())!==original){status('待登錄內容已變更，請重新核對');return;}
-   try{restoreSlipInputs(record);reuseResultId=record.id;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}
+   try{restoreSlipInputs(record);reuseResultId=record.id;editingSnapshot=original;draw();status('已載入原日期與累計量；修改後重新預覽，確認前不扣庫存。');}catch(e){status(e.message);}
   },'載入並修改');
  };
  const displayed=pending;
@@ -252,7 +389,7 @@ export function mountLoss({esc,fmt,ask,message}){
    return true;
   });
   if(disposed)return;
-  if(tracked){if(reuseResultId===record.id)reuseResultId='';clearSlipInputs(record);}
+  if(tracked&&reuseResultId===record.id){reuseResultId='';clearSlipInputs(record);}
   if(date===record.draft.date){dayDraft=draftFor(date);cache.clear();rowById.clear();}showPending();await load();},text=>{if(!disposed)message(text);},{beforeCommit,onReturn,reviewIntro:()=>draft.reason?'<p>更正原因：'+esc(draft.reason)+'</p>':''});
  ask('<p>將重新開啟這筆耗損的 Google 核對頁，日期與累計量保持不變，確認前不扣庫存。</p>',async()=>{try{await beforeCommit();}catch(e){status(e.message);return;}const form=document.createElement('form');form.method='POST';form.action=LOSS_ENDPOINT;form.target='_blank';const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(draft);form.append(input);document.body.append(form);form.submit();form.remove();message('已開啟 Google 核對頁，請於完成後查詢同步結果。');},'開啟 Google 核對頁',undefined,onReturn);
  }
@@ -263,5 +400,5 @@ export function mountLoss({esc,fmt,ask,message}){
  }
  window.addEventListener('storage',syncSlips);
  showPending();
- if(directEnabled()){const notes=$('#loss-submit-complete').parentElement.parentElement.querySelectorAll(':scope > p.muted');notes[0].textContent='在站內核對差額後按確認入帳。相同累計不重扣；雲端資料變更時需重新預覽。';notes[1].textContent='新增品項請先至藥品建帳；耗損存入獨立每日明細。若要將整個分類標記完成，請選「預覽並完成正常品項登錄」。';}const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>load();window.addEventListener('erp-synced',sync);load({showDialog:true}).finally(openSlips);return protectDraft(()=>{disposed=true;slipDialog?.close();closeCatalogScreen();stopWordAxis();completion.dispose();stopCatalogWatch();generation++;window.removeEventListener('erp-synced',sync);window.removeEventListener('storage',syncSlips);},()=>[...drafts.values()].some(d=>d.quantities.size>0||d.reason.trim()!==''||!!d.reasonKind));
+ if(directEnabled()){const notes=$('#loss-submit-complete').parentElement.parentElement.querySelectorAll(':scope > p.muted');notes[0].textContent='在站內核對差額後按確認入帳。相同累計不重扣；雲端資料變更時需重新預覽。';notes[1].textContent='新增品項請先至藥品建帳；耗損存入獨立每日明細。若要將整個分類標記完成，請選「預覽並完成正常品項登錄」。';}const stopCatalogWatch=watchSupplierCatalog(load);const sync=()=>load();window.addEventListener('erp-synced',sync);load({showDialog:true}).finally(openSlips);return protectDraft(()=>{disposed=true;slipDialog?.close();closeCatalogScreen();stopWordAxis();completion.dispose();stopCatalogWatch();generation++;window.removeEventListener('erp-synced',sync);window.removeEventListener('storage',syncSlips);},()=>[...drafts.values()].some(d=>d.quantities.size>0||d.prices.size>0||d.reason.trim()!==''||!!d.reasonKind),'本頁有尚未完成的耗損輸入，確定離開每日耗損？');
 }

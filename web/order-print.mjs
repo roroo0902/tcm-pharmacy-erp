@@ -83,7 +83,7 @@ export function bindOrderPrint(root,{autoMail=false,onCancelOrder,mergeIds:chose
   }catch(e){if(visible())draftStatus.textContent=e.message;loading.failure(e);}
   finally{if(mailVisit===visit)mail.disabled=false;}
  };
- const edit=async(output='pdf',continueMail=false,previousSelection=[])=>{if(!globalThis.google?.script?.run){openDelivery();status.textContent='訂單 '+id+'。請用藥庫的 Google 帳號開啟本筆已確認訂單，核對品項與瓶數。選擇寄送時，最後會請你確認收件人及附件。';panel.innerHTML=googleOrderEntryMarkup(id,continueMail?'mail':output,chosenMergeIds);return;}const mergeIds=chosenMergeIds??await chooseOrderOutput(id,orderRpc,previousSelection);if(mergeIds)openOrderPdfEditor({id,mergeIds,rpc:orderRpc,onMail:mailDraft,sendGate:mailSendGate,onBack:chosenMergeIds===null?()=>edit(output,continueMail,mergeIds):undefined,onCancelOrder,output,autoMail:continueMail});};button.onclick=()=>edit('print');box.querySelector('[data-pdf]').onclick=()=>edit();mail.onclick=()=>edit('pdf',true);if(autoMail)edit('pdf',true);
+ const edit=async(output='pdf',continueMail=false,previousSelection=[])=>{if(!globalThis.google?.script?.run){openDelivery();status.textContent='請用藥庫的 Google 帳號開啟本筆已確認訂單，核對品項與瓶數。選擇寄送時，最後會請你確認收件人及附件。';panel.innerHTML=googleOrderEntryMarkup(id,continueMail?'mail':output,chosenMergeIds);return;}const mergeIds=chosenMergeIds??await chooseOrderOutput(id,orderRpc,previousSelection);if(mergeIds)openOrderPdfEditor({id,mergeIds,rpc:orderRpc,onMail:mailDraft,sendGate:mailSendGate,onBack:chosenMergeIds===null?()=>edit(output,continueMail,mergeIds):undefined,onCancelOrder,output,autoMail:continueMail});};button.onclick=()=>edit('print');box.querySelector('[data-pdf]').onclick=()=>edit();mail.onclick=()=>edit('pdf',true);if(autoMail)edit('pdf',true);
  });
 }
 

@@ -37,6 +37,6 @@ test('general history marks exact QA code plus supplier and inherits reversal ma
  const map=new Map(entries.map(e=>[e.id,e.marked]));
  assert.deepEqual([map.get('ERP-exact'),map.get('ERP-real'),map.get('ERP-reversed')],[true,false,true]);
  assert.match(renderHistory(entries),/測試紀錄/);
- assert.match(renderHistory(entries),/ERP-exact/);
- assert.match(renderHistory(entries),/ERP-reversed/);
+ assert.match(renderHistory(entries),/對應原交易：訂貨登入-/);
+ assert.doesNotMatch(renderHistory(entries),/ERP-exact|ERP-reversed/);
 });

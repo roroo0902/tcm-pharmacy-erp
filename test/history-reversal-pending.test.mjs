@@ -1,3 +1,4 @@
+import {transactionLabel} from '../src/order-label.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
@@ -79,8 +80,8 @@ test('actual app positive button plus direct-review path checks pending immediat
    if(op==='commit'){assert.deepEqual(JSON.parse(raw),draft);assert.equal(token,'fixture-token');}
    ok(op==='preview'?{token:'fixture-token',lines}:{message:'mock readback',id:draft.id,lines});
   }};}};}}}};
-  const direct=new Function('globalThis','google','document','window','DIRECT','markCatalogWrite','beginProcessing','isProcessing','lossCompletionPreview',
-   sync+'\nreturn directReview;')({google},google,doc,{dispatchEvent(){}},{},()=>{},
+  const direct=new Function('transactionLabel','globalThis','google','document','window','DIRECT','markCatalogWrite','beginProcessing','isProcessing','lossCompletionPreview',
+   sync+'\nreturn directReview;')(transactionLabel,{google},google,doc,{dispatchEvent(){}},{},()=>{},
     ()=>({close(){},readback(){}}),()=>false,()=>'');
   const start=new Function('alive','actionStatus','localStorage','KEY','ask','directEnabled','directReview','cloudDraft','document','load','LOSS_ENDPOINT',
    src+'\nreturn beginHistoryReversal;')(true,actionStatus,localStorage,KEY,showAsk,()=>true,direct,cloudDraft,doc,async()=>{},'https://fixture.invalid/fallback');

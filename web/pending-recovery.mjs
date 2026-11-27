@@ -12,7 +12,7 @@ export async function lookupPostedTransaction(draft){
  if(!found)return null;
  const event=JSON.parse(found[1]);
  if(event.draft?.id!==draft.id||event.draft.action!==draft.action)throw Error('交易紀錄內容無法核對');
- return event;
+ return {...event,time:event.time||found[8]};
 }
 
 export async function recoverPendingTransaction({action,ask,status,isActive,onChange,onResolved,receiptRows,returnLabel,storageKey=KEY,onContinue,completionLabel,reviewIntro,reviewLabel}){
@@ -42,7 +42,7 @@ export async function recoverPendingTransaction({action,ask,status,isActive,onCh
  }
  const storeResult=completed=>{
   if(saved===localStorage.getItem(storageKey)){
-   localStorage.setItem(storageKey,JSON.stringify({...completed.draft,verified:true,...(receipt?{receiptEvent:completed}:{}),...(current.receiptInput?{receiptInput:current.receiptInput}:{})}));
+   localStorage.setItem(storageKey,JSON.stringify({...completed.draft,verified:true,...(receipt?{receiptEvent:completed}:{orderTime:completed.time}),...(current.receiptInput?{receiptInput:current.receiptInput}:{})}));
   }
  };
  if(event){

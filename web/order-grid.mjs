@@ -1,3 +1,4 @@
+import {orderLabel} from '../src/order-label.mjs';
 import {orderCancelFields,bindOrderCancelReason,unspecifiedCancelActor} from './order-cancel-reason.mjs';
 import {preserveLegacyRegistration} from './registration-pending.mjs';
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
@@ -138,8 +139,8 @@ export function mountOrderGrid({esc,fmt,ask}){
   localStorage.setItem(KEY,JSON.stringify(record));
   return true;
  };
- function completeOwnOrder(draft,submitted,input){
-  if(submitted==null||!savePendingIfCurrent(submitted,{...draft,verified:true})){
+ function completeOwnOrder(draft,submitted,input,time){
+  if(submitted==null||!savePendingIfCurrent(submitted,{...draft,verified:true,orderTime:time})){
    postedFormInputs.add(input);
    return false;
   }
@@ -203,6 +204,7 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(alive&&$('#og-recover-previous'))$('#og-recover-previous').disabled=false;
   }
  }
+ const checkedOrderTimes=new Set();
  function showPending(){const expected=localStorage.getItem(KEY);let p;try{p=JSON.parse(expected||'null');}catch{}
   if(p&&!p.verified&&['進貨','訂貨'].includes(p.action)){
    const count=Array.isArray(p.lines)?p.lines.length:0;
@@ -215,7 +217,14 @@ export function mountOrderGrid({esc,fmt,ask}){
   }
   const checkButton='<button type="button" id="og-check" class="secondary">重新確認同步結果</button>';
   const cancelButton='<button type="button" class="secondary" id="og-cancel-posted">刪除本筆訂單</button>';
-  const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;$('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+p.id)}</p></details>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id,cancelButton+checkButton):checkButton}`:'';if(!p)return;if(p.verified&&p.action==='訂貨'){
+  const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;
+  if(relevant&&p.verified&&!p.orderTime&&!checkedOrderTimes.has(p.id)){
+   checkedOrderTimes.add(p.id);
+   lookupPostedTransaction(cloudDraft(p)).then(event=>{
+    if(alive&&event?.time&&savePendingIfCurrent(expected,{...p,orderTime:event.time}))showPending();
+   }).catch(()=>{ /* The manual sync check remains available. */ });
+  }
+  $('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+(relevant?orderLabel(p.orderTime):p.id))}</p></details>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id,cancelButton+checkButton):checkButton}`:'';if(!p)return;if(p.verified&&p.action==='訂貨'){
    bindOrderPrint($('#og-pending'),{onCancelOrder:cancelEditorOrder});
    $('#og-cancel-posted').onclick=()=>cancelPostedOrder(p,expected);
   }$('#og-check').onclick=async()=>{
@@ -225,8 +234,8 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(!alive)return;
    if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
    if(!found)throw Error('未找到交易；請沿用同一編號核對');
-   const verified=JSON.parse(found[1]).draft;
-   if(!savePendingIfCurrent(expected,{...verified,verified:true})){showPending();status(pendingChanged);return;}
+   const event=JSON.parse(found[1]),verified=event.draft;
+   if(!savePendingIfCurrent(expected,{...verified,verified:true,orderTime:event.time||found[8]})){showPending();status(pendingChanged);return;}
    showPending();await load();status('已確認工作表中的操作結果。');
   }catch(e){status(e.message);}
  };}
@@ -242,13 +251,13 @@ export function mountOrderGrid({esc,fmt,ask}){
  function cancelPostedOrder(order,expected){
   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
   let readReason;
-  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(order.id)}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p>${orderCancelFields()}`,async()=>{
+  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(orderLabel(order.orderTime))}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p>${orderCancelFields()}`,async()=>{
    try{
     if(localStorage.getItem(KEY)!==expected)throw Error(pendingChanged);
     const draft=cloudDraft({...order,id:'ERP-'+crypto.randomUUID(),action:'取消訂貨',reverses:order.id,date:today(),actor:unspecifiedCancelActor,note:readReason()});
     let submitted;
-    await directReview(draft,ask,async()=>{
-     const owned=savePendingIfCurrent(submitted,{...draft,verified:true});
+    await directReview(draft,ask,async({time}={})=>{
+     const owned=savePendingIfCurrent(submitted,{...draft,verified:true,orderTime:time});
      if(alive){showPending();await load();if(!owned)status(pendingChanged);}
     },status,{beforeCommit:reviewed=>{
      if(!savePendingIfCurrent(expected,reviewed))throw Error(pendingChanged);
@@ -265,8 +274,8 @@ export function mountOrderGrid({esc,fmt,ask}){
  function reviewCombined(draft,saved,original,inputLines,ownsInput=true){
   const preview=openOrderPreview(saved);
   const input=orderFormFingerprint();let submitted,owned=false,caution='';
-  return directReview(draft,ask,async()=>{
-   owned=ownsInput?completeOwnOrder(draft,submitted,input):savePendingIfCurrent(submitted,{...draft,verified:true});
+  return directReview(draft,ask,async({time}={})=>{
+   owned=ownsInput?completeOwnOrder(draft,submitted,input,time):savePendingIfCurrent(submitted,{...draft,verified:true,orderTime:time});
    if(!owned)caution=postedOwnershipLost;
    if(alive){showPending();if(owned)await load();}
   },text=>status([text,caution].filter(Boolean).join('；')),{
@@ -295,7 +304,7 @@ export function mountOrderGrid({esc,fmt,ask}){
    const ownsInput=!prior.mergeOriginal||(prior.mergeInputLines===currentLines&&prior.date===$('#og-date').value&&prior.actor===$('#og-actor').value);
    if(event){
     const posted=cloudDraft(event.draft);
-    localStorage.setItem(KEY,JSON.stringify({...posted,verified:true}));
+    localStorage.setItem(KEY,JSON.stringify({...posted,verified:true,orderTime:event.time}));
     showPending();
     if(prior.mergeOriginal&&JSON.stringify(posted)===JSON.stringify(cloudDraft(prior))){
      // A lost response must not add the same input to the already-posted batch.
@@ -317,8 +326,8 @@ export function mountOrderGrid({esc,fmt,ask}){
  function send(d,outputMergeIds=null,reviewIntro){
   const saved=localStorage.getItem(KEY);let input=orderFormFingerprint(),submitted,owned=false,caution='';
   const preview=openOrderPreview(saved);
-  return directReview(d,(...args)=>{if(!submitted)recoveryStatus('');return ask(...args);},async()=>{
-   owned=completeOwnOrder(d,submitted,input);
+  return directReview(d,(...args)=>{if(!submitted)recoveryStatus('');return ask(...args);},async({time}={})=>{
+   owned=completeOwnOrder(d,submitted,input,time);
    if(!owned)caution=postedOwnershipLost;
    if(alive){showPending();if(owned)await load();}
   },text=>recoveryStatus([text,caution].filter(Boolean).join('；')),{
@@ -369,7 +378,7 @@ export function mountOrderGrid({esc,fmt,ask}){
   if(saved!==localStorage.getItem(KEY))throw Error('上一筆狀態已更新，請重新預覽。');
   recoveryStatus('');
   if(posted&&!prior.mergeOriginal){
-   prior={...prior,...posted.draft,verified:true,...(prior.action==='進貨'?{receiptEvent:posted}:{})};
+   prior={...prior,...posted.draft,verified:true,...(prior.action==='進貨'?{receiptEvent:posted}:{orderTime:posted.time})};
    localStorage.setItem(KEY,JSON.stringify(prior));
    showPending();
   }else{
@@ -400,8 +409,8 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(!alive)return;
    if(localStorage.getItem(KEY)!==expected){showPending();throw Error(pendingChanged);}
    if(!found)throw Error('尚未找到上一筆結果，已填訂量保留。請按「重新確認同步結果」查詢上一筆操作。');
-   const posted=JSON.parse(found[1]).draft;
-   if(!savePendingIfCurrent(expected,{...posted,verified:true})){showPending();throw Error(pendingChanged);}
+   const event=JSON.parse(found[1]),posted=event.draft;
+   if(!savePendingIfCurrent(expected,{...posted,verified:true,orderTime:event.time||found[8]})){showPending();throw Error(pendingChanged);}
    showPending();
  }finally{checking.close();busy=false;summary();}
  }

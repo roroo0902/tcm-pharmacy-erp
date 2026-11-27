@@ -1,3 +1,4 @@
+import {orderLabel} from '../src/order-label.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -12,7 +13,7 @@ function fixture(initial=old){
  const nodes=new Map(),writes=[],qty=new Map([['SYNTH','2']]),prices=new Map([['SYNTH','3']]),manualLines=[{name:'SYNTH manual'}];
  const $=id=>{if(!nodes.has(id))nodes.set(id,{value:id==='#og-date'?'2026-11-20':id==='#og-actor'?'QA':'',requestSubmit(){submissions++;}});return nodes.get(id);};
  const cloudDraft=({verified,receiptEvent,mergeOriginal,mergeInputLines,...d})=>d;
- const deps={KEY,localStorage:{getItem:()=>raw,setItem:(_k,value)=>{raw=value;writes.push(JSON.parse(value));}},$,quantities:qty,prices,manualLines,
+ const deps={orderLabel,KEY,localStorage:{getItem:()=>raw,setItem:(_k,value)=>{raw=value;writes.push(JSON.parse(value));}},$,quantities:qty,prices,manualLines,
   ask:(...args)=>{request.prompt=args;},draw(){},esc:String,orderPrintControl:()=>'',bindOrderPrint(){rendered++;},status:m=>{last=m;},load:async()=>{loads++;},busy:false,loadFailed:false,alive:true,
   isProcessing:()=>false,checkingPending:false,recoveringPrevious:false,rows:[],clearShortage:()=>{handoffs++;},
   directReview:(d,ask,success,status,opts)=>{request={d,ask,success,status,opts};},

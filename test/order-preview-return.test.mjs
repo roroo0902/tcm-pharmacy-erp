@@ -1,3 +1,4 @@
+import {orderLabel} from '../src/order-label.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -28,7 +29,7 @@ function orderForm(initial=null){
   return nodes.get(id);
  };
  const noop=()=>{};
- const deps={
+ const deps={orderLabel,
   $,rows,quantities,prices,manualLines:[],alive:true,busy:false,loadFailed:false,recoveringPrevious:false,
   orderKey,orderLines,cloudDraft,mergeUnpostedOrders,shortageLinks:()=>[],clearShortage:noop,
   directReview:(draft,ask,success,status,options)=>previews.push({draft,options,back:options.onReturn,

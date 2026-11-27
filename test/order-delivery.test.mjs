@@ -15,7 +15,7 @@ test('PDF draft protects original names and requires new review after order chan
 function mergedFixture(){const h=server(),previous={...draft,id:'ERP-previous1',date:'2026-11-16',lines:[{sheet:'科達單方',code:'A1',name:'藥<&',quantity:4},{sheet:'富田單方',code:'F1',name:'另一藥',quantity:1}]};h.events.unshift({draft:previous});const source=h.c.erpOrderPdfEditSource({id,mergeIds:[previous.id]});return {...h,previous,source};}
 test('merge is read-only, sums by sheet/code and retains quantities and source identity',()=>{const h=mergedFixture(),before=JSON.stringify(h.events),d=h.source;assert.equal(d.rows.find(x=>x.code==='A1').quantity,7);assert.equal(d.rows.find(x=>x.code==='A1').parts.previous,4);assert.equal(d.rows.find(x=>x.code==='A1').parts.current,3);assert.equal(d.rows.find(x=>x.code==='F1').quantity,1);const pdf=h.c.erpOrderPdfDownload({id,draft:d});assert.equal(pdf.files.length,3);assert.match(Buffer.from(pdf.files[0].base64,'base64').toString(),/更新版，取代前版，請勿重複下單/);assert.match(pdf.files[0].name,/合併更新版/);assert.equal(JSON.stringify(h.events),before);const single=h.c.erpOrderPdfEditSource(id);assert.equal(single.rows[0].quantity,3);assert.equal(single.rows.length,2);});
 test('merge rejects same order, future order, cancelled source and mismatched names',()=>{const h=mergedFixture();assert.throws(()=>h.c.erpOrderPdfEditSource({id,mergeIds:[id]}));assert.throws(()=>h.c.erpOrderPdfEditSource({id:h.previous.id,mergeIds:[id]}));h.events.push({draft:{id:'ERP-cancel11',action:'取消訂貨',reverses:h.previous.id}});assert.throws(()=>h.c.erpOrderPdfDownload({id,draft:h.source}),/取消/);const g=mergedFixture();g.previous.lines[0].name='不同名稱';assert.throws(()=>g.c.erpOrderPdfEditSource({id,mergeIds:[g.previous.id]}),/藥名不一致/);});
-test('merge mail previews use the selected sources, protect against cancellation and prevent duplicates',()=>{const h=mergedFixture(),before=JSON.stringify(h.events);const p=h.c.erpOrderPdfMailPreview({id,row:2,draft:h.source});assert.match(p.subject,/更新版/);assert.equal(h.sent.length,0);h.c.erpOrderPdfMailSend(p.token);assert.equal(h.sent[0].attachments.length,3);assert.match(h.sent[0].body,/ERP-previous1/);assert.equal(h.c.erpOrderPdfMailSend(p.token).duplicate,true);assert.equal(h.sent.length,1);assert.equal(JSON.stringify(h.events),before);const g=mergedFixture(),q=g.c.erpOrderPdfMailPreview({id,row:2,draft:g.source});g.events.push({draft:{id:'ERP-cancel12',action:'取消訂貨',reverses:g.previous.id}});assert.throws(()=>g.c.erpOrderPdfMailSend(q.token));assert.equal(g.sent.length,0);});
+test('merge mail previews use the selected sources, protect against cancellation and prevent duplicates',()=>{const h=mergedFixture(),before=JSON.stringify(h.events);const p=h.c.erpOrderPdfMailPreview({id,row:2,draft:h.source});assert.match(p.subject,/更新版/);assert.equal(h.sent.length,0);h.c.erpOrderPdfMailSend(p.token);assert.equal(h.sent[0].attachments.length,3);assert.match(h.sent[0].body,/來源訂單：訂貨登入-/);assert.ok(!h.sent[0].body.includes(h.previous.id));assert.equal(h.c.erpOrderPdfMailSend(p.token).duplicate,true);assert.equal(h.sent.length,1);assert.equal(JSON.stringify(h.events),before);const g=mergedFixture(),q=g.c.erpOrderPdfMailPreview({id,row:2,draft:g.source});g.events.push({draft:{id:'ERP-cancel12',action:'取消訂貨',reverses:g.previous.id}});assert.throws(()=>g.c.erpOrderPdfMailSend(q.token));assert.equal(g.sent.length,0);});
 test('prior candidates exclude cancelled and test orders and show legacy sent state',()=>{const h=mergedFixture();const old=h.c.erpOrderPdfMailPreview({id:h.previous.id,row:2,test:true});h.c.erpOrderPdfMailSend(old.token);h.props.delete('order-mail-sent-'+h.previous.id);const opts=h.c.erpOrderOutputOptions(id);assert.equal(opts.orders.length,1);assert.equal(opts.orders[0].sent,true);h.events.push({draft:{id:'ERP-cancel13',action:'取消訂貨',reverses:h.previous.id}});assert.equal(h.c.erpOrderOutputOptions(id).orders.length,0);});
 
 test('followup status is read-only and distinguishes unsent, sent and uncertain',()=>{
@@ -107,4 +107,21 @@ for(let round=1;round<=3;round++)test(`unposted merge round ${round}: union, sam
  assert.equal(merged.lines.find(x=>x.sheet==='科達單方').quantity,round*2+1);
  assert.equal(merged.lines.reduce((n,x)=>n+x.quantity,0),round*2+10);
  assert.equal(JSON.stringify([a,b]),before);
+});
+
+test('existing and merged orders show each original Taipei timestamp through selection, PDF and mail',()=>{
+ const h=mergedFixture();
+ h.events[0].time='2026-11-25T17:03:05.000Z';
+ h.events[1].time='2026-11-27T08:09:10.000Z';
+ const previous='訂貨登入-2026-11-26 01:03:05',current='訂貨登入-2026-11-27 16:09:10';
+ const option=h.c.erpOrderOutputOptions(id).orders[0];
+ assert.equal(option.id,h.previous.id);
+ assert.equal(option.time,h.events[0].time);
+ const pdf=h.c.erpOrderPdfDownload({id,draft:h.source}).files[0];
+ const html=Buffer.from(pdf.base64,'base64').toString();
+ for(const label of [previous,current])assert.ok(html.includes(label));
+ assert.ok(!html.includes(id)&&!html.includes(h.previous.id));
+ const preview=h.c.erpOrderPdfMailPreview({id,row:2,draft:h.source});
+ h.c.erpOrderPdfMailSend(preview.token);
+ for(const label of [previous,current])assert.ok(h.sent[0].body.includes(label));
 });

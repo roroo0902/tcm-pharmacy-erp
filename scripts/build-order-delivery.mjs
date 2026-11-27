@@ -1,3 +1,4 @@
 import {readFile,writeFile} from 'node:fs/promises';
-const source=(await readFile('src/order-pdf.mjs','utf8')).replaceAll('export function ','function ').replaceAll('orderPdfName(','orderPdfName_(').replaceAll('orderPdfHtml(','orderPdfHtml_(').replaceAll('orderMailRoster(','orderMailRoster_(');
+const labels=(await readFile('src/order-label.mjs','utf8')).replaceAll('export function ','function ');
+const source=(await readFile('src/order-pdf.mjs','utf8')).replaceAll('export function ','function ').replace("import {orderLabel} from './order-label.mjs';",()=>labels).replaceAll('orderPdfName(','orderPdfName_(').replaceAll('orderPdfHtml(','orderPdfHtml_(').replaceAll('orderMailRoster(','orderMailRoster_(');
 await writeFile('gas/cloud/OrderDelivery.gs',source+'\n'+(await readFile('src/order-pdf-draft.mjs','utf8')).replaceAll('export function ','function ').replaceAll('orderPdfSeed(','orderPdfSeed_(').replaceAll('reviseOrderPdf(','reviseOrderPdf_(').replaceAll('mergeOrderPdfPlans(','mergeOrderPdfPlans_(')+'\n'+await readFile('gas/cloud/order-delivery-adapter.gs','utf8'));

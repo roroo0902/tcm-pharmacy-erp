@@ -1,3 +1,5 @@
+import {lossDialogTheme} from './loss-dialog-theme.mjs';
+
 const prefix='tcm-loss-slip-v1:';
 export const lossSheets=draft=>[...new Set([...draft.lines.map(line=>line.sheet),...(draft.completionSheets||[])])];
 export function lossSlips(storage,legacyKey){
@@ -66,21 +68,21 @@ const slipStyle=`<style>
 #loss-slips li strong{white-space:nowrap}
 #loss-slips footer{border-top:1px solid #c4aa72;padding-top:12px}
 #loss-slips button{border:2px solid #caa252;border-radius:3px;box-shadow:0 3px 0 #805b28}
-</style>`;
+${lossDialogTheme}</style>`;
 
 export function showLossSlips({records,esc,check,remove}){
  const dialog=document.createElement('dialog');
  dialog.id='loss-slips';
  dialog.setAttribute('aria-labelledby','slip-heading');
  let selected=0;
- const sheetLabel=sheet=>esc(sheet.replace(/(.+?)(單方|複方)$/,'$1｜$2'));
+ const sheetLabel=sheet=>esc(sheet.replace(/(.+?)(單方|複方|成方|膠囊|藥錠)$/,'$1｜$2'));
  function groups(draft,lines){
   return lossSheets(draft).map(sheet=>{
    const items=lines.filter(line=>line.sheet===sheet);
    const completionOnly=!draft.lines.some(line=>line.sheet===sheet);
    if(!items.length&&!completionOnly)return '';
    return '<div class="slip-group">'+(lossSheets(draft).length>1?'<b>'+sheetLabel(sheet)+'</b>':'')+
-    (completionOnly?' · 正常品項完成登錄':'<ul>'+items.map(l=>'<li><span>• '+esc(l.name)+(l.code?'（'+esc(l.code)+'）':'')+'</span><strong>累計 '+esc(l.total)+' 瓶</strong></li>').join('')+'</ul>')+'</div>';
+    (completionOnly?' · 正常品項完成登錄':'<ul>'+items.map(l=>'<li><span>• '+esc(l.name)+(l.code?'（'+esc(l.code)+'）':'')+'</span><strong>當日累計 '+esc(l.total)+' 瓶</strong></li>').join('')+'</ul>')+'</div>';
   }).join('');
  }
  function card(record,i){
@@ -92,15 +94,27 @@ export function showLossSlips({records,esc,check,remove}){
   return '<article data-i="'+i+'" class="'+(i===selected?'selected':'')+'"><div class="slip-meta"><div>'+label+'<span class="slip-date">'+date+'</span></div><small>'+(record.phase==='draft'?'🪶 未送出草稿':'⌛ 入帳待核對')+'</small></div>'+
    groups(d,more?d.lines.slice(0,3):d.lines)+(more?'<details><summary>展開全部 '+d.lines.length+' 項</summary>'+groups(d,d.lines.slice(3))+'</details>':'')+'</article>';
  }
- dialog.innerHTML=slipStyle+'<header><h2 id="slip-heading"><img src="./web/assets/loss-ledger.png" alt="">待處理耗損單</h2><span>共 '+records.length+' 筆</span></header><div class="slip-list">'+
-  records.map(card).join('')+'</div><p role="status"></p><p id="slip-remove-help">移除只會清除本機待處理紀錄。已送出的耗損仍可能入帳。</p><footer>'+
-  '<button type="button" data-check>查詢同步結果</button><button type="button" data-delete aria-describedby="slip-remove-help">移除選取的耗損單</button><button type="button" data-later>稍後處理</button></footer>';
+ function instruction({draft,phase}){
+  if(phase==='draft')return '這筆是尚未送出的草稿，已保留在本機。';
+  const date=draft.date.slice(5).replace('-','/'),lines=draft.lines;
+  const target=lines.length===1?'這個品項在 Google 工作表的 '+date+' 累計耗損是否為 '+lines[0].total+' 瓶':
+   lines.length?'這 '+lines.length+' 個品項逐項填寫的數量，是否與 Google 工作表的 '+date+' 累計耗損一致':
+   'Google 工作表的 '+date+' 正常品項完成狀態';
+  return '核對'+target+'。只查詢，不會再次扣庫存。';
+ }
+ dialog.innerHTML=slipStyle+'<header><h2 id="slip-heading"><img src="./web/assets/loss-ledger.png" alt="">有 '+records.length+' 筆耗損需要核對</h2></header><div class="slip-list">'+
+  records.map(card).join('')+'</div><p role="status"></p><footer>'+
+  '<button type="button" data-check><img src="./web/assets/loss-lookup.png" alt="">核對當日耗損</button>'+
+  '<button type="button" data-later><img src="./web/assets/loss-keep.png" alt="">保留，稍後核對</button>'+
+  '<button type="button" data-delete aria-describedby="slip-remove-help"><img src="./web/assets/loss-remove.png" alt="">移除本機紀錄</button></footer>'+
+  '<p id="slip-remove-help">移除只會清除本機待處理紀錄，無法撤回已送出的耗損。</p>';
  const find=s=>dialog.querySelector(s);
+ find('[role=status]').textContent=instruction(records[selected]);
  function select(i){
   selected=i;
   for(const el of dialog.querySelectorAll('article'))el.classList.toggle('selected',Number(el.dataset.i)===i);
   dialog.querySelectorAll('input')[i].checked=true;
-  find('[role=status]').textContent='';
+  find('[role=status]').textContent=instruction(records[i]);
  }
  for(const el of dialog.querySelectorAll('article')){
   el.onclick=()=>select(Number(el.dataset.i));

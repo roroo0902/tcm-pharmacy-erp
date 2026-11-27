@@ -6,6 +6,23 @@ export const safePage=value=>pages.has(value)?value:'overview';
 export function googleEntryUrl(hash=''){
  const url=new URL(LOSS_ENDPOINT);url.searchParams.set('page',safePage(hash.replace(/^#/,'')));return url.href;
 }
+const isOrderId=value=>typeof value==='string'&&/^ERP-[a-zA-Z0-9-]{8,80}$/.test(value);
+export function orderEntryRequest(params={}){
+ const {page,orderId:id,output,previous}=params;
+ if(page!=='history'||!isOrderId(id)||!['print','pdf','mail'].includes(output))return null;
+ if(previous!=null&&previous!=='single'&&(!isOrderId(previous)||previous===id))return null;
+ return {id,output,mergeIds:previous==null?null:previous==='single'?[]:[previous]};
+}
+export function orderEntryUrl(id,output,mergeIds){
+ const url=new URL(googleEntryUrl('#history'));
+ const previous=Array.isArray(mergeIds)?mergeIds[0]||'single':undefined;
+ if(orderEntryRequest({page:'history',orderId:id,output,previous})){
+  url.searchParams.set('orderId',id);
+  url.searchParams.set('output',output);
+  if(previous)url.searchParams.set('previous',previous);
+ }
+ return url.href;
+}
 export function entryPreference(storage,remember){
  try{
   if(remember===true)storage.setItem(ENTRY_KEY,'google');
@@ -27,7 +44,7 @@ export function restoreGooglePage(google,location){
    if(settled)return;settled=true;
    clearTimeout(timer);
    if(info?.parameter?.page)location.hash=safePage(info.parameter.page);
-   resolve();
+   resolve(orderEntryRequest(info?.parameter));
   });
  });
 }

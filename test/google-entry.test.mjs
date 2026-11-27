@@ -43,3 +43,25 @@ test('remembered GitHub visit opens its selected Google page immediately and kee
   assert.equal(opened.length,1);
  }finally{keys.forEach((k,i)=>saved[i]?Object.defineProperty(globalThis,k,saved[i]):Reflect.deleteProperty(globalThis,k));}
 });
+
+test('authenticated order output keeps the confirmed ID, action and merge choice through the Google entry',async()=>{
+ const {orderEntryUrl}=await import('../web/google-entry.mjs');
+ const id='ERP-01234567-aaaa',prior='ERP-87654321-bbbb';
+ for(const output of ['mail','print','pdf']){
+  for(const mergeIds of [null,[],[prior]]){
+   const url=new URL(orderEntryUrl(id,output,mergeIds));
+   assert.equal(url.origin,'https://script.google.com');
+   const google={script:{run:{},url:{getLocation:fn=>fn({parameter:Object.fromEntries(url.searchParams)})}}};
+   const loc={hash:''};
+   assert.deepEqual(await restoreGooglePage(google,loc),{id,output,mergeIds});
+   assert.equal(loc.hash,'history');
+  }
+ }
+});
+test('a malformed or non-review handoff cannot start an order action',async()=>{
+ const {orderEntryRequest}=await import('../web/google-entry.mjs');
+ const valid={page:'history',orderId:'ERP-01234567',output:'mail'};
+ for(const bad of [{page:'loss'},{orderId:''},{output:'send'},{previous:'ERP-01234567'},{previous:'bad'}]){
+  assert.equal(orderEntryRequest({...valid,...bad}),null);
+ }
+});

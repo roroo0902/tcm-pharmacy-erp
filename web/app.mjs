@@ -1,3 +1,4 @@
+import {resumeOrderOutput} from './order-print.mjs';
 import {mountOrderBackup} from './order-backup.mjs';
 import {restoreNavigationIcons} from './navigation-icons.mjs';
 import {mountReleasePolish} from './release-polish.mjs?v=loss20261126';
@@ -72,6 +73,6 @@ function showAsk(html,action,label='確認入帳',cancelLabel='返回修改',onR
 }
 $('#commit').onclick=async()=>{const form=$('#confirm form');if(form&&!form.reportValidity())return;const action=pending;pending=null;$('#confirm').close();if(action)await action();};
 window.addEventListener('hashchange',()=>{if(ready){if(isProcessing()){history.replaceState(null,'',location.pathname+location.search+renderedHash);return;}if(!allowLeave(cloudCleanup,window.confirm.bind(window))){history.replaceState(null,'',location.pathname+location.search+renderedHash);return;}message('');render();}});window.addEventListener('beforeunload',e=>{if(cloudCleanup.hasUnsavedChanges?.()){e.preventDefault();e.returnValue='';}});window.addEventListener('storage',e=>{if(e.key===KEY&&ready&&!isProcessing()&&!cloudCleanup.hasUnsavedChanges?.()){try{read();render();message('已載入其他分頁的最新資料');}catch(err){message(err.message,true);}}});
-async function start(){mountReleasePolish();await restoreGooglePage(globalThis.google,location);setupDirect();mountGoogleEntry();installStaffSelectors();const loaded=loadLegacy(()=>localStorage,KEY);data=loaded.data;ledger=loaded.ledger;ready=true;render();if(loaded.error)message('舊本機資料無法讀取，已保留原資料；雲端功能仍可使用。請由備份頁保留原始資料後再處理。',true);}
+async function start(){mountReleasePolish();const orderRequest=await restoreGooglePage(globalThis.google,location);setupDirect();mountGoogleEntry();installStaffSelectors();const loaded=loadLegacy(()=>localStorage,KEY);data=loaded.data;ledger=loaded.ledger;ready=true;render();if(orderRequest)resumeOrderOutput(orderRequest);if(loaded.error)message('舊本機資料無法讀取，已保留原資料；雲端功能仍可使用。請由備份頁保留原始資料後再處理。',true);}
 start().catch(e=>message(e.message,true));
 

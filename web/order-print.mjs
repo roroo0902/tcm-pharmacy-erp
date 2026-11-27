@@ -1,4 +1,4 @@
-import {googleEntryUrl} from './google-entry.mjs';
+import {orderEntryUrl} from './google-entry.mjs';
 import {openMailProgress,openMailLoading} from './mail-progress.mjs';
 import {createMailSendGate} from './mail-send-gate.mjs';
 const mailSendGate=createMailSendGate();
@@ -6,7 +6,10 @@ import {chooseOrderOutput} from './order-output-choice.mjs';
 import {openOrderPdfEditor} from './order-pdf-editor.mjs';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 export const orderPrintControl=(id,leadingButtons='')=>`<div data-order-print="${esc(id)}" style="min-width:0;overflow-wrap:anywhere"><div style="display:flex;gap:8px;flex-wrap:wrap">${leadingButtons}<button type="button" class="secondary" data-print>產生訂藥列印版</button><button type="button" class="secondary" data-pdf>編輯／下載訂藥 PDF</button><button type="button" class="secondary" data-mail>選擇員工寄送 PDF</button></div><p role="status" style="white-space:normal;overflow-wrap:anywhere">可單獨輸出本筆或合併先前已確認訂單；不會重送訂貨或異動庫存。</p><div data-pdf-files></div><div data-mail-panel></div></div>`;
-export function googleOrderEntryMarkup(){return '<a class="button" href="'+esc(googleEntryUrl("#history"))+'" target="_blank" rel="noopener">開啟 Google 正式入口（交易紀錄）</a>';}
+export function googleOrderEntryMarkup(id,output,mergeIds){
+ const label={mail:'選擇收件員工並寄送訂貨單',pdf:'編輯與下載本筆訂貨單',print:'產生本筆訂貨單列印版'}[output]||'查看交易紀錄';
+ return '<a class="button" href="'+esc(orderEntryUrl(id,output,mergeIds))+'" target="_blank" rel="noopener noreferrer">前往 Google '+label+'</a>';
+}
 export const orderRpc=(method,arg)=>new Promise((resolve,reject)=>{if(!globalThis.google?.script?.run)return reject(Error('請由 Google 正式入口使用此功能'));google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(Error(e.message||'作業未完成，請核對結果')))[method](arg);});
 export function bindOrderPrint(root,{autoMail=false,onCancelOrder,mergeIds:chosenMergeIds=null}={}){
  if(!root)return;root.querySelectorAll('[data-order-print]').forEach(box=>{
@@ -80,9 +83,15 @@ export function bindOrderPrint(root,{autoMail=false,onCancelOrder,mergeIds:chose
   }catch(e){if(visible())draftStatus.textContent=e.message;loading.failure(e);}
   finally{if(mailVisit===visit)mail.disabled=false;}
  };
- const edit=async(output='pdf',continueMail=false)=>{if(!globalThis.google?.script?.run){openDelivery();status.textContent='PDF 與寄送須在 Google 正式入口核對。切換不會寄信，未送出的草稿不會自動搬移。';panel.innerHTML=googleOrderEntryMarkup();return;}const mergeIds=chosenMergeIds??await chooseOrderOutput(id,orderRpc);if(mergeIds)openOrderPdfEditor({id,mergeIds,rpc:orderRpc,onMail:mailDraft,onCancelOrder,output,autoMail:continueMail});};button.onclick=()=>edit('print');box.querySelector('[data-pdf]').onclick=()=>edit();mail.onclick=()=>edit('pdf',true);if(autoMail)edit('pdf',true);
+ const edit=async(output='pdf',continueMail=false)=>{if(!globalThis.google?.script?.run){openDelivery();status.textContent='訂單 '+id+'。請用藥庫的 Google 帳號開啟本筆已確認訂單，核對品項與瓶數。選擇寄送時，最後會請你確認收件人及附件。';panel.innerHTML=googleOrderEntryMarkup(id,continueMail?'mail':output,chosenMergeIds);return;}const mergeIds=chosenMergeIds??await chooseOrderOutput(id,orderRpc);if(mergeIds)openOrderPdfEditor({id,mergeIds,rpc:orderRpc,onMail:mailDraft,onCancelOrder,output,autoMail:continueMail});};button.onclick=()=>edit('print');box.querySelector('[data-pdf]').onclick=()=>edit();mail.onclick=()=>edit('pdf',true);if(autoMail)edit('pdf',true);
  });
 }
 
 
+export function resumeOrderOutput({id,output,mergeIds}){
+ const root=document.createElement('div');
+ root.innerHTML=orderPrintControl(id);
+ bindOrderPrint(root,{mergeIds});
+ root.querySelector('[data-'+output+']').click();
+}
 export function openExistingOrderMail(id,onCancelOrder){const root=document.createElement("div");root.innerHTML=orderPrintControl(id);bindOrderPrint(root,{autoMail:true,mergeIds:[],onCancelOrder});}

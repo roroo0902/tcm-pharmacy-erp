@@ -1,3 +1,4 @@
+import {orderCancelFields,bindOrderCancelReason} from './order-cancel-reason.mjs';
 import {registrationKey,preserveLegacyRegistration} from './registration-pending.mjs';
 import {bindOrderPrint} from './order-print.mjs';
 import {exportHistory} from './history-export.mjs?v=release20261120r1';
@@ -71,10 +72,12 @@ export function mountCloudHistory({esc,ask}){
    }
    status('');
   }catch(e){status(e.message);return;}
-  ask((event.draft.action==='訂貨'?'<h3>刪除本筆訂單</h3><p>訂單編號：'+esc(event.draft.id)+'</p>':'')+'<label>經手人<select id="cloud-reverse-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label>原因<input id="cloud-reverse-note" required></label>',async()=>{
+  const isOrder=event.draft.action==='訂貨';
+  let readReason;
+  ask((isOrder?'<h3>刪除本筆訂單</h3><p>訂單編號：'+esc(event.draft.id)+'</p>':'')+(isOrder?orderCancelFields('cloud-reverse-actor'):'<label>經手人<select id="cloud-reverse-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label>原因<input id="cloud-reverse-note" required></label>'),async()=>{
    try{
     ensureSaved(saved);
-    const d=cloudDraft({...event.draft,id:'ERP-'+crypto.randomUUID(),action:event.draft.action==='訂貨'?'取消訂貨':'沖銷',reverses:event.draft.id,date:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}),actor:document.querySelector('#cloud-reverse-actor').value,note:document.querySelector('#cloud-reverse-note').value});
+    const d=cloudDraft({...event.draft,id:'ERP-'+crypto.randomUUID(),action:event.draft.action==='訂貨'?'取消訂貨':'沖銷',reverses:event.draft.id,date:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}),actor:document.querySelector('#cloud-reverse-actor').value,note:isOrder?readReason():document.querySelector('#cloud-reverse-note').value});
     let pendingRaw;
     const persist=reviewed=>{
      ensureSaved(saved);
@@ -91,6 +94,7 @@ export function mountCloudHistory({esc,ask}){
     f.append(i);document.body.append(f);try{persist(d);f.submit();}finally{f.remove();}
    }catch(e){status(e.message);}
   },directEnabled()?'預覽雲端異動':'送往 Google 確認');
+  if(isOrder)readReason=bindOrderCancelReason();
  }
  const readFilters=()=>({type:c.querySelector('#history-type').value,test:showTests?'測試':'非測試',from:c.querySelector('#history-from').value,to:c.querySelector('#history-to').value,drug:c.querySelector('#history-drug').value,actor:c.querySelector('#history-actor').value});
  async function load(){const request=++loadGeneration;historyLoading=true;c.querySelector('#history-export').disabled=true;c.querySelector('#history-export-status').textContent='正在讀取紀錄，完成後即可匯出。';const out=c.querySelector('#history-list');out.textContent='讀取中…';const sources=[{id:SHEET_ID,gid:904291001,title:'建檔／進貨'},{id:ORDER_SHEET,gid:904291002,title:'訂貨'},{id:SHEET_ID,gid:918000103,title:'耗損'}];const result=await Promise.all(sources.map(async s=>{try{const r=directEnabled()?await directLog(s.title==='訂貨'?'orders':s.title==='耗損'?'loss':'inventory'):await fetch(`https://docs.google.com/spreadsheets/d/${s.id}/export?format=csv&gid=${s.gid}&range=A1:N5000`,{cache:'no-store',credentials:'omit',signal:abort.signal});if(!r.ok||!r.headers.get('content-type')?.includes('text/csv'))throw Error('尚未建立紀錄或讀取失敗');const rows=csvRows(await r.text());return {s,rows:rows.slice(1)};}catch(e){return {s,error:e.message};}}));if(!alive||request!==loadGeneration)return;historyLoading=false;const entries=historyEntries(result),incomplete=result.some(x=>x.error);c.querySelector('#history-errors').innerHTML=result.filter(x=>x.error).map(x=>'<p>'+esc(x.s.title)+'：'+esc(x.error)+'；此來源尚未完整讀取。</p>').join('');

@@ -1,3 +1,4 @@
+import {orderCancelFields,bindOrderCancelReason} from './order-cancel-reason.mjs';
 import {preserveLegacyRegistration} from './registration-pending.mjs';
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
 import {chooseOrderFollowup,orderMergeTable} from './order-followup.mjs';
@@ -240,10 +241,11 @@ export function mountOrderGrid({esc,fmt,ask}){
  }
  function cancelPostedOrder(order,expected){
   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
-  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(order.id)}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p><label>經手人<select id="og-cancel-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label><label>取消原因<input id="og-cancel-reason" required></label>`,async()=>{
+  let readReason;
+  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(order.id)}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p>${orderCancelFields('og-cancel-actor')}`,async()=>{
    try{
     if(localStorage.getItem(KEY)!==expected)throw Error(pendingChanged);
-    const draft=cloudDraft({...order,id:'ERP-'+crypto.randomUUID(),action:'取消訂貨',reverses:order.id,date:today(),actor:document.querySelector('#og-cancel-actor').value,note:document.querySelector('#og-cancel-reason').value});
+    const draft=cloudDraft({...order,id:'ERP-'+crypto.randomUUID(),action:'取消訂貨',reverses:order.id,date:today(),actor:document.querySelector('#og-cancel-actor').value,note:readReason()});
     let submitted;
     await directReview(draft,ask,async()=>{
      const owned=savePendingIfCurrent(submitted,{...draft,verified:true});
@@ -255,6 +257,7 @@ export function mountOrderGrid({esc,fmt,ask}){
     }});
    }catch(e){status(e.message);}
   },'下一步：核對取消內容');
+  readReason=bindOrderCancelReason();
  }
  function currentDraft(id){
   return cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id,action:'訂貨',date:$('#og-date').value,actor:$('#og-actor').value,note:'',lines:allLines(),shortageLinks:shortageLinks('order',orderLines(rows,quantities,prices))});

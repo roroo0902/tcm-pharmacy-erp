@@ -35,7 +35,8 @@ const tick=()=>new Promise(setImmediate);
 test('hiding a verified order only dismisses that result',()=>{
  const f=fixture();f.api.showPending();
  assert.match(f.$('#og-pending').innerHTML,/隱藏此提示/);
- assert.doesNotMatch(f.$('#og-pending').innerHTML,/og-check/);
+ assert.deepEqual([...f.$('#og-pending').innerHTML.matchAll(/<button[^>]*>([^<]*)/g)].map(match=>match[1]),['隱藏此提示']);
+ assert.doesNotMatch(f.$('#og-pending').innerHTML,/data-order-print|og-cancel-posted|og-check/);
  f.$('#og-hide').onclick();
  assert.equal(f.$('#og-pending').innerHTML,'');
  assert.deepEqual(f.raw(),old);
@@ -65,7 +66,7 @@ test('both normal and combined orders apply verified success only to the exact r
  for(const mode of ['normal','merge']){
   for(const scenario of ['owned','before','after','same-id']){
    const f=fixture();
-   if(mode==='normal')f.api.send(incoming);
+   if(mode==='normal')f.api.send(incoming,[old.id]);
    else f.api.reviewCombined(incoming,JSON.stringify(old),old,'[]');
    const req=f.request();
    if(scenario==='before'){
@@ -79,10 +80,10 @@ test('both normal and combined orders apply verified success only to the exact r
    if(scenario==='owned'){
     assert.equal(f.raw().id,incoming.id);assert.equal(f.raw().verified,true);
     assert.equal(f.writes.length,2);assert.equal(f.statistics().handoffs,1);assert.equal(f.qty.size,0);
-    assert.equal(req.opts.autoMail(),true);continue;
+    assert.deepEqual(req.opts.historyMergeIds?.(),mode==='normal'?[old.id]:undefined);continue;
    }
    assert.deepEqual(f.raw(),next);assert.equal(f.writes.length,1);assert.equal(f.statistics().handoffs,0);
-   assert.equal(f.qty.size,1);assert.equal(f.prices.size,1);assert.equal(req.opts.autoMail(),false);
+   assert.equal(f.qty.size,1);assert.equal(f.prices.size,1);assert.equal(req.opts.historyMergeIds?.()??null,null);
    assert.match(f.$('#og-recovery-status').textContent+' '+f.statistics().last,/已同步（替身）.*勿重複送出/);
    await f.click();assert.equal(f.request(),req);assert.equal(f.writes.length,1);
    assert.match(f.$('#og-recovery-status').textContent,/剛完成的訂貨／|剛完成的訂貨，請核對/);

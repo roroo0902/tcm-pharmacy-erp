@@ -27,6 +27,7 @@ import {orderKey,orderPrice,orderLines,sortOrderGrid} from './order-grid-data.mj
 import {quantitySteppers} from './quantity-stepper.mjs';
 import {today} from './store.mjs';
 const KEY='tcm-cloud-pending-v1';
+const HIDDEN_RESULT='tcm-order-hidden-result-v1';
 const columns=[['code','藥品／編號'],['brandCategory','廠牌／類別'],['bottles','未拆封瓶數'],['periodLoss','期間耗損量'],['quantity','本次確認訂量'],['price','單價（元／瓶）'],['amount','訂貨小計（元）'],['updated','原表更新欄']];
 export function mountOrderGrid({esc,fmt,ask}){
  preserveLegacyRegistration(localStorage);
@@ -215,19 +216,28 @@ export function mountOrderGrid({esc,fmt,ask}){
    };
    return;
   }
+  if(p?.verified&&p.id===localStorage.getItem(HIDDEN_RESULT)){
+   $('#og-pending').innerHTML='';return;
+  }
+  const hideButton='<button type="button" id="og-hide" class="secondary">隱藏此提示</button>';
   const checkButton='<button type="button" id="og-check" class="secondary">重新確認同步結果</button>';
   const cancelButton='<button type="button" class="secondary" id="og-cancel-posted">刪除本筆訂單</button>';
   const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;
   if(relevant&&p.verified&&!p.orderTime&&!checkedOrderTimes.has(p.id)){
    checkedOrderTimes.add(p.id);
-   lookupPostedTransaction(cloudDraft(p)).then(event=>{
+   Promise.resolve().then(()=>lookupPostedTransaction(cloudDraft(p))).then(event=>{
     if(alive&&event?.time&&savePendingIfCurrent(expected,{...p,orderTime:event.time}))showPending();
-   }).catch(()=>{ /* The manual sync check remains available. */ });
+   }).catch(()=>{ /* Keep the saved result visible when its timestamp cannot be recovered. */ });
   }
-  $('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+(relevant?orderLabel(p.orderTime):p.id))}</p></details>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id,cancelButton+checkButton):checkButton}`:'';if(!p)return;if(p.verified&&p.action==='訂貨'){
+  $('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+(relevant?orderLabel(p.orderTime):p.id))}</p></details>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id,cancelButton)+hideButton:p.verified?hideButton:checkButton}`:'';if(!p)return;if(p.verified&&p.action==='訂貨'){
    bindOrderPrint($('#og-pending'),{onCancelOrder:cancelEditorOrder});
    $('#og-cancel-posted').onclick=()=>cancelPostedOrder(p,expected);
-  }$('#og-check').onclick=async()=>{
+  }
+  if(p.verified){
+   $('#og-hide').onclick=()=>{localStorage.setItem(HIDDEN_RESULT,p.id);showPending();};
+   return;
+  }
+  $('#og-check').onclick=async()=>{
   if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
   try{
    const found=findPostedTransaction(csvRows(await (await directLog(['訂貨','取消訂貨'].includes(p.action)?'orders':'inventory')).text()).slice(1),cloudDraft(p));

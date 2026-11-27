@@ -18,7 +18,9 @@ test('loss keeps its retry only while pending and hides identifiers in closed de
  assert.match(html,/loss-resume/);
  assert.doesNotMatch(html,/<details open|核對完成|核對一致/);
  const verified={...p,verified:true};
- assert.doesNotMatch(operationResult(verified,'loss'),/loss-resume/);
+ assert.doesNotMatch(operationResult(verified,'loss'),/loss-resume|loss-check/);
+ assert.match(operationResult(verified,'loss'),/loss-hide/);
+ assert.match(html,/loss-check/);
  assert.doesNotMatch(operationResult(verified,'loss',p.id),/<details>/);
 });
 test('loss requires complete exact date, identity and totals, including zero',()=>{const row={...d.lines[0],posted:2,error:''};assert.equal(checkLossResult(d,{date:d.date,loss:[row]}),true);for(const loss of [[],[row,row],[{...row,posted:1}],[{...row,posted:null}],[{...row,name:'不同'}],[{...row,error:'待核對'}]])assert.throws(()=>checkLossResult(d,{date:d.date,loss}));assert.throws(()=>checkLossResult(d,{date:'2026-11-02',loss:[row]}));assert.equal(checkLossResult({...d,lines:[{...d.lines[0],total:0}]},{date:d.date,loss:[{...row,posted:0}]}),true);});

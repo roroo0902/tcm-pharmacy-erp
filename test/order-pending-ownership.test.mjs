@@ -13,7 +13,8 @@ function fixture(initial=old){
  const nodes=new Map(),writes=[],qty=new Map([['SYNTH','2']]),prices=new Map([['SYNTH','3']]),manualLines=[{name:'SYNTH manual'}];
  const $=id=>{if(!nodes.has(id))nodes.set(id,{value:id==='#og-date'?'2026-11-20':id==='#og-actor'?'QA':'',requestSubmit(){submissions++;}});return nodes.get(id);};
  const cloudDraft=({verified,receiptEvent,mergeOriginal,mergeInputLines,...d})=>d;
- const deps={orderLabel,KEY,localStorage:{getItem:()=>raw,setItem:(_k,value)=>{raw=value;writes.push(JSON.parse(value));}},$,quantities:qty,prices,manualLines,
+ const HIDDEN_RESULT='tcm-order-hidden-result-v1';let hidden=null;
+ const deps={orderLabel,KEY,HIDDEN_RESULT,localStorage:{getItem:k=>k===HIDDEN_RESULT?hidden:raw,setItem:(k,value)=>{if(k===HIDDEN_RESULT){hidden=value;return;}raw=value;writes.push(JSON.parse(value));}},$,quantities:qty,prices,manualLines,
   ask:(...args)=>{request.prompt=args;},draw(){},esc:String,orderPrintControl:()=>'',bindOrderPrint(){rendered++;},status:m=>{last=m;},load:async()=>{loads++;},busy:false,loadFailed:false,alive:true,
   isProcessing:()=>false,checkingPending:false,recoveringPrevious:false,rows:[],clearShortage:()=>{handoffs++;},
   directReview:(d,ask,success,status,opts)=>{request={d,ask,success,status,opts};},
@@ -31,14 +32,26 @@ function fixture(initial=old){
 const record=d=>[d.id,JSON.stringify({draft:d})];
 const tick=()=>new Promise(setImmediate);
 
+test('hiding a verified order only dismisses that result',()=>{
+ const f=fixture();f.api.showPending();
+ assert.match(f.$('#og-pending').innerHTML,/隱藏此提示/);
+ assert.doesNotMatch(f.$('#og-pending').innerHTML,/og-check/);
+ f.$('#og-hide').onclick();
+ assert.equal(f.$('#og-pending').innerHTML,'');
+ assert.deepEqual(f.raw(),old);
+ f.swap({...old,id:'next'});f.api.showPending();
+ assert.match(f.$('#og-pending').innerHTML,/og-hide/);
+});
+
 test('rendered recheck ignores stale-before-click and stale-response records, but ordinarily verifies',async()=>{
  for(const mode of ['before-click','after-click','same-id-change','unchanged']){
-  const f=fixture();f.api.showPending();let finish;f.read(()=>new Promise(res=>{finish=res;}));
+  const pending={...old,action:'取消訂貨',verified:false};
+  const f=fixture(pending);f.api.showPending();let finish;f.read(()=>new Promise(res=>{finish=res;}));
   const next=mode==='same-id-change'?{...old,note:'changed signoff'}:newer;
   if(mode==='before-click')f.swap(next);
   const check=f.$('#og-check').onclick();await tick();
   if(mode!=='before-click'&&mode!=='unchanged')f.swap(next);
-  finish?.([record(old)]);
+  finish?.([record(pending)]);
   await check;
   if(mode==='unchanged'){assert.equal(f.raw().verified,true);assert.equal(f.writes.length,1);assert.match(f.statistics().last,/已確認/);}
   else{

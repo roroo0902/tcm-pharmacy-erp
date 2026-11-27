@@ -34,7 +34,7 @@ function orderForm(initial=null){
   orderKey,orderLines,cloudDraft,mergeUnpostedOrders,shortageLinks:()=>[],clearShortage:noop,
   directReview:(draft,ask,success,status,options)=>previews.push({draft,options,back:options.onReturn,
    post:async(loseReply=false)=>{await options.beforeCommit(draft);posted.push(draft);events.set(draft.id,{draft});if(!loseReply)await success();}}),
-  KEY:'pending',localStorage:{getItem:()=>raw,setItem:(_,value)=>{raw=value;writes.push(value);}},
+  KEY:'pending',HIDDEN_RESULT:'hidden',localStorage:{getItem:key=>key==='pending'?raw:null,setItem:(_,value)=>{raw=value;writes.push(value);}},
   directLog:()=>assert.fail(),openExistingOrderMail:noop,orderPrintControl:()=>'',bindOrderPrint:noop,orderRpc:async()=>({state:'unsent'}),
   esc:String,ask:noop,status:noop,draw:noop,summary:noop,load:async()=>{},isProcessing:()=>false,beginProcessing:()=>({close:noop}),
   chooseOrderFollowup:async()=> 'merge',lookupPostedTransaction:async d=>events.get(d.id)||null,orderMergeTable:()=>'',

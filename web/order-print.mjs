@@ -5,7 +5,7 @@ const mailSendGate=createMailSendGate();
 import {chooseOrderOutput} from './order-output-choice.mjs';
 import {openOrderPdfEditor} from './order-pdf-editor.mjs';
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const orderPrintControl=(id,leadingButtons='')=>`<div data-order-print="${esc(id)}" style="min-width:0;overflow-wrap:anywhere"><div style="display:flex;gap:8px;flex-wrap:wrap">${leadingButtons}<button type="button" class="secondary" data-print>產生訂藥列印版</button><button type="button" class="secondary" data-pdf>編輯／下載訂藥 PDF</button><button type="button" class="secondary" data-mail>選擇員工寄送 PDF</button></div><p role="status" style="white-space:normal;overflow-wrap:anywhere">可單獨輸出本筆或合併先前已確認訂單；不會重送訂貨或異動庫存。</p><div data-pdf-files></div><div data-mail-panel></div></div>`;
+export const orderPrintControl=id=>`<div data-order-print="${esc(id)}" style="min-width:0;overflow-wrap:anywhere"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="secondary" data-print>產生訂藥列印版</button><button type="button" class="secondary" data-pdf>編輯／下載訂藥 PDF</button><button type="button" class="secondary" data-mail>選擇員工寄送 PDF</button></div><p role="status" style="white-space:normal;overflow-wrap:anywhere">可單獨輸出本筆或合併先前已確認訂單；不會重送訂貨或異動庫存。</p><div data-pdf-files></div><div data-mail-panel></div></div>`;
 export function googleOrderEntryMarkup(id,output,mergeIds){
  const label={mail:'選擇收件員工並寄送訂貨單',pdf:'編輯與下載本筆訂貨單',print:'產生本筆訂貨單列印版'}[output]||'查看交易紀錄';
  return '<a class="button" href="'+esc(orderEntryUrl(id,output,mergeIds))+'" target="_blank" rel="noopener noreferrer">前往 Google '+label+'</a>';
@@ -94,4 +94,6 @@ export function resumeOrderOutput({id,output,mergeIds}){
  bindOrderPrint(root,{mergeIds});
  root.querySelector('[data-'+output+']').click();
 }
-export function openExistingOrderMail(id,onCancelOrder){const root=document.createElement("div");root.innerHTML=orderPrintControl(id);bindOrderPrint(root,{autoMail:true,mergeIds:[],onCancelOrder});}
+export function orderHistoryOutputLink(id,mergeIds){
+ return '<a href="'+esc(orderEntryUrl(id,'mail',mergeIds))+'" target="_blank" rel="noopener noreferrer">前往交易紀錄核對'+(mergeIds.length?'合併訂單':'上一筆訂單')+'</a>';
+}

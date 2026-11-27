@@ -11,7 +11,7 @@ export function orderMergeTable(previous,current){
 
 export function chooseOrderFollowup(previous,current){return new Promise(resolve=>{
  const d=document.createElement('dialog');d.className='order-output-quest order-followup-quest';const title=previous.pending?previous.date+' 有一筆訂貨待確認，共 '+previous.count+' 項':'上一筆訂貨單尚未寄送';d.setAttribute('aria-label',title);
- const options=[['previous','先完成上一筆訂貨單','本筆內容先保留，接續上一筆的預覽與寄送核對'],['current','只完成本筆訂貨單','上一筆留待處理，本筆獨立預覽、確認與輸出'],['merge','合併兩筆訂貨單，並進行預覽','核對兩筆明細，一次確認後製作合併 PDF']].filter(([value])=>!previous.pending||value!=='current');
+ const options=[['previous','先完成上一筆訂貨單','保留本筆輸入；上一筆核對後，可到交易紀錄處理'],['current','只完成本筆訂貨單','上一筆留待處理，本筆獨立預覽與確認'],['merge','合併兩筆訂貨單，並進行預覽','核對兩筆明細，確認後可至交易紀錄輸出合併 PDF']].filter(([value])=>!previous.pending||value!=='current');
 
  d.innerHTML=`<style>.order-followup-summary{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}.order-followup-summary p{flex:1;min-width:0;padding:12px;border:1px solid #bda267;overflow-wrap:anywhere}.order-followup-lines{max-height:240px;overflow:auto;margin:16px 0}.order-followup-lines table{white-space:normal}.order-followup-lines td,.order-followup-lines th{text-align:center}.order-output-quest [hidden]{display:none!important}@media(max-width:600px){.order-followup-summary{display:block}.order-followup-lines td{padding:8px 4px}}
 dialog.order-followup-quest{border:3px solid #edce86;border-radius:5px;padding:28px 32px;background:linear-gradient(135deg,#152d4d,#0b1930 75%);box-shadow:inset 0 0 0 4px #09182d,inset 0 0 0 6px #bc9752,0 0 0 3px #09182d,0 22px 70px #020917cc}

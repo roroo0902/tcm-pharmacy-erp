@@ -1,9 +1,8 @@
 import {orderLabel} from '../src/order-label.mjs';
-import {orderCancelFields,bindOrderCancelReason,unspecifiedCancelActor} from './order-cancel-reason.mjs';
 import {preserveLegacyRegistration} from './registration-pending.mjs';
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
 import {chooseOrderFollowup,orderMergeTable} from './order-followup.mjs';
-import {orderPrintControl,bindOrderPrint,orderRpc,openExistingOrderMail} from './order-print.mjs';
+import {orderRpc,orderHistoryOutputLink} from './order-print.mjs';
 import {lossOrderEntries} from './loss-order-fill.mjs?v=release20261120r1';
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {alignOrderWord} from './order-word-axis.mjs';
@@ -58,7 +57,6 @@ export function mountOrderGrid({esc,fmt,ask}){
 #og-page-options label{display:flex;align-items:center;gap:8px;margin:0}
 #og-page-size{width:auto;margin:0}
 #og-pagination[hidden]{display:none}
-#og-pending [data-order-print] button{margin:0}
 </style><section class="panel"><h2>訂貨規劃</h2><a class="secondary" role="button" href="#orderPlanning">批次訂貨、建議量與舊草稿 →</a><p class="muted">依耗損計算建議量、編輯批次訂單及查看舊草稿。</p></section><section class="panel"><h2>登錄本次訂貨</h2><p>留白不訂貨，可跨廠商填寫後整批確認。確認量取代目前本周訂量；訂貨不增加庫存。</p><span class="order-selector-label">廠商</span><div id="order-brands" class="order-tabs" role="group" aria-label="廠商"></div><span class="order-selector-label">類別</span><div id="order-categories" class="order-tabs" role="group" aria-label="單方或複方"></div><form id="order-grid-form"><div class="grid"><label>訂貨日期<input id="og-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="og-actor" data-staff required disabled><option>正在讀取員工名冊…</option></select></label></div><div class="panelhead receive-tools"><input id="og-search" aria-label="搜尋訂貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" class="secondary" id="og-refresh">同步工作表庫存與單價</button><button type="button" class="secondary" id="og-export" disabled>匯出目前篩選結果</button></div><p id="og-export-status" role="status"></p>${periodControls}<div class="actions"><button type="button" id="og-fill-loss" disabled>將期間耗損量帶入訂量</button></div><p id="og-fill-note" role="status">更新耗損統計後，按「將期間耗損量帶入訂量」，將目前廠商／類別各品項的有效耗損總量填入訂貨草稿。零耗損與待核對品項保留原輸入，搜尋條件不影響帶入範圍。</p><label class="check-label"><input type="checkbox" id="og-only">只顯示本次已填品項（目前廠商／類別）</label><p id="order-grid-state" role="status">正在讀取廠商與品項…</p><p class="muted">點表頭切換升降冪；空白固定置底。只有月日的更新欄以訂貨日期年份排序。按「同步工作表庫存與單價」會以工作表最新單價取代所有本次手動單價，保留已填數量。單價帶入庫存表，可調整本次訂貨價格；不覆寫庫存表單價。</p><div id="og-page-options"><label>每頁顯示<select id="og-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><span id="og-page-range" role="status"></span></div><div class="tablewrap"><table id="order-grid"><thead><tr>${columns.map(([key,label])=>`<th>${key==='brandCategory'?'廠牌／類別':`<button type="button" class="sort-heading" data-og-sort="${key}">${label} ↕</button>${key==='code'?'<br><button type="button" class="sort-heading" data-og-sort="drug">藥名 ↕</button>':''}`}</th>`).join('')}<th>缺藥／缺藥率</th><th>原表</th></tr></thead><tbody></tbody></table></div><nav id="og-pagination" aria-label="藥品清單分頁" hidden><button type="button" class="secondary" id="og-prev">上一頁</button><span id="og-current-page" role="status"></span><button type="button" class="secondary" id="og-next">下一頁</button></nav>${orderAddMarkup}<div id="og-manual-list"></div><div class="actions"><span id="og-recovery-status" role="status"></span><strong id="og-summary" role="status"></strong><button type="button" class="secondary" id="og-clear">清除本次輸入</button><button id="og-submit" disabled>確認並預覽整批訂貨</button></div></form><div id="og-pending"></div><p class="muted">訂單單價與金額保存於 Google 訂貨紀錄；本周訂量同步至各廠商分頁。取消訂貨會還原上一筆有效確認量或原值。每批最多 100 項。</p></section>`;
  function allLines(){return [...orderLines(rows,quantities,prices),...manualLines];}
  function addLine(line){if(busy||loadFailed)throw Error('請等待品項讀取完成');if(line.manual)manualLines.push(line);else{const k=orderKey({name:line.sheet,code:line.code,drug:line.name});quantities.set(k,String(line.quantity));prices.set(k,String(line.unitPriceCents/100));}draw();}
@@ -221,7 +219,6 @@ export function mountOrderGrid({esc,fmt,ask}){
   }
   const hideButton='<button type="button" id="og-hide" class="secondary">隱藏此提示</button>';
   const checkButton='<button type="button" id="og-check" class="secondary">重新確認同步結果</button>';
-  const cancelButton='<button type="button" class="secondary" id="og-cancel-posted">刪除本筆訂單</button>';
   const relevant=p&&['訂貨','取消訂貨'].includes(p.action);if(p?.verified&&!relevant)p=null;
   if(relevant&&p.verified&&!p.orderTime&&!checkedOrderTimes.has(p.id)){
    checkedOrderTimes.add(p.id);
@@ -229,10 +226,8 @@ export function mountOrderGrid({esc,fmt,ask}){
     if(alive&&event?.time&&savePendingIfCurrent(expected,{...p,orderTime:event.time}))showPending();
    }).catch(()=>{ /* Keep the saved result visible when its timestamp cannot be recovered. */ });
   }
-  $('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表，尚未入庫。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+(relevant?orderLabel(p.orderTime):p.id))}</p></details>${p.verified&&p.action==='訂貨'?orderPrintControl(p.id,cancelButton)+hideButton:p.verified?hideButton:checkButton}`:'';if(!p)return;if(p.verified&&p.action==='訂貨'){
-   bindOrderPrint($('#og-pending'),{onCancelOrder:cancelEditorOrder});
-   $('#og-cancel-posted').onclick=()=>cancelPostedOrder(p,expected);
-  }
+  $('#og-pending').innerHTML=p?`<h3>${p.verified?'最近訂貨結果':'有一筆操作需要確認'}</h3><p>${esc(p.verified?(p.action==='取消訂貨'?'訂貨已取消，本周訂量已還原。':'訂貨量已同步至工作表。列印、下載、寄送 PDF 或取消訂單，請至「交易紀錄」展開明細。'):(relevant?'上次訂貨尚未確認完成，請先查詢結果，避免重複訂貨。':'其他頁面的操作尚未確認完成，請先查詢結果或前往交易紀錄處理。'))}</p><p class="muted">${esc([p.date,p.actor,Array.isArray(p.lines)?p.lines.length+' 個品項':''].filter(Boolean).join(' · '))}</p><details><summary>查看交易明細</summary><p>${esc(p.action+' · '+(relevant?orderLabel(p.orderTime):p.id))}</p></details>${p.verified?hideButton:checkButton}`:'';
+  if(!p)return;
   if(p.verified){
    $('#og-hide').onclick=()=>{localStorage.setItem(HIDDEN_RESULT,p.id);showPending();};
    return;
@@ -249,34 +244,8 @@ export function mountOrderGrid({esc,fmt,ask}){
    showPending();await load();status('已確認工作表中的操作結果。');
   }catch(e){status(e.message);}
  };}
- function cancelEditorOrder(id){
-  const expected=localStorage.getItem(KEY);
-  let order;
-  try{order=JSON.parse(expected);}catch{}
-  if(!alive||order?.id!==id||order.action!=='訂貨'||order.verified!==true){
-   status('訂單狀態已變更，請至交易紀錄核對原訂單。');return;
-  }
-  cancelPostedOrder(order,expected);
- }
- function cancelPostedOrder(order,expected){
-  if(localStorage.getItem(KEY)!==expected){showPending();status(pendingChanged);return;}
-  let readReason;
-  ask(`<h3>刪除本筆訂單</h3><p>訂單編號：${esc(orderLabel(order.orderTime))}</p><p>確認後會登記取消訂貨，依工作表紀錄還原本周訂量。原交易紀錄會保留。</p>${orderCancelFields()}`,async()=>{
-   try{
-    if(localStorage.getItem(KEY)!==expected)throw Error(pendingChanged);
-    const draft=cloudDraft({...order,id:'ERP-'+crypto.randomUUID(),action:'取消訂貨',reverses:order.id,date:today(),actor:unspecifiedCancelActor,note:readReason()});
-    let submitted;
-    await directReview(draft,ask,async({time}={})=>{
-     const owned=savePendingIfCurrent(submitted,{...draft,verified:true,orderTime:time});
-     if(alive){showPending();await load();if(!owned)status(pendingChanged);}
-    },status,{beforeCommit:reviewed=>{
-     if(!savePendingIfCurrent(expected,reviewed))throw Error(pendingChanged);
-     submitted=JSON.stringify(reviewed);
-     if(alive)showPending();
-    }});
-   }catch(e){status(e.message);}
-  },'下一步：核對取消內容');
-  readReason=bindOrderCancelReason();
+ function showPreviousOrder(orderId){
+  ask('<p>本筆輸入已保留。可在新分頁的交易紀錄處理上一筆訂單。</p>'+orderHistoryOutputLink(orderId,[]),()=>{},'返回訂貨');
  }
  function currentDraft(id){
   return cloudDraft({kind:'tcm-cloud',version:2,currency:'TWD',id,action:'訂貨',date:$('#og-date').value,actor:$('#og-actor').value,note:'',lines:allLines(),shortageLinks:shortageLinks('order',orderLines(rows,quantities,prices))});
@@ -289,8 +258,8 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(!owned)caution=postedOwnershipLost;
    if(alive){showPending();if(owned)await load();}
   },text=>status([text,caution].filter(Boolean).join('；')),{
-   onCancelOrder:cancelEditorOrder,autoMail:()=>alive&&owned,outputMergeIds:[],onReturn:preview.onReturn,
-   reviewIntro:()=>'<h3>確認合併訂貨單</h3><p>以下為兩筆合併後的品項與數量。確認後一次同步，並開啟 PDF 核對。</p>',
+   onReturn:preview.onReturn,
+   reviewIntro:()=>'<h3>確認合併訂貨單</h3><p>以下為兩筆合併後的品項與數量。確認後一次同步；合併訂單可從「交易紀錄」輸出。</p>',
    reviewLabel:'確認合併訂貨並同步',
    beforeCommit:()=>{
     preview.assertOpen();
@@ -319,7 +288,7 @@ export function mountOrderGrid({esc,fmt,ask}){
     if(prior.mergeOriginal&&JSON.stringify(posted)===JSON.stringify(cloudDraft(prior))){
      // A lost response must not add the same input to the already-posted batch.
      if(ownsInput){submittedFormInputs.delete(orderFormFingerprint());clearShortage('order');quantities.clear();prices.clear();manualLines=[];draw();}
-     openExistingOrderMail(posted.id,cancelEditorOrder);
+     status('已讀回合併訂單。後續輸出請至「交易紀錄」展開明細。');
      return;
     }
     resumedChoice={id:prior.id,mode:'merge'};
@@ -341,7 +310,7 @@ export function mountOrderGrid({esc,fmt,ask}){
    if(!owned)caution=postedOwnershipLost;
    if(alive){showPending();if(owned)await load();}
   },text=>recoveryStatus([text,caution].filter(Boolean).join('；')),{
-   onCancelOrder:cancelEditorOrder,autoMail:()=>alive&&owned,outputMergeIds,reviewIntro,onReturn:preview.onReturn,reviewLabel:reviewIntro?'確認本筆訂貨並開啟合併 PDF':'確認入帳',
+   historyMergeIds:()=>alive&&owned&&outputMergeIds?.length?outputMergeIds:null,reviewIntro,onReturn:preview.onReturn,reviewLabel:reviewIntro?'確認本筆訂貨並同步':'確認入帳',
    onDiscard:()=>ask('<h3>確定取消這次訂單？</h3><p>確認後會清除本次填寫的訂貨品項、數量與單價。</p>',()=>{
     if(!alive||submitted||activeOrderPreview!==preview)return;
     if(localStorage.getItem(KEY)!==saved){recoveryStatus(pendingChanged);return;}
@@ -441,11 +410,11 @@ export function mountOrderGrid({esc,fmt,ask}){
     if(!alive)return;
     if(localStorage.getItem(KEY)!==saved)throw Error(pendingChanged);
     if(latest.state!=='unsent')throw Error('上一筆寄送狀態已變更，請重新核對；本筆輸入仍保留。');
-    if(choice==='previous'){openExistingOrderMail(prior.id,cancelEditorOrder);return;}
+    if(choice==='previous'){showPreviousOrder(prior.id);return;}
    }
    outputMergeIds=choice==='merge'?[prior.id]:[];
    if(choice==='merge'){
-    reviewIntro=current=>'<h3>確認本筆訂貨並預覽合併內容</h3><p>上一筆已同步。這一步同步本筆，接著開啟合併 PDF 編輯。</p><div class="tablewrap">'+orderMergeTable(previous.lines,current.lines)+'</div><h3>本步同步的品項（本筆）</h3>';
+    reviewIntro=current=>'<h3>確認本筆訂貨並預覽合併內容</h3><p>上一筆已同步。本筆同步後，可前往「交易紀錄」核對合併 PDF。</p><div class="tablewrap">'+orderMergeTable(previous.lines,current.lines)+'</div><h3>本步同步的品項（本筆）</h3>';
    }
   }
  }

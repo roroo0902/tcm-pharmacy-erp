@@ -160,7 +160,7 @@ test('planning settings show the live coverage and formula after changing holida
  }finally{h.unmount();}
 });
 
-test('confirmed blanks recalculate and apply while invalid losses stay blocked',async()=>{
+test('all-blank loss days can be applied as zero without another read while invalid losses stay blocked',async()=>{
  const h=mountHarness(),{$}=h;
  try{
   await new Promise(setImmediate);
@@ -168,13 +168,8 @@ test('confirmed blanks recalculate and apply while invalid losses stay blocked',
   values[4][13]='待核對';
   h.reply(async()=>({values}));
   await $('#order-load').onclick();
-  assert.equal($('#order-confirm-blanks').hidden,false);
   $('#order-usage').onclick();
-  assert.equal($('qty:科達單方:NORMAL:4').value,'');
-  $('#order-suggest').onclick();
-  assert.match($('#order-state').textContent,/沒有可帶入/);
-  await $('#order-confirm-blanks').onclick();
-  assert.equal($('#order-confirm-blanks').hidden,true);
+  assert.equal($('qty:科達單方:NORMAL:4').value,'0');
   $('#order-suggest').onclick();
   assert.equal($('qty:科達單方:NORMAL:4').value,'0');
   assert.equal($('qty:科達單方:KEEP:5').value,'');
@@ -242,5 +237,29 @@ test('clearing a confirmed draft shows its counts and removes only that draft on
   assert.deepEqual(savedIds(),[other.id]);
   assert.match(h.$('#order-history').innerHTML,/PO-planning-0002/);
   assert.doesNotMatch(h.$('#order-history').innerHTML,/PO-planning-0001/);
+ }finally{h.unmount();}
+});
+
+test('planning counts blank open days as zero on the first read and still flags missing or invalid data',async()=>{
+ const h=mountHarness(),{$}=h;
+ try{
+  await new Promise(setImmediate);
+  assert.doesNotMatch($('#content').innerHTML,/order-confirm-blanks|id="order-blank"/);
+  const data=grid('4');
+  data[0].push('1/20');data[1].push('二');
+  data[2].push('');data[3].push('');data[4].push('待核對');
+  $('#order-end').value='2026-01-20';
+  let reads=0;
+  h.reply(async()=>{reads++;return {values:data};});
+  await $('#order-load').onclick();
+  $('#order-suggest').onclick();
+  assert.equal(reads,1);
+  assert.equal($('qty:科達單方:NORMAL:4').value,'14');
+  assert.equal($('qty:科達單方:KEEP:5').value,'');
+  assert.match($('#order-table').innerHTML,/耗損有非數字或負數/);
+  data[0].pop();
+  await $('#order-load').onclick();
+  assert.match($('#order-table').innerHTML,/缺 1 天日期欄/);
+  assert.match($('#order-table').innerHTML,/資料不足/);
  }finally{h.unmount();}
 });

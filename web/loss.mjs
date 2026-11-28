@@ -115,8 +115,6 @@ export function mountLoss({esc,fmt,ask,message}){
   <div class="loss-fields">
    <label>耗損日期<input id="loss-date" type="date" value="${date}" max="${date}"></label>
    <label>經手人<select id="loss-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label>
-   <label class="loss-full">更正原因（調低累計或歸零必填）<select id="loss-form-reason-kind"><option value="">請選擇更正原因</option>${reasonOptions()}</select></label>
-   <label id="loss-note-label" class="loss-full" hidden>補充說明（選填）<textarea id="loss-form-reason-note" maxlength="490" rows="2"></textarea></label>
   </div>
   <div class="loss-tools"><input id="loss-search" type="search" aria-label="搜尋耗損品項" placeholder="搜尋藥品名稱或編號"><button class="secondary" type="button" id="loss-refresh">重新讀取工作表</button></div>
   <p id="loss-state" role="status"></p>
@@ -139,20 +137,7 @@ export function mountLoss({esc,fmt,ask,message}){
  function summary(){const count=dayDraft.quantities.size;$('#loss-clear').disabled=!count&&!dayDraft.prices.size&&!dayDraft.reason.trim()&&!dayDraft.reasonKind;$('#loss-summary').textContent=`已填 ${count} 項（含其他分頁）`;
  document.querySelectorAll('[data-delta]').forEach(cell=>{const r=rowById.get(cell.dataset.delta),result=lossCalculation(dayDraft.quantities.get(r.id),r),after=$('[data-after="'+r.id+'"]');cell.textContent=result.delta;after.textContent=result.after;after.classList.toggle('loss-insufficient',result.insufficient);});}
 
- function renderFormReason(){
-  $('#loss-form-reason-kind').value=dayDraft.reasonKind;
-  $('#loss-form-reason-note').value=dayDraft.reason;
-  $('#loss-note-label').hidden=!dayDraft.reasonKind;
- }
- $('#loss-form-reason-kind').onchange=e=>{
-  dayDraft.reasonKind=e.target.value;
-  if(!dayDraft.reasonKind)dayDraft.reason='';
-  renderFormReason();saveFormDraft();summary();
- };
- $('#loss-form-reason-note').oninput=e=>{
-  dayDraft.reason=e.target.value;saveFormDraft();summary();
- };
- function draw(){if(disposed)return;renderFormReason();const selection=supplierSelection(sources,brand,category);({brand,category,source:selected}=selection);
+ function draw(){if(disposed)return;const selection=supplierSelection(sources,brand,category);({brand,category,source:selected}=selection);
  $('#loss-brands').innerHTML=selection.brands.map(b=>sign(b,brand,'brand',esc)).join('');
  $('#loss-categories').innerHTML=selection.categories.map(k=>categoryButton(k,category,esc)).join('');const q=$('#loss-search').value.trim().toLowerCase(),list=sortSheetRows((cache.get(selected?.gid)||[]).filter(r=>`${r.drug} ${r.code}`.toLowerCase().includes(q)),sort,direction);
  const paged=lossPage(list,page,pageSize);page=paged.page;
@@ -290,7 +275,7 @@ export function mountLoss({esc,fmt,ask,message}){
  if(!label){message('請選擇更正原因',true);return;}
  const note=$('#loss-reason').value.trim();
  dayDraft.reasonKind=kind;dayDraft.reason=note;
- renderFormReason();saveFormDraft();summary();
+ saveFormDraft();summary();
  let reason=label;
  if(note)reason=note===choice[2]?note:label+'：'+note;
  proceed(reason);

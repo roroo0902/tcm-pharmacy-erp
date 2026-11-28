@@ -721,8 +721,10 @@ dialog.order-followup-quest{border:3px solid #edce86;border-radius:5px;padding:2
 #photo-receive-panel{--ai-navy:#19364e;--ai-gold:#b28c43;--ai-line:#d8cfb7;color:var(--ai-navy);background:#fffdf5;text-align:left}
 #photo-receive-panel *{box-sizing:border-box}
 #photo-receive-panel [hidden]{display:none!important}
-#photo-receive-panel .ai-plaque{display:inline-flex;align-items:center;gap:.55em;margin:0;padding:7px 16px;background:var(--ai-navy);color:#fff9e7;border:4px double #dab967;border-radius:5px;font-size:clamp(20px,2vw,29px);line-height:1.25}
-.ai-plaque svg{width:1.1em;fill:#efc76e}
+#photo-receive-panel h3.ai-plaque{display:inline-flex;align-items:center;gap:.55em;margin:0;padding:7px 16px;background:var(--ai-navy);color:#fff9e7;border:4px double #dab967;border-radius:5px;line-height:1.25}
+#photo-receive-panel h2.ai-plaque{display:inline-flex;align-items:center;gap:10px;margin:0;padding:8px 17px;color:#fff2cb;background:#19354c;border:4px double #cea35a;border-radius:7px;box-shadow:0 2px 0 #685233;font-family:Georgia,"PMingLiU",serif;letter-spacing:.07em}
+#photo-receive-panel h2.ai-plaque::before{display:none}
+#photo-receive-panel h2.ai-plaque svg{width:28px;height:26px;flex:none;fill:#efc76e}
 #photo-receive-panel .ai-steps{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;list-style:none;margin:14px 0;padding:0}
 .ai-steps li{display:flex;align-items:center;gap:12px;font-size:14px}
 .ai-steps li+li:before{content:'→';color:#94805c}
@@ -778,6 +780,7 @@ dialog.order-followup-quest{border:3px solid #edce86;border-radius:5px;padding:2
 @media(min-width:761px){.ai-review-table th:nth-child(1){width:24%}.ai-review-table th:nth-child(2){width:38%}}
 @media(max-width:1150px){.ai-workspace{grid-template-columns:1fr}.ai-photo-stage{min-height:80px}#ai-original{max-height:215px}}
 @media(max-width:760px){
+ #photo-receive-panel h2.ai-plaque{padding:6px 9px;font-size:18px}
  #photo-receive-panel .ai-steps{gap:5px}.ai-steps li{font-size:12px;gap:4px}.ai-steps li span{padding:3px 5px}
  #photo-receive-panel .ai-workspace{grid-template-columns:minmax(0,1fr)}
  #photo-receive-panel .ai-table,#photo-receive-panel .ai-table tbody{display:block;min-width:0}

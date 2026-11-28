@@ -48,6 +48,34 @@ async function client(t){
  return mod;
 }
 const response=result=>new Response(JSON.stringify({done:true,response:{result}}));
+test('the entire connection notice follows authorization, expiry and reauthorization',async t=>{
+ const m=await client(t);
+ const notice={append(button){this.button=button;}},foot={};
+ globalThis.document={querySelector:selector=>selector==='.notice'?notice:foot,createElement:()=>({}),head:{append(){}}};
+ globalThis.window.addEventListener=()=>{};
+ t.mock.timers.enable({apis:['Date','setTimeout']});
+ m.setupDirect();
+ assert.equal(notice.hidden,false);
+ const oauth=google.accounts.oauth2;
+ oauth.hasGrantedAllScopes=()=>false;
+ await notice.button.onclick();
+ assert.equal(notice.hidden,false);
+ assert.match(notice.button.textContent,/重新連線/);
+ oauth.hasGrantedAllScopes=()=>true;
+ await notice.button.onclick();
+ assert.equal(notice.hidden,true);
+ t.mock.timers.tick(3540000);
+ assert.equal(notice.hidden,false);
+ assert.equal(notice.button.textContent,'登入 Google 同步');
+ await m.authorize();
+ assert.equal(notice.hidden,true);
+ globalThis.fetch=async()=>new Response('{}',{status:401});
+ await assert.rejects(m.runDirect('readAll'));
+ assert.equal(notice.hidden,false);
+ globalThis.google={script:{run:{}}};
+ m.setupDirect();
+ assert.equal(notice.hidden,true);
+});
 test('price review rejects missing server prices and confirms exact cents with E change',async t=>{
  const m=await client(t);const line={sheet:'科達單方',code:'QA',name:'測試',quantity:3,unitPriceCents:18025};
  const d={kind:'tcm-cloud',version:2,action:'進貨',lines:[line]};let asked=false,status='',confirm,committed;

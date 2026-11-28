@@ -1,4 +1,7 @@
 export const stockFilterStyles = `<style>
+.panel .section-plaque{display:inline-flex;align-items:center;gap:10px;margin:0;padding:5px 14px 5px 9px;border:4px double #dcba67;border-radius:6px;background:#18344c;color:#fff6dc;line-height:1.25;clip-path:polygon(5px 0,calc(100% - 5px) 0,100% 5px,100% calc(100% - 5px),calc(100% - 5px) 100%,5px 100%,0 calc(100% - 5px),0 5px)}
+.panel .section-plaque::before{content:none}
+.section-plaque img{width:38px;height:33px;object-fit:contain;flex:none}
 .stock-filter-tabs{display:flex;align-items:end;flex-wrap:wrap;gap:6px 10px;margin:2px 0 12px}
 .stock-filter-tabs button{font-weight:700;line-height:1.15;letter-spacing:0;transform:none}
 #content .stock-sign{position:relative;width:96px;height:64px;padding:0;border:0;border-radius:0;box-shadow:none;color:#39230e;background:transparent url("./web/assets/photo-supplier-sign.webp") center/100% 100% no-repeat}

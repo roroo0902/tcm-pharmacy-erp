@@ -60,9 +60,6 @@ export function mountOrderGrid({esc,fmt,ask}){
 #og-pagination[hidden]{display:none}
 .order-planning-head{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 .order-planning-head p{margin:8px 0 0}
-.panel .order-plaque{display:inline-flex;align-items:center;gap:10px;margin:0;padding:5px 14px 5px 9px;border:4px double #dcba67;border-radius:6px;background:#18344c;color:#fff6dc;line-height:1.25;clip-path:polygon(5px 0,calc(100% - 5px) 0,100% 5px,100% calc(100% - 5px),calc(100% - 5px) 100%,5px 100%,0 calc(100% - 5px),0 5px)}
-.panel .order-plaque::before{content:none}
-.order-plaque img{width:38px;height:33px;object-fit:contain;flex:none}
 .order-entry-intro{line-height:1.6;margin:10px 0 15px}
 .order-filters{display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:4px;border-top:1px solid #d3c2a0;padding:16px 0 8px}
 .order-filters .cloud-selector-label{margin-bottom:0}
@@ -70,12 +67,12 @@ export function mountOrderGrid({esc,fmt,ask}){
 @media(max-width:600px){.order-filters{gap:12px}.order-filters .order-tabs{gap:8px}}
 </style>
 <section class="panel order-planning-head">
- <div><h2 class="order-plaque"><img src="./web/assets/order-planning-map.webp" width="38" height="33" alt="">訂貨規劃</h2>
+ <div><h2 class="section-plaque"><img src="./web/assets/order-planning-map.webp" width="38" height="33" alt="">訂貨規劃</h2>
  <p>適用於平時補貨。依每日平均耗損與備貨天數（含運送及假期），扣除未拆封庫存，估算建議訂貨量。</p></div>
  <a class="secondary" role="button" href="#orderPlanning">平時補貨建議 →</a>
 </section>
 <section class="panel">
- <h2 class="order-plaque"><img src="./web/assets/order-entry-quill.webp" width="38" height="33" alt="">登錄本次訂貨</h2>
+ <h2 class="section-plaque"><img src="./web/assets/order-entry-quill.webp" width="38" height="33" alt="">登錄本次訂貨</h2>
  <p class="order-entry-intro">留白不訂貨，可跨廠商填寫後整批確認。<br>確認量取代目前本周訂量；訂貨不增加庫存。</p>
  <div class="order-filters">
   ${filterHeading('廠商','order-brand-label')}<div id="order-brands" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="order-brand-label"></div>

@@ -11,12 +11,13 @@ export const hostedEnabled=()=>!!globalThis.google?.script?.run;
 export const directEnabled=()=>hostedEnabled()||(DIRECT.enabled&&!!DIRECT.clientId&&!!DIRECT.deploymentId);
 const scopes=['https://www.googleapis.com/auth/spreadsheets','https://www.googleapis.com/auth/script.container.ui','https://www.googleapis.com/auth/userinfo.email'];
 let token='',expires=0,client,signing;
+let refreshConnectionNotice;
 let snapshotRequest,writing=false,reviewSequence=0;
 export const directPollMs=()=>DIRECT.pollMs;
 export function setupDirect(){
  if(!directEnabled())return;
  if(hostedEnabled()){
-  document.querySelector('.notice').textContent='Google Sheets 為正式庫存；在本頁預覽並確認後直接入帳，完成後自動讀回。訂貨不增加庫存。';
+  document.querySelector('.notice').hidden=true;
   document.querySelector('.sidefoot small').textContent='Google 已登入・站內確認後直接同步';
   return;
  }
@@ -25,7 +26,17 @@ export function setupDirect(){
  const button=document.createElement('button');button.id='google-connect';button.textContent='登入 Google 同步';
  const notice=document.querySelector('.notice');notice.textContent='Google Sheets 為唯一正式庫存；在站內核對後按「確認入帳」直接同步。訂貨不增加庫存。';notice.append(button);
  const foot=document.querySelector('.sidefoot small');if(foot)foot.textContent='正式帳務儲存於 Google Sheets；站內核對後直接同步';
- button.onclick=()=>authorize().then(()=>{button.textContent='Google 已連線';window.dispatchEvent(new CustomEvent('erp-synced',{detail:{connected:true}}));}).catch(e=>{button.textContent=e.message;});
+ let expiryTimer;
+ refreshConnectionNotice=()=>{
+  clearTimeout(expiryTimer);
+  const remaining=expires-Date.now();
+  notice.hidden=!!token&&remaining>0;
+  if(notice.hidden)expiryTimer=setTimeout(refreshConnectionNotice,remaining);
+  else button.textContent='登入 Google 同步';
+ };
+ refreshConnectionNotice();
+ window.addEventListener('pageshow',refreshConnectionNotice);
+ button.onclick=()=>authorize().then(()=>{window.dispatchEvent(new CustomEvent('erp-synced',{detail:{connected:true}}));}).catch(e=>{button.textContent=e.message+'（重新連線）';});
 }
 export function authorize(){
  if(hostedEnabled())return Promise.resolve();
@@ -38,7 +49,7 @@ export function authorize(){
   client=google.accounts.oauth2.initTokenClient({client_id:DIRECT.clientId,scope:scopes.join(' '),callback:r=>{
    if(r.error)return fail(r);
    if(!google.accounts.oauth2.hasGrantedAllScopes(r,...scopes))return fail({message:'尚未授權所有必要權限'});
-   token=r.access_token;expires=Date.now()+(Number(r.expires_in)-60)*1000;signing=null;resolve();
+   token=r.access_token;expires=Date.now()+(Number(r.expires_in)-60)*1000;refreshConnectionNotice?.();signing=null;resolve();
   },error_callback:fail});client.requestAccessToken({prompt:''});
  });return signing;
 }
@@ -50,13 +61,14 @@ export async function runDirect(operation,draft,previewToken){
   if(operation==='preview'&&draft?.kind==='tcm-loss-cumulative')await call('prepareLoss');
   return call(operation);
  }
- if(!token||Date.now()>=expires)throw Error('請先點「登入 Google 同步」重新連線；輸入仍保留');
+ if(!token||Date.now()>=expires){refreshConnectionNotice?.();throw Error('請先點「登入 Google 同步」重新連線；輸入仍保留');}
  if(operation==='preview'&&draft?.kind==='tcm-loss-cumulative')await runDirect('prepareLoss',draft);
+ const requestToken=token;
  const response=await fetch('https://script.googleapis.com/v1/scripts/'+encodeURIComponent(DIRECT.deploymentId)+':run',{
-  method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+  method:'POST',headers:{Authorization:'Bearer '+requestToken,'Content-Type':'application/json'},
   body:JSON.stringify(operation==='readOverviewCatalog'?{function:'erpOverviewCatalog',parameters:[],devMode:false}:{function:'erpDirect',parameters:[operation,draft??null,previewToken??null],devMode:false})
  });
- if(response.status===401){token='';expires=0;}
+ if(response.status===401&&token===requestToken){token='';expires=0;refreshConnectionNotice?.();}
  const result=await response.json();
  if(!response.ok||result.error)throw Error(result.error?.details?.[0]?.errorMessage||result.error?.message||'同步失敗；請以同一交易重新核對，勿重複建立');
  if(!result.done||!result.response||!Object.hasOwn(result.response,'result'))throw Error('結果未明，請以同一交易重新核對');

@@ -103,6 +103,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  #receipt-panel .receipt-sync{flex-basis:100%;justify-content:flex-start;margin:0}
  #receipt-panel .receipt-fields,#receipt-panel .receipt-filters{grid-template-columns:minmax(0,1fr)}
  #receipt-panel .receipt-filters .order-tabs{min-height:0}
+ #receipt-brands.order-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));justify-items:center}
  #content #receipt-panel .tablewrap:has(#receipt-grid){overflow:visible;border:0;background:transparent}
  #content #receipt-panel #receipt-grid{border:0;background:transparent}
  #content #receipt-panel #receipt-grid thead{display:none}
@@ -168,7 +169,11 @@ export function mountReceiptGrid({esc,fmt,ask}){
   $('#receipt-summary').textContent=`已填 ${count} 項（含其他分頁） · ${invalid?'請核對數量':fmt(total)+' 瓶'}`;
   const current=[];let priceInvalid=false;
   for(const [key,q] of quantities){const r=rows.find(x=>receiptKey(x)===key);if(!r||!Number.isInteger(Number(q))||Number(q)<1)continue;try{if(r.priceWarning&&!prices.has(key))throw Error();current.push({quantity:Number(q),unitPriceCents:priceCents(receiptPrice(r,prices))});}catch{priceInvalid=true;}}
-  try{const cost=pricingTotal(current);$('#receipt-summary').textContent+=' · '+(priceInvalid?'請核對單價':(cost.missing?'已填單價小計 ':'進貨合計 ')+money(cost.cents)+(cost.missing?'（'+cost.missing+' 項未填單價）':''));}catch(e){$('#receipt-summary').textContent+=' · '+e.message;}
+  try{
+   const cost=pricingTotal(current);
+   const amount=money(cost.cents).replace(' ','\u00a0');
+   $('#receipt-summary').textContent+=' · '+(priceInvalid?'請核對單價':(cost.missing?'已填單價小計 ':'進貨合計 ')+amount+(cost.missing?'（'+cost.missing+' 項未填單價）':''));
+  }catch(e){$('#receipt-summary').textContent+=' · '+e.message;}
   c.querySelectorAll('[data-amount]').forEach(el=>{const key=el.dataset.amount,q=quantities.get(key),r=rows.find(x=>receiptKey(x)===key);el.textContent='—';if(!q||!r)return;try{const cents=priceCents(receiptPrice(r,prices));el.textContent=cents===undefined?'未提供':Number.isInteger(Number(q))&&Number(q)>0?money(cents*Number(q)):'數量無效';}catch{el.textContent='單價待核對';}});
   $('#receipt-submit').disabled=loading||loadFailed||!count;
   c.querySelectorAll('[data-after]').forEach(el=>{const v=quantities.get(el.dataset.after),r=rows.find(x=>receiptKey(x)===el.dataset.after),n=Number(v);el.textContent=v==null||v===''?'—':!Number.isInteger(n)||n<1||n>1000000?'數量無效':!Number.isInteger(r?.bottles)||r.bottles<0?'待核對':fmt(r.bottles+n)+' 瓶';});

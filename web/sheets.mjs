@@ -23,6 +23,7 @@ export function mountSheets({esc,fmt}){
 .stock-heading h2 img{width:26px;height:35px;object-fit:contain;flex:none}
 .stock-heading p{margin:5px 0 0}
 .stock-heading #cloud-total{font-weight:700;color:#214563}
+@media(min-width:951px){#cloud-brands-label,#cloud-categories-label{width:77%}}
 #cloud-cards{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 #cloud-cards button.card{width:100%;min-width:0;min-height:112px;display:flex;align-items:center;justify-content:center;gap:clamp(7px,1vw,16px);padding:18px 12px;text-align:left;background:#fffdf5;border:1px solid #c6a362;color:#173650;font:inherit;cursor:pointer}
 #cloud-cards button.card img{width:clamp(50px,5vw,86px);height:70px;object-fit:contain;flex:none}

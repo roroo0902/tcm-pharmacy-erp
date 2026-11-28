@@ -1,3 +1,4 @@
+import {stockFilterStyles,filterHeading,sign,categoryButton} from './stock-filters.mjs';
 import {receiptEntryDialog} from './receipt-entry-dialog.mjs';
 import {beginProcessing,isProcessing,showReceiptReviewWarning} from './processing-screen.mjs';
 import {createRefreshStatus} from './refresh-status.mjs';
@@ -30,7 +31,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  let rows=[],sources=[],source=null,brand='',category='',sort='code',direction='asc',alive=true,loading=false,loadFailed=false,ticket=0,pending=null,checkingPending=false;
  let shortageSeeded=false,shortageHandoff=null;
  const status=text=>{if(alive)$('#receipt-state').textContent=text;};
- c.innerHTML=`${supplyLayout}<style>
+ c.innerHTML=`${stockFilterStyles}${supplyLayout}<style>
 #receipt-process[hidden]{display:none}
 #receipt-grid .receipt-price-control{display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
 #receipt-grid .receipt-price-unit{flex:none;line-height:34px}
@@ -127,7 +128,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  <div class="receipt-heading"><h2><span class="receipt-crates" aria-hidden="true"><i></i></span>進貨登錄</h2><a class="secondary" href="#items">＋ 新增品項</a></div>
  <p id="receipt-summary" role="status"></p><p id="receipt-state" role="status">正在讀取共用廠商與品項…</p>
  <div class="panelhead receive-tools"><input id="receipt-search" type="search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" id="receipt-refresh" class="secondary">重新讀取工作表</button></div>
- <div class="receipt-filters"><div><strong>廠商</strong><div class="order-tabs" id="receipt-brands" role="group" aria-label="進貨廠商"></div></div><div><strong>類別</strong><div class="order-tabs" id="receipt-categories" role="group" aria-label="進貨類別"></div></div></div>
+ <div class="receipt-filters"><div>${filterHeading('廠商','receipt-brand-label')}<div id="receipt-brands" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="receipt-brand-label"></div></div><div>${filterHeading('類別','receipt-category-label')}<div id="receipt-categories" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="receipt-category-label"></div></div></div>
  <form id="receipt-form"><div class="grid"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div>
  <div id="receipt-page-options"><label>每頁顯示<select id="receipt-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><label>排序<select id="receipt-mobile-sort">${[['code','藥品編號'],['quantity','進貨數量'],['bottles','未拆封瓶數'],['updated','原表更新欄']].map(([key,label])=>['asc','desc'].map(dir=>`<option value="${key}:${dir}">${label} ${dir==='asc'?'↑':'↓'}</option>`).join('')).join('')}</select></label><span id="receipt-page-range" role="status"></span></div><div class="tablewrap"><table id="receipt-grid"><thead><tr><th><button type="button" class="sort-heading" data-sort="code">藥品／編號 ↑</button></th><th>廠牌／類別</th><th class="num"><button type="button" class="sort-heading" data-sort="bottles">未拆封瓶數 ↕</button></th><th class="receipt-quantity"><button type="button" class="sort-heading" data-sort="quantity">本次實收 ↕</button></th><th class="receipt-price-cell">單價（元／瓶）</th><th class="num">進貨小計（元）</th><th class="num">入庫後瓶數</th><th><button type="button" class="sort-heading" data-sort="updated">原表更新欄 ↕</button></th><th>缺藥標記／率</th></tr></thead><tbody></tbody></table></div><nav id="receipt-pagination" aria-label="藥品清單分頁" hidden><button type="button" class="secondary" id="receipt-prev">上一頁</button><span id="receipt-current-page" role="status"></span><button type="button" class="secondary" id="receipt-next">下一頁</button></nav><div class="receipt-footer"><button id="receipt-submit" disabled>預覽本次進貨</button><div class="actions"><button type="button" class="secondary" id="receipt-clear">清除本次輸入</button><span id="receipt-pending-status" role="status"></span><button type="button" id="receipt-process" hidden>處理上一筆進貨</button></div></div></form><div id="receipt-pending"></div><p class="muted">先在站內核對各品項原庫存、進貨量與入庫後瓶數，再按「確認入帳」。進貨只增加本次填入數量。重新讀取工作表會更新庫存與原表單價，保留已填數量及手動單價。單價由原表 E 欄帶入；確認入帳後，有填單價的進貨品項會同步更新 E 欄。留白不清除原表價格，0 為零元。金額依輸入單價計算，未另計稅額、折扣或運費。</p></section>`;
  const warnPreview=(message,onReview)=>{
@@ -137,8 +138,8 @@ export function mountReceiptGrid({esc,fmt,ask}){
  function draw(){
   if(!alive)return;
   const selection=supplierSelection(sources,brand,category);({brand,category,source}=selection);
-  $('#receipt-brands').innerHTML=selection.brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b)}</button>`).join('');
-  $('#receipt-categories').innerHTML=selection.categories.map(k=>`<button type="button" class="secondary ${k===category?'selected':''}" data-category="${esc(k)}" aria-pressed="${k===category}">${esc(k)}</button>`).join('');
+  $('#receipt-brands').innerHTML=selection.brands.map(b=>sign(b,brand,'brand',esc)).join('');
+  $('#receipt-categories').innerHTML=selection.categories.map(k=>categoryButton(k,category,esc)).join('');
   const query=$('#receipt-search').value.trim().toLowerCase(),list=sortReceiptRows(rows.filter(r=>r.name===source?.name&&`${r.drug} ${r.code}`.toLowerCase().includes(query)),quantities,sort,direction);
   const pageCount=Math.max(1,Math.ceil(list.length/pageSize));
   page=Math.min(page,pageCount);

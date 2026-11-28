@@ -1,3 +1,4 @@
+import {stockFilterStyles,filterHeading,sign,categoryButton} from './stock-filters.mjs';
 import {lossSlips,lossSheets,showLossSlips} from './loss-pending-list.mjs?v=lossRemove20261127';
 import {priceCents} from './receipt-pricing.mjs?v=compact20261030';
 import {readLossForm,writeLossForm} from './loss-form-drafts.mjs';
@@ -100,7 +101,7 @@ export function mountLoss({esc,fmt,ask,message}){
   }});
  }
  const reasonOptions=(selected='')=>lossReasons.map(([id,label])=>`<option value="${id}"${selected===id?' selected':''}>${esc(label)}</option>`).join('');
- $('#content').innerHTML=`<section class="panel loss-workbench" aria-labelledby="loss-heading">
+ $('#content').innerHTML=`${stockFilterStyles}<section class="panel loss-workbench" aria-labelledby="loss-heading">
   <div class="loss-panelhead">
    <h2 id="loss-heading"><img src="./web/assets/loss-ledger.png" width="38" height="28" alt="">每日耗損</h2>
    <a class="secondary" href="${LOSS_SHEET}" target="_blank" rel="noopener">開啟耗損表 ↗</a>
@@ -108,8 +109,8 @@ export function mountLoss({esc,fmt,ask,message}){
   <h3 class="loss-subheading">登錄當日累計耗損</h3>
   <p id="loss-qty-help">只登錄已填品項。留白保留已入帳累計，填 0 表示歸零。瓶數限整數。</p>
   <div class="loss-selectors">
-   <div class="loss-selector"><span id="loss-brand-label">廠商</span><div class="order-tabs" id="loss-brands" role="group" aria-labelledby="loss-brand-label"></div></div>
-   <div class="loss-selector"><span id="loss-category-label">類別</span><div class="order-tabs" id="loss-categories" role="group" aria-labelledby="loss-category-label"></div></div>
+   <div class="loss-selector">${filterHeading('廠商','loss-brand-label')}<div id="loss-brands" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="loss-brand-label"></div></div>
+   <div class="loss-selector">${filterHeading('類別','loss-category-label')}<div id="loss-categories" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="loss-category-label"></div></div>
   </div>
   <div class="loss-fields">
    <label>耗損日期<input id="loss-date" type="date" value="${date}" max="${date}"></label>
@@ -152,8 +153,8 @@ export function mountLoss({esc,fmt,ask,message}){
   dayDraft.reason=e.target.value;saveFormDraft();summary();
  };
  function draw(){if(disposed)return;renderFormReason();const selection=supplierSelection(sources,brand,category);({brand,category,source:selected}=selection);
- $('#loss-brands').innerHTML=selection.brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b)}</button>`).join('');
- $('#loss-categories').innerHTML=selection.categories.map(k=>`<button type="button" class="secondary ${k===category?'selected':''}" data-category="${esc(k)}" aria-pressed="${k===category}">${esc(k)}</button>`).join('');const q=$('#loss-search').value.trim().toLowerCase(),list=sortSheetRows((cache.get(selected?.gid)||[]).filter(r=>`${r.drug} ${r.code}`.toLowerCase().includes(q)),sort,direction);
+ $('#loss-brands').innerHTML=selection.brands.map(b=>sign(b,brand,'brand',esc)).join('');
+ $('#loss-categories').innerHTML=selection.categories.map(k=>categoryButton(k,category,esc)).join('');const q=$('#loss-search').value.trim().toLowerCase(),list=sortSheetRows((cache.get(selected?.gid)||[]).filter(r=>`${r.drug} ${r.code}`.toLowerCase().includes(q)),sort,direction);
  const paged=lossPage(list,page,pageSize);page=paged.page;
  $('#loss-page-size').value=String(pageSize);
  $('#loss-page-info').textContent=paged.total?'第 '+page+'／'+paged.pages+' 頁 · 第 '+paged.start+'–'+paged.end+' 筆，共 '+paged.total+' 筆':'共 0 筆';

@@ -1,3 +1,4 @@
+import {stockFilterStyles,filterHeading,sign,categoryButton,icon,tick} from './stock-filters.mjs';
 import {supplierCache} from './recent-read.mjs';
 import {beginProcessing,isProcessing} from './processing-screen.mjs';
 import {exportInventory,filterInventory,selectInventory,inventoryLabels} from './inventory-export.mjs?v=overviewCards1';
@@ -8,7 +9,7 @@ import {SOURCES,parseSheet,sheetUrl,exportUrl} from './sheets-data.mjs?v=stockre
 export function mountSheets({esc,fmt}){
  const content=document.querySelector('#content');let sources=[],brand='',category='',alive=true,busy=false,page=0,statusFilter='all',sortKey='code',sortDirection='asc';const sortYear=Number(new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Taipei'}).slice(0,4));const controller=new AbortController(),snapshots=new Map(),errors=new Map();
  let registry=[],lastBrands='',lastCategories='';
- content.innerHTML=`<style>
+ content.innerHTML=`${stockFilterStyles}<style>
 #content #cloud-table th:nth-child(-n+2),#content #cloud-table td:nth-child(-n+2){text-align:center;vertical-align:middle}
 #content #cloud-table tbody td:first-child{padding-left:54px;padding-right:54px}
 #content #cloud-table th:nth-child(-n+2) .sort-heading{text-align:center}
@@ -36,64 +37,21 @@ export function mountSheets({esc,fmt}){
 #cloud-cards button.card:focus-visible{outline:3px solid #a88036;outline-offset:3px}
 @media(max-width:1100px){#cloud-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){#cloud-cards{gap:8px}#cloud-cards button.card{min-height:94px;padding:16px 8px;gap:5px}#cloud-cards button.card img{width:38px;height:44px}#cloud-cards .metric-copy{padding-inline-start:6px}}
-#cloud-brands,#cloud-categories{display:flex;align-items:end;flex-wrap:wrap;gap:6px 10px;margin:2px 0 12px}
-#cloud-brands button,#cloud-categories button{font-weight:700;line-height:1.15;letter-spacing:0;transform:none}
-#content .stock-sign{position:relative;width:96px;height:64px;padding:0;border:0;border-radius:0;box-shadow:none;color:#39230e;background:transparent url("./web/assets/photo-supplier-sign.webp") center/100% 100% no-repeat}
-#content .stock-sign.stock-all{width:122px}
-/* The painted board occupies x=7–88%, y=42–91% of the hanging-sign sprite. */
-.stock-sign .sign-face{position:absolute;inset:42% 12% 9% 7%;display:grid;grid-template-columns:16px minmax(0,1fr) 16px;align-items:center;font-size:15px}
-.stock-all .sign-face{grid-template-columns:24px minmax(0,1fr) 24px}
-.stock-label{grid-column:2;grid-row:1;text-align:center;overflow-wrap:anywhere}
-.stock-sign .stock-sprite,.stock-tool .stock-sprite{grid-column:1;grid-row:1;justify-self:center}
-.stock-tick,.stock-trailing{grid-column:3;grid-row:1;justify-self:center}
-.stock-trailing{display:inline-flex;align-items:center;gap:2px}
-#content .stock-sign[aria-pressed=true]{color:#fff}
-.stock-sign[aria-pressed=true]::before{content:'';position:absolute;inset:0;background:inherit;clip-path:polygon(8% 51%,12% 44%,83% 44%,88% 52%,88% 95%,85% 100%,11% 100%,7% 94%);filter:hue-rotate(174deg) saturate(.9) brightness(.43)}
-.stock-tick{color:#efc45f}
-.stock-sprite{width:28px;height:28px;flex:none;display:inline-block;background:url("./web/assets/overview-filter-icons.webp") no-repeat;background-size:700% 100%;background-position:var(--sprite) center}
-.stock-sign .stock-sprite{width:24px;height:24px}
-#content .stock-tool{display:inline-grid;grid-template-columns:28px minmax(0,auto) 28px;align-items:center;justify-content:center;gap:2px;min-height:44px;max-width:100%;padding:5px 10px;background:#fff7e4;color:#193650;border:3px double #b99450;border-radius:6px;box-shadow:0 2px 0 #aa9060;font-size:14px;overflow-wrap:anywhere}
-#content .stock-tool[aria-pressed=true],#content .stock-tool.is-active{background:#193650;color:white}
-#content :is(.stock-sign,.stock-tool):focus-visible{outline:3px solid #35658b;outline-offset:2px}
-.stock-more{position:relative;max-width:100%}
-.stock-options{position:absolute;z-index:5;inset-inline-end:0;top:calc(100% + 4px);width:max-content;min-width:100%;max-width:min(17rem,90vw);max-height:16rem;overflow:auto;padding:3px;background:#fff9e9;border:1px solid #bc9a55;border-radius:5px;box-shadow:0 3px 10px #37270133}
-#content .stock-options .stock-tool{width:100%;grid-template-columns:3.5em minmax(0,1fr) 3.5em;justify-content:stretch;border:0;border-radius:2px;box-shadow:none;text-align:start}
-.stock-options small{font-size:12px}
-.stock-options p{margin:6px 8px}
-@media(max-width:600px){#cloud-categories{align-items:end;gap:7px}#cloud-categories .stock-more{position:static}#cloud-categories{position:relative}.stock-options{inset-inline:0;width:auto;max-width:100%}}
-.cloud-selector-label{display:flex;align-items:center;margin:14px 0 8px}
-.cloud-selector-label::after{content:'';flex:1;border-top:1px solid #cfb273}
-.cloud-selector-label span{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid #bd9652;border-radius:5px;background:transparent;color:#193650;font-size:1rem;font-weight:700;line-height:1.35}
-.cloud-selector-label svg{width:1.2em;height:1.2em;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #cloud-details{scroll-margin-top:16px}#cloud-detail-title:focus{outline:2px solid #315e81;outline-offset:4px}
-</style><section class="panel"><div class="panelhead"><div class="stock-heading"><h2><img src="./web/assets/inventory-clipboard.webp" width="26" height="35" alt="">藥庫存量總覽</h2><p id="cloud-total"></p><p class="muted">翻開藥庫盤點板，依廠商、類別或藥名查看未拆封庫存。</p></div><button id="cloud-refresh">立即同步 ↻</button></div><div id="cloud-status" role="status" aria-live="polite">正在讀取 Google Sheets…</div><p class="muted">開啟此頁時讀取，停留頁面每 ${directEnabled()?directPollMs()/1000:60} 秒重新讀取。原表更新欄僅有月／日者照原樣顯示；同步時間不代表實際盤點時間。單價取自原表 E 欄；庫存以原表 G 欄「未拆封」瓶數為準。</p><div class="toolbar cloud-filters"><input id="cloud-search" aria-label="搜尋雲端藥品" placeholder="搜尋藥名或編號"></div><div class="cloud-selector-label" id="cloud-brands-label"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18M5 3v18M10 4v4m8-4v4"/><rect x="8" y="8" width="13" height="10" rx="1.5"/><path d="M11 12h7"/></svg>廠商</span></div><div id="cloud-brands" class="order-tabs" role="group" aria-labelledby="cloud-brands-label"></div><div class="cloud-selector-label" id="cloud-categories-label"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18a9 9 0 0 1-18 0ZM7 21h10m-9-1 1-2m7 2-1-2M12 10l7-7a1.6 1.6 0 0 1 2.3 2.2L17 10"/></svg>類別</span></div><div id="cloud-categories" class="order-tabs" role="group" aria-labelledby="cloud-categories-label"></div></section><div class="cards" id="cloud-cards"></div><section class="panel" id="cloud-details"><div class="panelhead"><h2 id="cloud-detail-title" tabindex="-1"></h2><button id="cloud-export" class="secondary" disabled>匯出目前篩選結果</button></div><p id="cloud-export-status" role="status"></p><p class="muted">點選上方統計卡可切換明細，保留搜尋、廠商與類別條件。點選欄位標題可切換升冪／降冪；完整日期依年月日排序；只有月／日者以今年（${sortYear} 年）排序。空白或無效值固定置底。</p><div id="cloud-table"></div><div class="actions"><button class="secondary" id="cloud-prev">上一頁</button><span class="muted" id="cloud-page"></span><button class="secondary" id="cloud-next">下一頁</button></div></section><section class="panel"><h2>來源與同步狀態</h2><div id="cloud-sources"></div><p class="muted">查詢內容直接從 Google 讀取，不寫入公開 GitHub 程式庫或單機帳本。${directEnabled()?'請先登入獲准使用藥庫的 Google 帳號。':'若原表停止公開分享，此查詢會停止，需另設登入授權。'}</p></section>`;
+</style><section class="panel"><div class="panelhead"><div class="stock-heading"><h2><img src="./web/assets/inventory-clipboard.webp" width="26" height="35" alt="">藥庫存量總覽</h2><p id="cloud-total"></p><p class="muted">翻開藥庫盤點板，依廠商、類別或藥名查看未拆封庫存。</p></div><button id="cloud-refresh">立即同步 ↻</button></div><div id="cloud-status" role="status" aria-live="polite">正在讀取 Google Sheets…</div><p class="muted">開啟此頁時讀取，停留頁面每 ${directEnabled()?directPollMs()/1000:60} 秒重新讀取。原表更新欄僅有月／日者照原樣顯示；同步時間不代表實際盤點時間。單價取自原表 E 欄；庫存以原表 G 欄「未拆封」瓶數為準。</p><div class="toolbar cloud-filters"><input id="cloud-search" aria-label="搜尋雲端藥品" placeholder="搜尋藥名或編號"></div>${filterHeading('廠商','cloud-brands-label')}<div id="cloud-brands" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="cloud-brands-label"></div>${filterHeading('類別','cloud-categories-label')}<div id="cloud-categories" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="cloud-categories-label"></div></section><div class="cards" id="cloud-cards"></div><section class="panel" id="cloud-details"><div class="panelhead"><h2 id="cloud-detail-title" tabindex="-1"></h2><button id="cloud-export" class="secondary" disabled>匯出目前篩選結果</button></div><p id="cloud-export-status" role="status"></p><p class="muted">點選上方統計卡可切換明細，保留搜尋、廠商與類別條件。點選欄位標題可切換升冪／降冪；完整日期依年月日排序；只有月／日者以今年（${sortYear} 年）排序。空白或無效值固定置底。</p><div id="cloud-table"></div><div class="actions"><button class="secondary" id="cloud-prev">上一頁</button><span class="muted" id="cloud-page"></span><button class="secondary" id="cloud-next">下一頁</button></div></section><section class="panel"><h2>來源與同步狀態</h2><div id="cloud-sources"></div><p class="muted">查詢內容直接從 Google 讀取，不寫入公開 GitHub 程式庫或單機帳本。${directEnabled()?'請先登入獲准使用藥庫的 Google 帳號。':'若原表停止公開分享，此查詢會停止，需另設登入授權。'}</p></section>`;
  const $=s=>content.querySelector(s),time=t=>new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false});
  function heading(key,label,second){return `<th aria-sort="${(sortKey===key||sortKey===second?.[0])?(sortDirection==='asc'?'ascending':'descending'):'none'}"><button class="sort-heading" data-sort="${key}" aria-label="依${label}排序">${label} ${sortKey===key?(sortDirection==='asc'?'↑':'↓'):'↕'}</button>${second?'<br><button class="sort-heading" data-sort="'+second[0]+'" aria-label="依'+second[1]+'排序">'+second[1]+' '+(sortKey===second[0]?(sortDirection==='asc'?'↑':'↓'):'↕')+'</button>':''}</th>`;}
  const quick=['單方','複方'];
- const symbols=['','單方','複方','成方','膠囊','藥錠'];
- const tick='<span class="stock-tick" aria-hidden="true">✓</span>';
- function icon(name){
-  const index=symbols.indexOf(name);
-  return `<i class="stock-sprite" aria-hidden="true" style="--sprite:${100*(index<0?6:index)/6}%"></i>`;
- }
- function sign(value,selected,key){
-  const active=value===selected;
-  return `<button type="button" class="stock-sign ${value?'':'stock-all'}" data-${key}="${esc(value)}" aria-pressed="${active}"><span class="sign-face">${value?'':icon('')}<span class="stock-label">${esc(value||'全部')}</span>${active?tick:''}</span></button>`;
- }
- function categoryButton(value,enabled=true){
-  const active=value===category;
-  return `<button type="button" class="stock-tool" data-category="${esc(value)}" aria-pressed="${active}" ${enabled?'':'disabled'}>${icon(value)}<span class="stock-label">${esc(value)}</span>${active?tick:''}${enabled?'':'<small class="stock-trailing">未啟用</small>'}</button>`;
- }
  function drawFilters(brands,categories){
   const group=$('#cloud-categories');
   const brandBar=$('#cloud-brands');
-  const vendorMarkup=['',...brands].map(b=>sign(b,brand,'brand')).join('');
+  const vendorMarkup=['',...brands].map(b=>sign(b,brand,'brand',esc)).join('');
   const extras=[...new Set(registry.filter(s=>!brand||s.brand===brand).map(s=>s.category).concat(categories))].filter(c=>c&&!quick.includes(c));
   const selectedExtra=extras.includes(category);
   const name=selectedExtra?category:'更多類別';
-  const choices=extras.map(c=>categoryButton(c,categories.includes(c))).join('');
+  const choices=extras.map(c=>categoryButton(c,category,esc,categories.includes(c))).join('');
   const menu=`<div class="stock-more"><button type="button" class="stock-tool ${selectedExtra?'is-active':''}" id="stock-more" aria-expanded="false" aria-controls="stock-options">${icon(name)}<span class="stock-label">${esc(name)}</span><span class="stock-trailing" aria-hidden="true">${selectedExtra?tick:''}▾</span></button><div id="stock-options" class="stock-options" hidden>${choices||'<p>此廠商沒有其他類別</p>'}</div></div>`;
-  const categoryMarkup=sign('',category,'category')+quick.filter(c=>categories.includes(c)).map(c=>categoryButton(c)).join('')+menu;
+  const categoryMarkup=sign('',category,'category',esc)+quick.filter(c=>categories.includes(c)).map(c=>categoryButton(c,category,esc)).join('')+menu;
   if(vendorMarkup!==lastBrands){brandBar.innerHTML=vendorMarkup;lastBrands=vendorMarkup;}
   if(categoryMarkup!==lastCategories){group.innerHTML=categoryMarkup;lastCategories=categoryMarkup;}
  }

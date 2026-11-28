@@ -1,3 +1,4 @@
+import {stockFilterStyles,filterHeading,sign,categoryButton} from './stock-filters.mjs';
 import {orderLabel} from '../src/order-label.mjs';
 import {preserveLegacyRegistration} from './registration-pending.mjs';
 import {orderAddMarkup,bindOrderAdd} from './order-add.mjs';
@@ -34,7 +35,7 @@ export function mountOrderGrid({esc,fmt,ask}){
  let manualLines=[],page=1,pageSize=10;
  let loadingScreen=null;let periodData=null,periodUI,periodReady=false;let shortageSeeded=false,recoveringPrevious=false;const readCatalog=createSupplierLoader(loadOrderGridCatalog);
  const status=t=>{if(alive)$('#order-grid-state').textContent=t;};
- c.innerHTML=`${supplyLayout}<style>#order-grid td.order-period-loss{white-space:normal;min-width:180px;max-width:300px;line-height:1.6}#order-grid td.order-period-loss details{font-size:13px;line-height:1.7}#order-grid td.order-period-loss summary{cursor:pointer;min-height:44px;padding:8px}#order-grid th,#order-grid td{vertical-align:middle;text-align:right;font-variant-numeric:tabular-nums}#order-grid th:first-child,#order-grid td:first-child,#order-grid th:nth-last-child(-n+2),#order-grid td:nth-last-child(-n+2){text-align:left}#order-grid .sort-heading{color:inherit;background:transparent;border:0;padding:0;font:inherit;white-space:nowrap}#order-grid input{text-align:right;min-width:0;max-width:120px}#order-grid .order-price{width:72px}#order-grid .receipt-quantity{min-width:174px}#order-grid .quantity-stepper{grid-template-columns:26px 64px 26px 16px;gap:6px;width:150px;margin-inline:auto}#order-grid .quantity-stepper input{width:64px;height:34px;min-height:34px;font-size:14px;font-weight:400;padding:4px}#order-grid .quantity-adjust{width:26px;min-width:26px;min-height:28px;height:28px;font-size:18px;border-radius:5px}#order-grid .quantity-clear{height:22px;min-height:22px;padding:0 4px;font-size:12px;justify-self:center}#order-grid th:nth-child(5),#order-grid td:nth-child(5){text-align:center}#order-grid td small{display:block;line-height:20px;font-size:11px}#order-grid .order-price{width:72px;height:34px;min-height:34px;padding:4px 6px;font-size:14px}#order-grid th .sort-heading{width:100%;text-align:inherit}
+ c.innerHTML=`${stockFilterStyles}${supplyLayout}<style>#order-grid td.order-period-loss{white-space:normal;min-width:180px;max-width:300px;line-height:1.6}#order-grid td.order-period-loss details{font-size:13px;line-height:1.7}#order-grid td.order-period-loss summary{cursor:pointer;min-height:44px;padding:8px}#order-grid th,#order-grid td{vertical-align:middle;text-align:right;font-variant-numeric:tabular-nums}#order-grid th:first-child,#order-grid td:first-child,#order-grid th:nth-last-child(-n+2),#order-grid td:nth-last-child(-n+2){text-align:left}#order-grid .sort-heading{color:inherit;background:transparent;border:0;padding:0;font:inherit;white-space:nowrap}#order-grid input{text-align:right;min-width:0;max-width:120px}#order-grid .order-price{width:72px}#order-grid .receipt-quantity{min-width:174px}#order-grid .quantity-stepper{grid-template-columns:26px 64px 26px 16px;gap:6px;width:150px;margin-inline:auto}#order-grid .quantity-stepper input{width:64px;height:34px;min-height:34px;font-size:14px;font-weight:400;padding:4px}#order-grid .quantity-adjust{width:26px;min-width:26px;min-height:28px;height:28px;font-size:18px;border-radius:5px}#order-grid .quantity-clear{height:22px;min-height:22px;padding:0 4px;font-size:12px;justify-self:center}#order-grid th:nth-child(5),#order-grid td:nth-child(5){text-align:center}#order-grid td small{display:block;line-height:20px;font-size:11px}#order-grid .order-price{width:72px;height:34px;min-height:34px;padding:4px 6px;font-size:14px}#order-grid th .sort-heading{width:100%;text-align:inherit}
 #order-grid th:not(:first-child),#order-grid td:not(:first-child){text-align:center}
 #order-grid tbody td{vertical-align:top;padding-top:16px;padding-bottom:16px;line-height:34px}
 #order-grid tbody td:first-child{line-height:17px}
@@ -63,8 +64,8 @@ export function mountOrderGrid({esc,fmt,ask}){
 .panel .order-plaque::before{content:none}
 .order-plaque img{width:38px;height:33px;object-fit:contain;flex:none}
 .order-entry-intro{line-height:1.6;margin:10px 0 15px}
-.order-filters{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:12px 22px;border-top:1px solid #d3c2a0;padding:16px 0 8px}
-.order-filters .order-selector-label{font-weight:700}
+.order-filters{display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:4px;border-top:1px solid #d3c2a0;padding:16px 0 8px}
+.order-filters .cloud-selector-label{margin-bottom:0}
 .order-filters .order-tabs{margin:0}
 @media(max-width:600px){.order-filters{gap:12px}.order-filters .order-tabs{gap:8px}}
 </style>
@@ -77,8 +78,8 @@ export function mountOrderGrid({esc,fmt,ask}){
  <h2 class="order-plaque"><img src="./web/assets/order-entry-quill.webp" width="38" height="33" alt="">登錄本次訂貨</h2>
  <p class="order-entry-intro">留白不訂貨，可跨廠商填寫後整批確認。<br>確認量取代目前本周訂量；訂貨不增加庫存。</p>
  <div class="order-filters">
-  <span class="order-selector-label" id="order-brand-label">廠商</span><div id="order-brands" class="order-tabs" role="group" aria-labelledby="order-brand-label"></div>
-  <span class="order-selector-label" id="order-category-label">類別</span><div id="order-categories" class="order-tabs" role="group" aria-labelledby="order-category-label"></div>
+  ${filterHeading('廠商','order-brand-label')}<div id="order-brands" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="order-brand-label"></div>
+  ${filterHeading('類別','order-category-label')}<div id="order-categories" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="order-category-label"></div>
  </div>
 <form id="order-grid-form"><div class="grid"><label>訂貨日期<input id="og-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="og-actor" data-staff required disabled><option>正在讀取員工名冊…</option></select></label></div><div class="panelhead receive-tools"><input id="og-search" aria-label="搜尋訂貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" class="secondary" id="og-refresh">同步工作表庫存與單價</button><button type="button" class="secondary" id="og-export" disabled>匯出目前篩選結果</button></div><p id="og-export-status" role="status"></p>${periodControls}<div class="actions"><button type="button" id="og-fill-loss" disabled>將期間耗損量帶入訂量</button></div><p id="og-fill-note" role="status">更新耗損統計後，按「將期間耗損量帶入訂量」，將目前廠商／類別各品項的有效耗損總量填入訂貨草稿。零耗損與待核對品項保留原輸入，搜尋條件不影響帶入範圍。</p><label class="check-label"><input type="checkbox" id="og-only">只顯示本次已填品項（目前廠商／類別）</label><p id="order-grid-state" role="status">正在讀取廠商與品項…</p><p class="muted">點表頭切換升降冪；空白固定置底。只有月日的更新欄以訂貨日期年份排序。按「同步工作表庫存與單價」會以工作表最新單價取代所有本次手動單價，保留已填數量。單價帶入庫存表，可調整本次訂貨價格；不覆寫庫存表單價。</p><div id="og-page-options"><label>每頁顯示<select id="og-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><span id="og-page-range" role="status"></span></div><div class="tablewrap"><table id="order-grid"><thead><tr>${columns.map(([key,label])=>`<th>${key==='brandCategory'?'廠牌／類別':`<button type="button" class="sort-heading" data-og-sort="${key}">${label} ↕</button>${key==='code'?'<br><button type="button" class="sort-heading" data-og-sort="drug">藥名 ↕</button>':''}`}</th>`).join('')}<th>缺藥／缺藥率</th><th>原表</th></tr></thead><tbody></tbody></table></div><nav id="og-pagination" aria-label="藥品清單分頁" hidden><button type="button" class="secondary" id="og-prev">上一頁</button><span id="og-current-page" role="status"></span><button type="button" class="secondary" id="og-next">下一頁</button></nav>${orderAddMarkup}<div id="og-manual-list"></div><div class="actions"><span id="og-recovery-status" role="status"></span><strong id="og-summary" role="status"></strong><button type="button" class="secondary" id="og-clear">清除本次輸入</button><button id="og-submit" disabled>確認並預覽整批訂貨</button></div></form><div id="og-pending"></div><p class="muted">訂單單價與金額保存於 Google 訂貨紀錄；本周訂量同步至各廠商分頁。取消訂貨會還原上一筆有效確認量或原值。每批最多 100 項。</p></section>`;
  function allLines(){return [...orderLines(rows,quantities,prices),...manualLines];}
@@ -101,8 +102,8 @@ export function mountOrderGrid({esc,fmt,ask}){
   ({brand,category}=supplierSelection(sources,brand,category));
   const heading=$('[data-og-sort="periodLoss"]');if(heading)heading.textContent=(periodData?.period.label||'期間耗損量')+' ↕';
   const selection=supplierSelection(sources,brand,category);({brand,category}=selection);const brands=selection.brands,cats=selection.categories;
-  $('#order-brands').innerHTML=brands.map(b=>`<button type="button" class="secondary ${b===brand?'selected':''}" data-brand="${esc(b)}" aria-pressed="${b===brand}">${esc(b)}</button>`).join('');
-  $('#order-categories').innerHTML=cats.map(k=>`<button type="button" class="secondary ${k===category?'selected':''}" data-category="${esc(k)}" aria-pressed="${k===category}">${esc(k)}</button>`).join('');
+  $('#order-brands').innerHTML=brands.map(b=>sign(b,brand,'brand',esc)).join('');
+  $('#order-categories').innerHTML=cats.map(k=>categoryButton(k,category,esc)).join('');
   const list=selectOrderExport(rows,quantities,prices,exportFilters());
   const pageCount=Math.max(1,Math.ceil(list.length/pageSize));
   page=Math.min(page,pageCount);

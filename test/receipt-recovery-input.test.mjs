@@ -1,3 +1,4 @@
+import * as stockFilters from '../web/stock-filters.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -50,7 +51,7 @@ async function fixture({initial,catalog=[row],direct=true}={}){
  };
  const deps={cloudDraft,localStorage,directLog,directReview,csvRows:JSON.parse};
  const recover=new Function(...Object.keys(deps),sourceOf('pending-recovery.mjs')+'\nreturn {lookupPostedTransaction,recoverPendingTransaction}')( ...Object.values(deps));
- const mountDeps={receiptEntryDialog:()=>()=>{},...deps,...recover,receiptKey,receiptLines,sortReceiptRows,receiptPrice,priceCents,money,pricingTotal,
+ const mountDeps={...stockFilters,receiptEntryDialog:()=>()=>{},...deps,...recover,receiptKey,receiptLines,sortReceiptRows,receiptPrice,priceCents,money,pricingTotal,
   document:{querySelector:()=>host,body:{append(){}},createElement:()=>({append(input){this.input=input;},submit(){external.push(JSON.parse(this.input.value));},remove(){}})},
   navigator:{locks:{request:async(_key,fn)=>fn()}},LOSS_ENDPOINT:'https://example.invalid',window:{addEventListener(){},removeEventListener(){}},crypto:{randomUUID:()=>issued++?oldId.slice(4):normalId.slice(4)},
   loadReceiptCatalog:async()=>({sources:catalog,rows:catalog.map(r=>({...r,bottles:stock}))}),watchSupplierCatalog:()=>()=>{},

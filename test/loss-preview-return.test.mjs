@@ -1,3 +1,4 @@
+import * as stockFilters from '../web/stock-filters.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -43,7 +44,7 @@ async function mountForm({direct=true,withPrices=false}={}){
  $('#loss-submit-complete').parentElement={parentElement:{querySelectorAll:()=>[{},{}]}};
  const document={getElementById:node,querySelector:$,querySelectorAll:sel=>sel==='.loss-qty'?quantities:sel==='.loss-price'?prices:[],createElement:()=>({})};
  const noop=()=>{};
- const deps={
+ const deps={...stockFilters,
   document,localStorage:storage,window:{sessionStorage,addEventListener:noop,removeEventListener:noop},
   navigator:{locks:{request:(_key,fn)=>fn()}},
   priceCents,readLossForm,writeLossForm,lossDraft,lossCorrectionReason,lossSheets,lossSlips,lossPage,lossReasons,supplierSelection,protectDraft,

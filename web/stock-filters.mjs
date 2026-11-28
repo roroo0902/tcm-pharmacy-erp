@@ -2,7 +2,7 @@ export const stockFilterStyles = `<style>
 .stock-filter-tabs{display:flex;align-items:end;flex-wrap:wrap;gap:6px 10px;margin:2px 0 12px}
 .stock-filter-tabs button{font-weight:700;line-height:1.15;letter-spacing:0;transform:none}
 #content .stock-sign{position:relative;width:96px;height:64px;padding:0;border:0;border-radius:0;box-shadow:none;color:#39230e;background:transparent url("./web/assets/photo-supplier-sign.webp") center/100% 100% no-repeat}
-#content .stock-sign.stock-all{width:122px}
+#content .stock-sign.stock-all,#content .stock-sign[data-other]{width:122px}
 /* The painted board occupies x=7–88%, y=42–91% of the hanging-sign sprite. */
 .stock-sign .sign-face{position:absolute;inset:42% 12% 9% 7%;display:grid;grid-template-columns:16px minmax(0,1fr) 16px;align-items:center;font-size:15px}
 .stock-all .sign-face{grid-template-columns:24px minmax(0,1fr) 24px}

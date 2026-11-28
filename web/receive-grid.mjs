@@ -59,18 +59,21 @@ export function mountReceiptGrid({esc,fmt,ask}){
 #receipt-pagination[hidden]{display:none}
 
 #receipt-panel{min-width:0;background:#fffdf5}
-#receipt-panel .receipt-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+#receipt-panel .receipt-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;padding-bottom:12px;border-bottom:1px solid #cfb273}
+#receipt-panel .receipt-sync{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px 12px;margin-inline-start:auto}
 #receipt-panel .receipt-heading h2{display:inline-flex;align-items:center;gap:10px;margin:0;padding:8px 17px;color:#fff2cb;background:#19354c;border:4px double #cea35a;border-radius:7px;box-shadow:0 2px 0 #685233;font-family:Georgia,"PMingLiU",serif;letter-spacing:.07em}
 #receipt-panel .receipt-heading h2::before{display:none}
 .receipt-crates{position:relative;width:28px;height:26px;flex:none}
 .receipt-crates i,.receipt-crates::before,.receipt-crates::after{content:"";position:absolute;width:12px;height:12px;box-sizing:border-box;background:linear-gradient(90deg,#d6a052 39%,#fae2a2 39% 60%,#bd8338 60%);border:1px solid #8c602d;box-shadow:inset 0 2px #f9db91,inset -2px -2px #ab7534}
 .receipt-crates i{left:8px;top:1px}.receipt-crates::before{left:1px;bottom:1px}.receipt-crates::after{right:1px;bottom:1px}
 #content #receipt-panel #receipt-summary{display:block;border:0;padding:0;margin:16px 0 8px;background:none;color:#19354c;font:700 clamp(16px,2vw,22px)/1.5 Georgia,"PMingLiU",serif}
-#receipt-panel .receive-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
-#receipt-panel #receipt-search{width:min(100%,360px);margin:0}
-#receipt-panel .receipt-filters,#receipt-panel .receipt-filters>div{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
-#receipt-panel .receipt-filters{margin:14px 0;gap:12px 30px}
-#receipt-panel .receipt-filters .order-tabs{margin:0}
+#receipt-panel .receipt-fields,#receipt-panel .receipt-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:24px;row-gap:12px;align-items:start}
+#receipt-panel .receipt-fields label{display:grid;gap:4px;min-width:0;margin:0}
+#receipt-panel .receipt-fields :is(input,select),#receipt-panel #receipt-search{width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin:0}
+#receipt-panel .receipt-filters{margin:18px 0}
+#receipt-panel .receipt-filters .cloud-selector-label{margin:0 0 8px}
+#receipt-panel .receipt-filters .order-tabs{min-height:64px;align-items:end;margin:0}
+#receipt-panel .receipt-list-search{display:grid;gap:8px;margin:0;padding-top:14px;border-top:1px solid #cfb273;color:#19354c;font-size:1.1rem;font-weight:700}
 #receipt-panel .receipt-record-details{margin:.4em auto 0;font-size:12px;color:#456075;line-height:1.5;text-align:center}
 #receipt-panel .receipt-record-details dl{margin:6px 0;display:grid;grid-template-columns:auto auto;gap:3px 10px;text-align:left}#receipt-panel dd{margin:0}
 #receipt-panel #receipt-grid{width:100%}
@@ -97,10 +100,9 @@ export function mountReceiptGrid({esc,fmt,ask}){
  #content #receipt-panel{padding:14px;min-width:0}
  #receipt-panel .receipt-heading h2{padding:6px 9px;font-size:18px}
  #receipt-panel .receipt-heading a{white-space:nowrap;padding:8px}
- #receipt-panel .receipt-filters{display:grid}
- #receipt-panel .receipt-filters>div{gap:5px 8px}
- #receipt-panel .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
- #receipt-panel .grid label,#receipt-panel .grid input,#receipt-panel .grid select{min-width:0;width:100%;max-width:100%;box-sizing:border-box}
+ #receipt-panel .receipt-sync{flex-basis:100%;justify-content:flex-start;margin:0}
+ #receipt-panel .receipt-fields,#receipt-panel .receipt-filters{grid-template-columns:minmax(0,1fr)}
+ #receipt-panel .receipt-filters .order-tabs{min-height:0}
  #content #receipt-panel .tablewrap:has(#receipt-grid){overflow:visible;border:0;background:transparent}
  #content #receipt-panel #receipt-grid{border:0;background:transparent}
  #content #receipt-panel #receipt-grid thead{display:none}
@@ -125,11 +127,11 @@ export function mountReceiptGrid({esc,fmt,ask}){
  #receipt-panel #receipt-page-options{justify-content:flex-start}
 }
 </style><section class="panel" id="receipt-panel">
- <div class="receipt-heading"><h2><span class="receipt-crates" aria-hidden="true"><i></i></span>進貨登錄</h2><a class="secondary" href="#items">＋ 新增品項</a></div>
+ <div class="receipt-heading"><h2><span class="receipt-crates" aria-hidden="true"><i></i></span>進貨登錄</h2><a class="secondary" href="#items">＋ 新增品項</a><div class="receipt-sync"><button type="button" id="receipt-refresh" class="secondary">重新讀取工作表</button></div></div>
  <p id="receipt-summary" role="status"></p><p id="receipt-state" role="status">正在讀取共用廠商與品項…</p>
- <div class="panelhead receive-tools"><input id="receipt-search" type="search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"><button type="button" id="receipt-refresh" class="secondary">重新讀取工作表</button></div>
+ <form id="receipt-form"><div class="receipt-fields"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div>
  <div class="receipt-filters"><div>${filterHeading('廠商','receipt-brand-label')}<div id="receipt-brands" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="receipt-brand-label"></div></div><div>${filterHeading('類別','receipt-category-label')}<div id="receipt-categories" class="order-tabs stock-filter-tabs" role="group" aria-labelledby="receipt-category-label"></div></div></div>
- <form id="receipt-form"><div class="grid"><label>進貨日期<input id="receipt-date" type="date" value="${today()}" max="${today()}" required></label><label>經手人<select id="receipt-actor" data-staff required disabled><option value="">正在讀取員工名冊…</option></select></label></div>
+ <label class="receipt-list-search">藥品清單<input id="receipt-search" type="search" aria-label="搜尋進貨品項" placeholder="搜尋藥品名稱或編號"></label>
  <div id="receipt-page-options"><label>每頁顯示<select id="receipt-page-size"><option value="10">10 項</option><option value="20">20 項</option><option value="30">30 項</option></select></label><label>排序<select id="receipt-mobile-sort">${[['code','藥品編號'],['quantity','進貨數量'],['bottles','未拆封瓶數'],['updated','原表更新欄']].map(([key,label])=>['asc','desc'].map(dir=>`<option value="${key}:${dir}">${label} ${dir==='asc'?'↑':'↓'}</option>`).join('')).join('')}</select></label><span id="receipt-page-range" role="status"></span></div><div class="tablewrap"><table id="receipt-grid"><thead><tr><th><button type="button" class="sort-heading" data-sort="code">藥品／編號 ↑</button></th><th>廠牌／類別</th><th class="num"><button type="button" class="sort-heading" data-sort="bottles">未拆封瓶數 ↕</button></th><th class="receipt-quantity"><button type="button" class="sort-heading" data-sort="quantity">本次實收 ↕</button></th><th class="receipt-price-cell">單價（元／瓶）</th><th class="num">進貨小計（元）</th><th class="num">入庫後瓶數</th><th><button type="button" class="sort-heading" data-sort="updated">原表更新欄 ↕</button></th><th>缺藥標記／率</th></tr></thead><tbody></tbody></table></div><nav id="receipt-pagination" aria-label="藥品清單分頁" hidden><button type="button" class="secondary" id="receipt-prev">上一頁</button><span id="receipt-current-page" role="status"></span><button type="button" class="secondary" id="receipt-next">下一頁</button></nav><div class="receipt-footer"><button id="receipt-submit" disabled>預覽本次進貨</button><div class="actions"><button type="button" class="secondary" id="receipt-clear">清除本次輸入</button><span id="receipt-pending-status" role="status"></span><button type="button" id="receipt-process" hidden>處理上一筆進貨</button></div></div></form><div id="receipt-pending"></div><p class="muted">先在站內核對各品項原庫存、進貨量與入庫後瓶數，再按「確認入帳」。進貨只增加本次填入數量。重新讀取工作表會更新庫存與原表單價，保留已填數量及手動單價。單價由原表 E 欄帶入；確認入帳後，有填單價的進貨品項會同步更新 E 欄。留白不清除原表價格，0 為零元。金額依輸入單價計算，未另計稅額、折扣或運費。</p></section>`;
  const warnPreview=(message,onReview)=>{
   if(alive&&!isProcessing())showReceiptReviewWarning(message,onReview);
@@ -461,6 +463,7 @@ export function mountReceiptGrid({esc,fmt,ask}){
  $('#receipt-brands').onclick=e=>{const b=e.target.closest('[data-brand]');if(b){brand=b.dataset.brand;selected();}};
  $('#receipt-categories').onclick=e=>{const b=e.target.closest('[data-category]');if(b){category=b.dataset.category;selected();}};
  $('#receipt-search').oninput=resetPage;$('#receipt-refresh').onclick=()=>{if(!loading)load(true,{showDialog:true,compact:true});};
+ $('#receipt-search').onkeydown=e=>{if(e.key==='Enter'&&!e.isComposing)e.preventDefault();};
  // User edits invalidate earlier-form ownership even if the value is later re-entered identically.
  for(const field of ['#receipt-date','#receipt-actor'])for(const event of ['input','change'])$(field).addEventListener(event,()=>{ownedNormalReceipt=null;});
  $('#receipt-clear').onclick=()=>{ownedNormalReceipt=null;quantities.clear();prices.clear();draw();status('已清除本次輸入，未修改工作表。');};

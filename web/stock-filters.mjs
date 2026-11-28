@@ -23,7 +23,8 @@ export const stockFilterStyles = `<style>
 #content .stock-options .stock-tool{width:100%;grid-template-columns:3.5em minmax(0,1fr) 3.5em;justify-content:stretch;border:0;border-radius:2px;box-shadow:none;text-align:start}
 .stock-options small{font-size:12px}
 .stock-options p{margin:6px 8px}
-@media(max-width:600px){#cloud-categories{align-items:end;gap:7px}#cloud-categories .stock-more{position:static}#cloud-categories{position:relative}.stock-options{inset-inline:0;width:auto;max-width:100%}}
+@media(min-width:951px){#cloud-brands-label,#cloud-categories-label,#item-registration-panel .cloud-selector-label{width:77%}}
+@media(max-width:600px){#cloud-categories,#item-registration-panel #entry-categories{align-items:end;gap:7px}#cloud-categories .stock-more{position:static}#cloud-categories{position:relative}.stock-options{inset-inline:0;width:auto;max-width:100%}}
 .cloud-selector-label{display:flex;align-items:center;margin:14px 0 8px}
 .cloud-selector-label::after{content:'';flex:1;border-top:1px solid #cfb273}
 .cloud-selector-label span{display:inline-flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid #bd9652;border-radius:5px;background:transparent;color:#193650;font-size:1rem;font-weight:700;line-height:1.35}

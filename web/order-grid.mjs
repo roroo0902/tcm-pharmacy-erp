@@ -57,7 +57,7 @@ export function mountOrderGrid({esc,fmt,ask}){
 #og-page-options label{display:flex;align-items:center;gap:8px;margin:0}
 #og-page-size{width:auto;margin:0}
 #og-pagination[hidden]{display:none}
-.order-planning-head{display:flex;align-items:center;justify-content:space-between;gap:16px 24px;flex-wrap:wrap}
+.order-planning-head{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
 .order-planning-head p{margin:8px 0 0}
 .panel .order-plaque{display:inline-flex;align-items:center;gap:10px;margin:0;padding:5px 14px 5px 9px;border:4px double #dcba67;border-radius:6px;background:#18344c;color:#fff6dc;line-height:1.25;clip-path:polygon(5px 0,calc(100% - 5px) 0,100% 5px,100% calc(100% - 5px),calc(100% - 5px) 100%,5px 100%,0 calc(100% - 5px),0 5px)}
 .panel .order-plaque::before{content:none}
@@ -66,12 +66,12 @@ export function mountOrderGrid({esc,fmt,ask}){
 .order-filters{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:12px 22px;border-top:1px solid #d3c2a0;padding:16px 0 8px}
 .order-filters .order-selector-label{font-weight:700}
 .order-filters .order-tabs{margin:0}
-@media(max-width:600px){.order-planning-head{align-items:flex-start;flex-direction:column}.order-filters{gap:12px}.order-filters .order-tabs{gap:8px}}
+@media(max-width:600px){.order-filters{gap:12px}.order-filters .order-tabs{gap:8px}}
 </style>
 <section class="panel order-planning-head">
  <div><h2 class="order-plaque"><img src="./web/assets/order-planning-map.webp" width="38" height="33" alt="">訂貨規劃</h2>
- <p>依耗損計算建議量、編輯批次訂單及查看舊草稿。</p></div>
- <a class="secondary" role="button" href="#orderPlanning">批次訂貨、建議量與舊草稿 →</a>
+ <p>適用於平時補貨。依每日平均耗損與備貨天數（含運送及假期），扣除未拆封庫存，估算建議訂貨量。</p></div>
+ <a class="secondary" role="button" href="#orderPlanning">平時補貨建議 →</a>
 </section>
 <section class="panel">
  <h2 class="order-plaque"><img src="./web/assets/order-entry-quill.webp" width="38" height="33" alt="">登錄本次訂貨</h2>

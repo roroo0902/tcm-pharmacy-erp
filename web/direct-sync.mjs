@@ -44,6 +44,7 @@ export function authorize(){
 }
 export async function runDirect(operation,draft,previewToken){
  if(hostedEnabled()){
+  if(operation==='readOverviewCatalog')return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(Error(e.message||'庫存讀取失敗'))).erpOverviewCatalog());
   const call=(op)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(Error(e.message||'同步失敗，請重新核對同一筆資料'))).erpHosted(op,draft??null,previewToken??null));
   // Separate executions avoid SpreadsheetApp stale caches after adding a date column.
   if(operation==='preview'&&draft?.kind==='tcm-loss-cumulative')await call('prepareLoss');
@@ -53,7 +54,7 @@ export async function runDirect(operation,draft,previewToken){
  if(operation==='preview'&&draft?.kind==='tcm-loss-cumulative')await runDirect('prepareLoss',draft);
  const response=await fetch('https://script.googleapis.com/v1/scripts/'+encodeURIComponent(DIRECT.deploymentId)+':run',{
   method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-  body:JSON.stringify({function:'erpDirect',parameters:[operation,draft??null,previewToken??null],devMode:false})
+  body:JSON.stringify(operation==='readOverviewCatalog'?{function:'erpOverviewCatalog',parameters:[],devMode:false}:{function:'erpDirect',parameters:[operation,draft??null,previewToken??null],devMode:false})
  });
  if(response.status===401){token='';expires=0;}
  const result=await response.json();

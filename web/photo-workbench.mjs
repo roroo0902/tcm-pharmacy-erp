@@ -11,11 +11,18 @@ const styles = `
 .ai-steps li+li:before{content:'→';color:#94805c}
 .ai-steps li span{border:1px solid #d4c49f;border-radius:3px;padding:3px 8px}
 .ai-steps [aria-current=step] span{background:#1e3c54;border-color:#d3ae60;color:white}
-#ai-status{background:#e6efe8;border-left:3px solid #547969;padding:8px 12px;margin:10px 0}
-#photo-receive-panel .ai-suppliers,.ai-tools,.ai-foot{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
-#photo-receive-panel #ai-source{margin:0}
-#ai-source [aria-pressed=true]{background:#e8c371;color:#21364b;border-color:#9e7732}
-#ai-source [aria-pressed=true]:before{content:'✓ '}.ai-suppliers{margin:12px 0}
+#photo-receive-panel .ai-suppliers{padding:8px 12px;margin:10px 0;border:1px solid var(--ai-line);border-radius:5px}
+.ai-supplier-head{display:flex;align-items:center;justify-content:space-between;max-width:470px;gap:12px}
+#photo-receive-panel #ai-reload{font-size:13px;padding:4px 8px}
+#photo-receive-panel #ai-source{display:flex;flex-wrap:wrap;gap:6px 10px;margin:5px 0}
+#photo-receive-panel .ai-brand-sign{position:relative;display:block;width:96px;height:64px;padding:0;border:0;border-radius:0;box-shadow:none;transform:none;color:#32200b;background:transparent url("./web/assets/photo-supplier-sign.webp") center / 100% 100% no-repeat}
+#photo-receive-panel .ai-brand-sign span{position:absolute;left:9%;width:77%;top:49%;height:45%;display:flex;align-items:center;justify-content:center;gap:2px;line-height:1.05;font-size:16px;font-weight:700;overflow-wrap:anywhere;text-align:center}
+#photo-receive-panel .ai-brand-sign[aria-pressed=true]{color:#fff}
+#photo-receive-panel .ai-brand-sign[aria-pressed=true]::before{content:"";position:absolute;inset:0;background:inherit;clip-path:polygon(8% 51%,12% 44%,83% 44%,88% 52%,88% 95%,85% 100%,11% 100%,7% 94%);filter:hue-rotate(174deg) saturate(.9) brightness(.43)}
+.ai-brand-sign[aria-pressed=true] span::after{content:"✓";color:#ffdb74;font-weight:800}
+#photo-receive-panel .ai-brand-sign:focus-visible{outline:2px solid #966b18;outline-offset:2px;border-radius:3px}
+#ai-status{background:#e6efe8;border-left:3px solid #547969;padding:5px 10px;margin:5px 0 0}
+.ai-tools,.ai-foot{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
 .ai-workspace{display:grid;grid-template-columns:minmax(190px,23%) minmax(0,1fr);gap:14px;align-items:start}
 .ai-pane{border:1px solid var(--ai-line);background:#fffef9;border-radius:5px;padding:clamp(10px,1vw,16px);min-width:0}
 #photo-receive-panel .ai-pane h3,#photo-receive-panel .ai-list-title{margin:0 0 12px;font-size:18px}
@@ -61,6 +68,8 @@ const styles = `
 @media(min-width:761px){.ai-review-table th:nth-child(1){width:24%}.ai-review-table th:nth-child(2){width:38%}}
 @media(max-width:1150px){.ai-workspace{grid-template-columns:1fr}.ai-photo-stage{min-height:80px}#ai-original{max-height:215px}}
 @media(max-width:760px){
+ #photo-receive-panel #ai-source{display:grid;grid-template-columns:repeat(2,minmax(0,96px))}
+ #photo-receive-panel .ai-brand-sign{max-width:100%}
  #photo-receive-panel h2.ai-plaque{padding:6px 9px;font-size:18px}
  #photo-receive-panel .ai-steps{gap:5px}.ai-steps li{font-size:12px;gap:4px}.ai-steps li span{padding:3px 5px}
  #photo-receive-panel .ai-workspace{grid-template-columns:minmax(0,1fr)}
@@ -84,12 +93,12 @@ export function photoWorkbench(date){
  return `<style>${styles}</style><section class="panel" id="photo-receive-panel">
  <h2 class="ai-plaque"><svg viewBox="0 0 24 20" aria-hidden="true"><path fill-rule="evenodd" d="M2 4h5l2-3h6l2 3h5v14H2zm10 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>AI 拍照進貨</h2>
  <ol class="ai-steps" aria-label="進貨流程">${steps.map((s,i)=>`<li data-ai-step="${i}"><span>${s}</span></li>`).join('')}</ol>
- <p id="ai-status" role="status">正在讀取廠商與藥品名冊…</p>
- <div class="ai-suppliers"><strong id="ai-source-label">廠商</strong><div id="ai-source" class="order-tabs" role="group" aria-labelledby="ai-source-label"></div><button type="button" class="secondary" id="ai-reload">更新現有藥品</button></div>
+ <section class="ai-suppliers" aria-labelledby="ai-source-label"><div class="ai-supplier-head"><strong id="ai-source-label">進貨單廠商</strong><button type="button" class="secondary" id="ai-reload">↻ 更新藥品名冊</button></div>
+ <div id="ai-source" role="group" aria-labelledby="ai-source-label"></div><p id="ai-status" role="status">正在讀取廠商與藥品名冊…</p></section>
  <div class="ai-workspace"><section class="ai-pane"><h3>單據照片</h3><div class="ai-photo-stage"><span id="ai-photo-empty">尚未選擇照片</span><img id="ai-original" hidden alt="本張進貨原照片"></div>
- <div class="ai-tools"><button type="button" class="secondary" id="ai-camera">拍照</button><button type="button" class="secondary" id="ai-choose">選擇照片</button></div>
- <input hidden id="ai-image" type="file" accept="image/*"><small tabindex="0" id="ai-image-hint" class="ai-hint">也可選取此欄位後貼上圖片。</small>
- <div class="ai-tools"><button id="ai-scan" type="button">AI 解析照片</button><button type="button" class="secondary" id="ai-reset-photo" hidden>清除本張照片</button></div></section>
+ <div class="ai-tools"><button type="button" class="secondary" id="ai-camera" disabled>拍照</button><button type="button" class="secondary" id="ai-choose" disabled>選擇照片</button></div>
+ <input hidden disabled id="ai-image" type="file" accept="image/*"><small tabindex="0" id="ai-image-hint" class="ai-hint">選好廠商後，可在此貼上圖片。</small>
+ <div class="ai-tools"><button id="ai-scan" type="button" disabled>AI 解析照片</button><button type="button" class="secondary" id="ai-reset-photo" hidden>清除本張照片</button></div></section>
  <section class="ai-pane"><header class="ai-review-head"><h3 class="ai-plaque"><img src="./web/assets/loss-lookup.png" width="32" height="28" alt="">人工核對藥品</h3><span data-ai-review-count role="status" hidden></span></header><div class="ai-fields"><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label>
  <label>進貨日期<input type="date" id="ai-date" max="${date}" value="${date}"></label>
  <label>單據或備註（選填）<select id="ai-note"><option value="">不填寫備註</option><option>依送貨單進貨</option><option>補填入送到貨單</option><option>無附進貨單直接入庫</option><option>換貨補回</option><option>其他</option></select></label></div>

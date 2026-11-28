@@ -70,7 +70,7 @@ function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMes
    <td data-label="人工核對" data-wide><div class="ai-review-actions"><label><input data-reviewed="${id}" type="checkbox" aria-label="${name} 已核對配對品項" ${found?(line.reviewed?'checked':''):'disabled'}>已核對</label>
     <button type="button" data-remove="${id}" aria-label="排除 ${name}" class="secondary small">排除</button></div></td></tr>`;
  }).join('');
- return '<p class="muted ai-review-note">請核對藥名、規格及數量。單據以盒、袋或包計量時，請填寫換算後的實際入庫瓶數。</p>'+
+ return '<p class="muted ai-review-note">請核對藥名、規格及數量。100g 品項只比對單方。單據以盒、袋或包計量時，請填寫換算後的實際入庫瓶數。</p>'+
   '<div class="ai-review-wrap" tabindex="0" role="region" aria-label="核對辨識結果表格"><table class="ai-table ai-review-table"><thead><tr>'+
   '<th scope="col">單據辨識內容</th><th scope="col">配對庫存藥品</th><th scope="col">入庫瓶數</th><th scope="col">單價（元／瓶）</th><th scope="col">人工核對</th>'+
   '</tr></thead><tbody>'+rows+'</tbody></table></div>';
@@ -138,7 +138,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   brandDrafts.delete(brand);
   selected=brand;recognized=draft?.recognized||[];editing=draft?.editing||null;
   scanPhoto=draft?.scanPhoto||null;pastedImage=draft?.file||null;$('#ai-image').value='';
-  $('#ai-image-hint').textContent=draft?.hint||'也可選取此欄位後貼上圖片。';
+  $('#ai-image-hint').textContent=draft?.hint||(selected?'也可選取此欄位後貼上圖片。':'選好廠商後，可在此貼上圖片。');
   displayPhoto(scanPhoto||pastedImage);
  }
  function updateSteps(){
@@ -193,7 +193,26 @@ export function mountPhotoReceive({esc,fmt,ask}){
  $('#ai-note-back').onclick=()=>{$('#ai-note').value=previousNote;showOtherNote();$('#ai-note').focus?.();};
  const noteValue=()=>$('#ai-note').value==='其他'?['其他',$('#ai-note-other').value.trim()].filter(Boolean).join('：'):$('#ai-note').value.trim();
  const status=text=>{if(alive)$('#ai-status').textContent=text;};
- const lockBusy=busy=>{loading=busy;if(!alive)return;$('#ai-scan').disabled=busy||!!submission;$('#ai-camera').disabled=$('#ai-choose').disabled=busy||!!editing||!!submission;updateSteps();$('#ai-preview').disabled=busy||!basket.length||awaitingPhoto()||otherUnfinished().length>0;$('#ai-reload').disabled=busy;$('#ai-add').disabled=busy||!catalogReady||!editing&&!recognized.some(x=>!x.removed);};
+ function updatePhotoControls(){
+  const locked=!selected||!catalogReady||loading||!!editing||!!submission;
+  $('#ai-camera').disabled=locked;
+  $('#ai-choose').disabled=locked;
+  $('#ai-image').disabled=locked;
+  $('#ai-scan').disabled=locked||!selectedFile();
+  $('#ai-image-hint').tabIndex=locked?-1:0;
+ }
+ function lockBusy(busy){
+  loading=busy;
+  if(!alive)return;
+  drawBasket();
+  $('#ai-reload').disabled=busy;
+  $('#ai-add').disabled=busy||!catalogReady||!editing&&!recognized.some(x=>!x.removed);
+ }
+ function showSupplierStatus(){
+  if(!selected){status('請選擇這張進貨單的廠商。');return;}
+  const next=unfinished()?'請繼續核對本張單據。':selectedFile()?'可開始辨識單據照片。':'可拍照或選取單據照片。';
+  status('已選'+selected+'，'+next);
+ }
  function currentRows(){return rows.filter(r=>r.brand===selected);}
  const catalogDialog=$('#ai-catalog-dialog');
  const catalogTitle=$('#ai-catalog-title');
@@ -215,23 +234,23 @@ export function mountPhotoReceive({esc,fmt,ask}){
   load();
  }
  function drawBrandButtons(brands){
-  $('#ai-source').innerHTML=brands.map(brand=>'<button type="button" class="secondary '+(brand===selected?'selected':'')+'" data-ai-brand="'+esc(brand)+'" aria-pressed="'+(brand===selected)+'">'+esc(brand)+'</button>').join('');
+  $('#ai-source').innerHTML=brands.map(brand=>'<button type="button" class="ai-brand-sign" data-ai-brand="'+esc(brand)+'" aria-pressed="'+(brand===selected)+'" title="'+esc(brand)+'"><span>'+esc(brand)+'</span></button>').join('');
  }
  async function load({fresh=false}={}){
   if(!alive)return;
   const seq=++run;catalogReady=false;rows=[];
   recognized.forEach(line=>{line.reviewed=false;});
   for(const draft of brandDrafts.values())draft.recognized.forEach(line=>{line.reviewed=false;});
-  drawResult();
+  updatePhotoControls();drawResult();
   showCatalogState();
   try{
    const catalog=await loadReceiptCatalog({fresh});
    if(seq!==run||!alive)return;
    const brands=[...new Set(catalog.sources.map(source=>source.brand))];
-   if(!brands.includes(selected))switchBrand(brands[0]);
+   if(selected&&!brands.includes(selected))switchBrand('');
    drawBrandButtons(brands);
    sources=catalog.sources;rows=catalog.rows;catalogReady=true;drawResult();drawBasket();catalogDialog.close();
-   status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');
+   showSupplierStatus();
   }catch(error){if(seq===run&&alive){rows=[];catalogReady=false;drawResult();status(error.message);showCatalogState(error.message);}}
  }
 
@@ -364,8 +383,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
   }).join('')+'</tbody></table></div>':'<p class="muted">尚未加入品項。可依序上傳多張照片，將品項累積到同一進貨清單。</p>';
   if(parked.length)$('#ai-basket').insertAdjacentHTML('beforeend','<p class="muted">請切回 '+parked.map(esc).join('、')+' 完成本張品項核對，再預覽整批。</p>');
   updateSteps();
-  $('#ai-camera').disabled=$('#ai-choose').disabled=loading||!!editing||!!submission;
-  $('#ai-scan').disabled=loading||!!submission||!!editing;
+  updatePhotoControls();
   $('#ai-add').textContent=editing?'更新本張核對內容':'核對後加入進貨清單';
   if(batches.length)$('#ai-basket').insertAdjacentHTML('beforeend',batches.map((batch,i)=>'<button type="button" class="secondary" data-edit-photo="'+i+'" '+(blockEdit?'disabled':'')+'>修改第 '+(i+1)+' 張 · '+esc(batch.brand)+'</button>').join(''));
   root.querySelectorAll('[data-edit-photo]').forEach(b=>b.onclick=()=>editBatch(batches[Number(b.dataset.editPhoto)]));
@@ -375,9 +393,10 @@ export function mountPhotoReceive({esc,fmt,ask}){
    batches=batches.filter(batch=>batch.recognized.some(l=>!l.removed));basket=basket.filter(l=>l.key!==key);drawBasket();});
   $('#ai-preview').disabled=loading||!basket.length||busyDraft;
  }
- $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||loading||button.dataset.aiBrand===selected)return;if(submission)return;switchBrand(button.dataset.aiBrand);
+ $('#ai-source').onclick=event=>{const button=event.target.closest('[data-ai-brand]');if(!button||!catalogReady||loading||submission||button.dataset.aiBrand===selected)return;switchBrand(button.dataset.aiBrand);
   drawBrandButtons([...new Set(sources.map(source=>source.brand))]);drawResult();drawBasket();
-  status('已讀取 '+selected+' 共 '+currentRows().length+' 項；100g 品項只比對單方。');};
+  $('#ai-source [aria-pressed=true]')?.focus?.({preventScroll:true});
+  showSupplierStatus();};
  $('#ai-reload').onclick=async()=>{try{if(directEnabled())await authorize();await load({fresh:true});}catch(error){status(error.message);}};
 
  const fileInput=$('#ai-image');
@@ -391,11 +410,12 @@ export function mountPhotoReceive({esc,fmt,ask}){
  $('#ai-choose').onclick=()=>{fileInput.removeAttribute('capture');fileInput.click();};
  $('#ai-camera').onclick=()=>{fileInput.setAttribute('capture','environment');fileInput.click();};
  fileInput.onchange=()=>{
+  if(fileInput.disabled){fileInput.value='';return;}
   pastedImage=null;displayPhoto(scanPhoto||selectedFile());drawBasket();
   $('#ai-image-hint').textContent=selectedFile()?'已選擇 '+selectedFile().name+'，可開始辨識。':'也可選取此欄位後貼上圖片。';
  };
  fileInput.onpaste=$('#ai-image-hint').onpaste=event=>{
-  if(loading||editing||submission)return;
+  if(fileInput.disabled)return;
   const image=[...(event.clipboardData?.files||[])].find(file=>file.type.startsWith('image/'));
   if(!image)return;
   event.preventDefault();
@@ -404,6 +424,7 @@ export function mountPhotoReceive({esc,fmt,ask}){
  };
  $('#ai-scan').onclick=async()=>{
   if(loading||submission)return;
+  if(!selected){showSupplierStatus();return;}
   if(editing){status('請先更新本張核對內容，再辨識下一張。');return;}
   try{
    if(!directEnabled())throw Error('AI 拍照功能需要已授權的 Google 雲端入口');

@@ -2,7 +2,12 @@ const styles = `
 #photo-receive-panel{--ai-navy:#19364e;--ai-gold:#b28c43;--ai-line:#d8cfb7;color:var(--ai-navy);background:#fffdf5;text-align:left}
 #photo-receive-panel *{box-sizing:border-box}
 #photo-receive-panel [hidden]{display:none!important}
-#photo-receive-panel h3.ai-plaque{display:inline-flex;align-items:center;gap:.55em;margin:0;padding:7px 16px;background:var(--ai-navy);color:#fff9e7;border:4px double #dab967;border-radius:5px;line-height:1.25}
+#photo-receive-panel .ai-section-heading{
+ display:inline-flex;align-items:center;gap:7px;max-width:100%;min-height:34px;margin:0;padding:4px 9px;
+ border:1px solid var(--ai-gold);border-radius:5px;background:transparent;color:var(--ai-navy);font-size:16px;font-weight:700;line-height:1.4
+}
+.ai-section-heading::before{content:"";align-self:stretch;width:3px;flex:none;background:#be9239}
+.ai-section-heading svg{width:18px;height:18px;flex:none;stroke:#76561e;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round}
 #photo-receive-panel h2.ai-plaque{display:inline-flex;align-items:center;gap:10px;margin:0;padding:8px 17px;color:#fff2cb;background:#19354c;border:4px double #cea35a;border-radius:7px;box-shadow:0 2px 0 #685233;font-family:Georgia,"PMingLiU",serif;letter-spacing:.07em}
 #photo-receive-panel h2.ai-plaque::before{display:none}
 #photo-receive-panel h2.ai-plaque svg{width:28px;height:26px;flex:none;fill:#efc76e}
@@ -12,11 +17,11 @@ const styles = `
 .ai-steps li span{border:1px solid #d4c49f;border-radius:3px;padding:3px 8px}
 .ai-steps [aria-current=step] span{background:#1e3c54;border-color:#d3ae60;color:white}
 #photo-receive-panel .ai-suppliers{padding:8px 12px;margin:10px 0;border:1px solid var(--ai-line);border-radius:5px}
-.ai-supplier-head{display:flex;align-items:center;justify-content:space-between;max-width:470px;gap:12px}
-#photo-receive-panel #ai-reload{font-size:13px;padding:4px 8px}
+.ai-supplier-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px}
+#photo-receive-panel #ai-reload{font-size:13px;padding:4px 8px;margin-inline-start:auto}
 #photo-receive-panel #ai-source{display:flex;flex-wrap:wrap;gap:6px 10px;margin:5px 0}
 #photo-receive-panel .ai-brand-sign{position:relative;display:block;width:96px;height:64px;padding:0;border:0;border-radius:0;box-shadow:none;transform:none;color:#32200b;background:transparent url("./web/assets/photo-supplier-sign.webp") center / 100% 100% no-repeat}
-#photo-receive-panel .ai-brand-sign span{position:absolute;left:9%;width:77%;top:49%;height:45%;display:flex;align-items:center;justify-content:center;gap:2px;line-height:1.05;font-size:16px;font-weight:700;overflow-wrap:anywhere;text-align:center}
+#photo-receive-panel .ai-brand-sign span{position:absolute;left:9%;width:77%;top:46%;height:46%;display:flex;align-items:center;justify-content:center;gap:2px;line-height:1.05;font-size:16px;font-weight:700;overflow-wrap:anywhere;text-align:center}
 #photo-receive-panel .ai-brand-sign[aria-pressed=true]{color:#fff}
 #photo-receive-panel .ai-brand-sign[aria-pressed=true]::before{content:"";position:absolute;inset:0;background:inherit;clip-path:polygon(8% 51%,12% 44%,83% 44%,88% 52%,88% 95%,85% 100%,11% 100%,7% 94%);filter:hue-rotate(174deg) saturate(.9) brightness(.43)}
 .ai-brand-sign[aria-pressed=true] span::after{content:"✓";color:#ffdb74;font-weight:800}
@@ -25,7 +30,7 @@ const styles = `
 .ai-tools,.ai-foot{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
 .ai-workspace{display:grid;grid-template-columns:minmax(190px,23%) minmax(0,1fr);gap:14px;align-items:start}
 .ai-pane{border:1px solid var(--ai-line);background:#fffef9;border-radius:5px;padding:clamp(10px,1vw,16px);min-width:0}
-#photo-receive-panel .ai-pane h3,#photo-receive-panel .ai-list-title{margin:0 0 12px;font-size:18px}
+#photo-receive-panel .ai-list>.ai-section-heading{margin-bottom:10px}
 .ai-photo-stage{display:grid;place-items:center;background:#f2eddf;border:1px dashed #c9b88f;border-radius:3px;min-height:130px;margin:10px 0;color:#74664b}
 #ai-original{display:block;width:100%;max-height:310px;object-fit:contain}
 .ai-tools{margin:8px 0}.ai-hint{display:block;overflow-wrap:anywhere}
@@ -34,7 +39,6 @@ const styles = `
 #photo-receive-panel .ai-fields label{margin:0}
 #photo-receive-panel .ai-fields :is(select,input){width:100%;min-width:0}
 .ai-review-note{font-size:13px}.ai-review-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
-#photo-receive-panel .ai-review-head h3{margin:0}.ai-review-head img{object-fit:contain;image-rendering:pixelated}
 [data-ai-review-count]{border:1px solid #bda465;border-radius:5px;padding:5px 9px;font-size:14px;font-weight:600}
 #photo-receive-panel .ai-review-wrap,#photo-receive-panel .ai-basket-wrap{overflow:auto;max-width:100%}
 #photo-receive-panel .ai-table{width:100%;border-collapse:collapse;font-size:14px;color:#22394a;white-space:normal}
@@ -88,21 +92,31 @@ const styles = `
 }
 `;
 
+const sectionIcons={
+ supplier:'<path d="M3 9l2-6h14l2 6M3 9h18v1a3 3 0 0 1-5 2 3 3 0 0 1-4 0 3 3 0 0 1-4 0 3 3 0 0 1-5-2zM5 13v8h14v-8M9 21v-6h5v6"/>',
+ photo:'<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="9" r="1.3"/><path d="m3 17 5-5 4 3 4-5 5 5"/>',
+ review:'<circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/>',
+ list:'<path d="M5 2h10l4 4v16H5zM14 3v5h4M8 12h8M8 16h8"/>'
+};
+function sectionHeading(icon,title,id=''){
+ return `<h3 class="ai-section-heading"${id?' id="'+id+'"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${sectionIcons[icon]}</svg>${title}</h3>`;
+}
+
 export function photoWorkbench(date){
  const steps=['選廠商','拍照','AI 解析','人工核對','預覽','確認入庫'];
  return `<style>${styles}</style><section class="panel" id="photo-receive-panel">
  <h2 class="ai-plaque"><svg viewBox="0 0 24 20" aria-hidden="true"><path fill-rule="evenodd" d="M2 4h5l2-3h6l2 3h5v14H2zm10 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>AI 拍照進貨</h2>
  <ol class="ai-steps" aria-label="進貨流程">${steps.map((s,i)=>`<li data-ai-step="${i}"><span>${s}</span></li>`).join('')}</ol>
- <section class="ai-suppliers" aria-labelledby="ai-source-label"><div class="ai-supplier-head"><strong id="ai-source-label">進貨單廠商</strong><button type="button" class="secondary" id="ai-reload">↻ 更新藥品名冊</button></div>
+ <section class="ai-suppliers" aria-labelledby="ai-source-label"><div class="ai-supplier-head">${sectionHeading('supplier','進貨單廠商','ai-source-label')}<button type="button" class="secondary" id="ai-reload">↻ 更新藥品名冊</button></div>
  <div id="ai-source" role="group" aria-labelledby="ai-source-label"></div><p id="ai-status" role="status">正在讀取廠商與藥品名冊…</p></section>
- <div class="ai-workspace"><section class="ai-pane"><h3>單據照片</h3><div class="ai-photo-stage"><span id="ai-photo-empty">尚未選擇照片</span><img id="ai-original" hidden alt="本張進貨原照片"></div>
+ <div class="ai-workspace"><section class="ai-pane">${sectionHeading('photo','單據照片')}<div class="ai-photo-stage"><span id="ai-photo-empty">尚未選擇照片</span><img id="ai-original" hidden alt="本張進貨原照片"></div>
  <div class="ai-tools"><button type="button" class="secondary" id="ai-camera" disabled>拍照</button><button type="button" class="secondary" id="ai-choose" disabled>選擇照片</button></div>
  <input hidden disabled id="ai-image" type="file" accept="image/*"><small tabindex="0" id="ai-image-hint" class="ai-hint">選好廠商後，可在此貼上圖片。</small>
  <div class="ai-tools"><button id="ai-scan" type="button" disabled>AI 解析照片</button><button type="button" class="secondary" id="ai-reset-photo" hidden>清除本張照片</button></div></section>
- <section class="ai-pane"><header class="ai-review-head"><h3 class="ai-plaque"><img src="./web/assets/loss-lookup.png" width="32" height="28" alt="">人工核對藥品</h3><span data-ai-review-count role="status" hidden></span></header><div class="ai-fields"><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label>
+ <section class="ai-pane"><header class="ai-review-head">${sectionHeading('review','人工核對藥品')}<span data-ai-review-count role="status" hidden></span></header><div class="ai-fields"><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label>
  <label>進貨日期<input type="date" id="ai-date" max="${date}" value="${date}"></label>
  <label>單據或備註（選填）<select id="ai-note"><option value="">不填寫備註</option><option>依送貨單進貨</option><option>補填入送到貨單</option><option>無附進貨單直接入庫</option><option>換貨補回</option><option>其他</option></select></label></div>
  <div id="ai-note-other-field" hidden><label for="ai-note-other">其他說明（選填）</label><input type="text" id="ai-note-other" maxlength="490"><button type="button" class="secondary" id="ai-note-back">返回上一個選項</button></div>
  <div id="ai-result" tabindex="-1"></div><div class="ai-foot"><button type="button" id="ai-add" disabled>核對後加入進貨清單</button></div></section></div>
- <section class="ai-pane ai-list"><h3 class="ai-list-title">本次進貨清單（尚未入庫）</h3><div id="ai-basket"></div><div class="ai-foot"><strong id="ai-total"></strong><button type="button" class="ai-primary" id="ai-preview" disabled>預覽進貨</button></div></section><section id="ai-pending"></section></section>`;
+ <section class="ai-pane ai-list">${sectionHeading('list','本次進貨清單（尚未入庫）')}<div id="ai-basket"></div><div class="ai-foot"><strong id="ai-total"></strong><button type="button" class="ai-primary" id="ai-preview" disabled>預覽進貨</button></div></section><section id="ai-pending"></section></section>`;
 }

@@ -50,28 +50,40 @@ function renderPhotoReview(lines,{esc,categories,candidatesFor,matchLine,unitMes
   const options=candidates.map(row=>'<option value="'+esc(String(row.id))+'">'+esc(row.category+'｜'+row.code+'｜'+row.drug+(row.vendorCode?'｜廠商 '+row.vendorCode:''))+'</option>').join('');
   const name=esc(line.name||'未讀出藥名'),id=esc(line.id);
   line.sourceQuantity??=line.quantity;
-  return '<tr><td data-label="藥品／原始編號"><strong>'+name+'</strong><small>原始編號 '+esc(line.code||'未讀出')+'</small></td>'+
-   '<td data-label="規格／單據數量">'+esc(line.unit||'單位不明')+'／'+esc(line.sourceQuantity||'數量不明')+
-   '<details><summary>原始辨識</summary>'+esc(line.evidence||'無可核對文字')+'<small>'+esc(unitMessage(line.unit))+'</small></details></td>'+
-   '<td data-label="配對庫存藥品" data-wide><div class="ai-review-match"><select class="ai-review-state"'+(found?' data-matched':'')+' style="width:auto;flex:0 0 auto" data-receipt-category="'+id+'" aria-label="'+name+' 庫存類別"><option value="">全部</option>'+categoryOptions+'</select>'+
-   '<div data-picker><div class="receipt-current-match">'+esc(found?found.code+'｜'+found.drug:'待配對')+'</div>'+(found?.vendorCell?'<a href="'+esc(found.vendorCell)+'" target="_blank" rel="noopener">'+esc(found.vendorCode?'廠商品號：'+found.vendorCode+'（修改）':'補登廠商品號')+'</a>':'')+'<input type="search" data-drug-search="'+id+'" aria-label="'+name+' 搜尋編號或藥名" placeholder="輸入編號或藥名" autocomplete="off">'+
-   '<select data-select="'+id+'" aria-label="'+name+' 配對庫存藥品"><option value="">請選擇相符藥品</option>'+options+'</select>'+
-   '<button type="button" data-new-drug hidden>＋新增庫存藥品</button><div data-registration hidden></div></div></div>'+
-   '<small>'+esc(found?'現庫存 '+(found.bottles??'待核對')+' 瓶'+(line.manualSelection?'':' · '+match.reason):line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)+'</small></td>'+
-   '<td data-label="入庫瓶數"><input data-qty="'+id+'" aria-label="'+name+' 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="'+esc(line.quantity)+'"></td>'+
-   '<td data-label="單價（元／瓶）"><input data-photo-price="'+id+'" aria-label="'+name+' 單價" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="未提供" value="'+esc(line.price??(found?.unitPriceCents==null?'':found.unitPriceCents/100))+'"></td>'+
-   '<td data-label="已核對"><input data-reviewed="'+id+'" type="checkbox" aria-label="'+name+' 已核對配對品項" '+(line.reviewed?'checked':'')+'></td>'+
-   '<td data-label="操作"><button type="button" data-remove="'+id+'" aria-label="排除 '+name+'" class="secondary small">排除</button></td></tr>';
+  const picker=`<div class="ai-review-match">
+   <select data-receipt-category="${id}" aria-label="${name} 庫存類別"><option value="">全部類別</option>${categoryOptions}</select>
+   <div data-picker><input type="search" data-drug-search="${id}" aria-label="${name} 搜尋編號或藥名" placeholder="輸入編號或藥名" autocomplete="off">
+    <select data-select="${id}" aria-label="${name} 配對庫存藥品"><option value="">請選擇相符藥品</option>${options}</select>
+    <button type="button" data-new-drug hidden>＋新增庫存藥品</button><div data-registration hidden></div>
+   </div></div>`;
+  const vendorLink=found?.vendorCell?`<a href="${esc(found.vendorCell)}" target="_blank" rel="noopener">${esc(found.vendorCode?'廠商品號：'+found.vendorCode+'（修改）':'補登廠商品號')}</a>`:'';
+  const pairing=found?`<small>${esc(found.category)}　${esc(found.code)}</small><strong>${esc(found.drug)}</strong>
+    <small>現庫存 ${esc(found.bottles??'待核對')} 瓶 · ${esc(line.manualSelection?'手動配對':match.reason)}</small>
+    <div class="ai-match-tools"><details><summary>更換配對</summary>${picker}</details>${vendorLink}</div>`:
+   `<b class="ai-unmatched">待配對</b>${picker}<small>${esc(line.manualSelection?(candidates.length?'請選擇相符藥品':'此類別沒有符合的藥品'):match.reason)}</small>`;
+  return `<tr${found?'':' data-unmatched'}>
+   <td data-label="單據辨識內容" data-wide><strong>${name}</strong><div>${esc(line.unit||'單位不明')} · 單據數量 ${esc(line.sourceQuantity||'數量不明')}</div>
+    <small>原始編號 ${esc(line.code||'未讀出')}</small><details><summary>原始辨識</summary>${esc(line.evidence||'無可核對文字')}<small>${esc(unitMessage(line.unit))}</small></details></td>
+   <td data-label="配對庫存藥品" data-wide>${pairing}</td>
+   <td data-label="入庫瓶數"><input data-qty="${id}" aria-label="${name} 實際入庫瓶數" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="${esc(line.quantity)}"></td>
+   <td data-label="單價（元／瓶）"><input data-photo-price="${id}" aria-label="${name} 單價" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="未提供" value="${esc(line.price??(found?.unitPriceCents==null?'':found.unitPriceCents/100))}"></td>
+   <td data-label="人工核對" data-wide><div class="ai-review-actions"><label><input data-reviewed="${id}" type="checkbox" aria-label="${name} 已核對配對品項" ${found?(line.reviewed?'checked':''):'disabled'}>已核對</label>
+    <button type="button" data-remove="${id}" aria-label="排除 ${name}" class="secondary small">排除</button></div></td></tr>`;
  }).join('');
- return '<div class="ai-review-head"><span data-ai-review-count role="status"></span></div>'+
-  '<p class="muted ai-review-note">請核對藥名、規格及數量。單據以盒、袋或包計量時，請填寫換算後的實際入庫瓶數。</p>'+
+ return '<p class="muted ai-review-note">請核對藥名、規格及數量。單據以盒、袋或包計量時，請填寫換算後的實際入庫瓶數。</p>'+
   '<div class="ai-review-wrap" tabindex="0" role="region" aria-label="核對辨識結果表格"><table class="ai-table ai-review-table"><thead><tr>'+
-  '<th scope="col">藥品／原始編號</th><th scope="col">規格／單據數量</th><th scope="col">配對庫存藥品</th><th scope="col">入庫瓶數</th><th scope="col">單價（元／瓶）</th><th scope="col">已核對</th><th scope="col">操作</th>'+
+  '<th scope="col">單據辨識內容</th><th scope="col">配對庫存藥品</th><th scope="col">入庫瓶數</th><th scope="col">單價（元／瓶）</th><th scope="col">人工核對</th>'+
   '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 function updatePhotoReviewCount(root,lines){
  const count=root.querySelector('[data-ai-review-count]');
- if(count)count.textContent='已辨識 '+lines.length+' 項 · 已核對 '+lines.filter(line=>line.reviewed&&!line.removed).length+' 項'+(lines.some(line=>line.removed)?' · 已排除 '+lines.filter(line=>line.removed).length+' 項':'');
+ if(!count)return;
+ const active=lines.filter(line=>!line.removed);
+ const unmatched=root.querySelectorAll('[data-unmatched]').length;
+ const checked=root.querySelectorAll('[data-reviewed]:checked').length;
+ const pending=active.length-unmatched-checked,excluded=lines.length-active.length;
+ count.hidden=!lines.length;
+ count.textContent=[active.length+' 項','已核對 '+checked,'待配對 '+unmatched,...(pending?['待核對 '+pending]:[]),...(excluded?['已排除 '+excluded]:[])].join('　');
 }
 
 export function mountPhotoReceive({esc,fmt,ask}){
@@ -240,9 +252,12 @@ export function mountPhotoReceive({esc,fmt,ask}){
    line.reviewed=false;
    if(el.value&&!currentRows().some(row=>String(row.id)===line.selected&&row.category===el.value))line.selected='';
    drawResult();
-   review.querySelector('[data-receipt-category="'+line.id+'"]')?.focus({preventScroll:true});
+   const category=review.querySelector('[data-receipt-category="'+line.id+'"]');
+   const details=category.closest('details');
+   if(details)details.open=true;
+   category.focus({preventScroll:true});
   });
-  root.querySelectorAll('[data-select]').forEach(el=>{const line=recognized.find(x=>x.id===el.dataset.select);el.value=line.selected;el.onchange=()=>{line.selected=el.value;line.manualSelection=true;line.reviewed=false;drawResult();root.querySelector('[data-select="'+line.id+'"]')?.focus({preventScroll:true});};});
+  root.querySelectorAll('[data-select]').forEach(el=>{const line=recognized.find(x=>x.id===el.dataset.select);el.value=line.selected;el.onchange=()=>{line.selected=el.value;line.manualSelection=true;line.reviewed=false;drawResult();const select=review.querySelector('[data-select="'+line.id+'"]');(select.closest('details')?.querySelector('summary')||select).focus({preventScroll:true});};});
   root.querySelectorAll('[data-drug-search]').forEach(input=>{
    const picker=input.closest('[data-picker]');
    const select=picker.querySelector('select');

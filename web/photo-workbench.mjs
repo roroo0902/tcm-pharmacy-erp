@@ -24,7 +24,9 @@ const styles = `
 #photo-receive-panel label{min-width:0}
 #photo-receive-panel .ai-fields label{margin:0}
 #photo-receive-panel .ai-fields :is(select,input){width:100%;min-width:0}
-.ai-review-note{font-size:13px}.ai-review-head{margin:10px 0 4px}
+.ai-review-note{font-size:13px}.ai-review-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+#photo-receive-panel .ai-review-head h3{margin:0}.ai-review-head img{object-fit:contain;image-rendering:pixelated}
+[data-ai-review-count]{border:1px solid #bda465;border-radius:5px;padding:5px 9px;font-size:14px;font-weight:600}
 #photo-receive-panel .ai-review-wrap,#photo-receive-panel .ai-basket-wrap{overflow:auto;max-width:100%}
 #photo-receive-panel .ai-table{width:100%;border-collapse:collapse;font-size:14px;color:#22394a;white-space:normal}
 #photo-receive-panel .ai-table th{background:#ede7d5;color:#20384b;text-align:left;white-space:nowrap}
@@ -44,6 +46,17 @@ const styles = `
 #photo-receive-panel .ai-foot{justify-content:flex-end;margin-top:12px}
 #photo-receive-panel .ai-list{margin-top:14px}
 #photo-receive-panel .ai-primary{color:#fff9df;background:#1c3952;border:3px double #d6b56c}
+#photo-receive-panel .ai-review-table th{background:#203b53;color:#fff9e7}
+#photo-receive-panel .ai-review-table td{overflow-wrap:anywhere}
+#photo-receive-panel .ai-review-table tr:has([data-reviewed]:checked) td{background:#eaf2e7}
+#photo-receive-panel .ai-review-table tr[data-unmatched] td:first-child{box-shadow:inset 3px 0 #c3892b;padding-left:10px}
+.ai-unmatched{display:inline-block;padding:2px 8px;margin-bottom:5px;color:#70400b;background:#ffe5ae;border-radius:4px;font-size:13px}
+.ai-match-tools,.ai-review-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:5px}
+.ai-match-tools details[open]{flex-basis:100%}
+#photo-receive-panel .ai-match-tools summary{color:#254e6b;text-decoration:underline}
+#photo-receive-panel .ai-review-actions label{display:inline-flex;align-items:center;gap:5px;margin:0;white-space:nowrap}
+#photo-receive-panel [data-receipt-category]{width:auto;max-width:100%;justify-self:start}
+@media(min-width:761px){.ai-review-table th:nth-child(1){width:24%}.ai-review-table th:nth-child(2){width:38%}}
 @media(max-width:1150px){.ai-workspace{grid-template-columns:1fr}.ai-photo-stage{min-height:80px}#ai-original{max-height:215px}}
 @media(max-width:760px){
  #photo-receive-panel .ai-steps{gap:5px}.ai-steps li{font-size:12px;gap:4px}.ai-steps li span{padding:3px 5px}
@@ -55,6 +68,10 @@ const styles = `
  #photo-receive-panel .ai-table td:before{display:block;content:attr(data-label);font-size:12px;color:#655b47;margin-bottom:3px}
  #photo-receive-panel .ai-table td[data-wide]{grid-column:1/-1}
  #photo-receive-panel .ai-review-match{min-width:0}
+ #photo-receive-panel .ai-review-table tr:has([data-reviewed]:checked){background:#eaf2e7}
+ #photo-receive-panel .ai-review-table tr[data-unmatched]{border-left:3px solid #c3892b}
+ #photo-receive-panel .ai-review-table tr[data-unmatched] td:first-child{box-shadow:none;padding-left:0}
+ #photo-receive-panel .ai-review-actions{justify-content:space-between}
  #photo-receive-panel .ai-foot button{flex:1}
 }
 `;
@@ -70,7 +87,7 @@ export function photoWorkbench(date){
  <div class="ai-tools"><button type="button" class="secondary" id="ai-camera">拍照</button><button type="button" class="secondary" id="ai-choose">選擇照片</button></div>
  <input hidden id="ai-image" type="file" accept="image/*"><small tabindex="0" id="ai-image-hint" class="ai-hint">也可選取此欄位後貼上圖片。</small>
  <div class="ai-tools"><button id="ai-scan" type="button">AI 解析照片</button><button type="button" class="secondary" id="ai-reset-photo" hidden>清除本張照片</button></div></section>
- <section class="ai-pane"><h3>人工核對</h3><div class="ai-fields"><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label>
+ <section class="ai-pane"><header class="ai-review-head"><h3 class="ai-plaque"><img src="./web/assets/loss-lookup.png" width="32" height="28" alt="">人工核對藥品</h3><span data-ai-review-count role="status" hidden></span></header><div class="ai-fields"><label>經手人<select id="ai-actor" data-staff data-staff-compact required disabled><option value="">正在讀取員工名冊…</option></select></label>
  <label>進貨日期<input type="date" id="ai-date" max="${date}" value="${date}"></label>
  <label>單據或備註（選填）<select id="ai-note"><option value="">不填寫備註</option><option>依送貨單進貨</option><option>補填入送到貨單</option><option>無附進貨單直接入庫</option><option>換貨補回</option><option>其他</option></select></label></div>
  <div id="ai-note-other-field" hidden><label for="ai-note-other">其他說明（選填）</label><input type="text" id="ai-note-other" maxlength="490"><button type="button" class="secondary" id="ai-note-back">返回上一個選項</button></div>
